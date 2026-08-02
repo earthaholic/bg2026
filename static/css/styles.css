@@ -1507,3 +1507,63 @@ body {
     font-size: 0.78rem;
     color: var(--text-dim);
 }
+
+/* Google Drive File Link Card Styles */
+.gdrive-files-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.gdrive-file-link-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    background: rgba(66, 133, 244, 0.08);
+    border: 1px solid rgba(66, 133, 244, 0.25);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    text-decoration: none;
+    transition: var(--transition-fast);
+}
+
+.gdrive-file-link-card:hover {
+    background: rgba(66, 133, 244, 0.18);
+    border-color: #4285F4;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
+}
+
+.gdrive-file-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    overflow: hidden;
+}
+
+.gdrive-icon {
+    font-size: 1.1rem;
+    color: #4285F4;
+    flex-shrink: 0;
+}
+
+.gdrive-filename {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gdrive-action {
+    font-size: 0.78rem;
+    color: #4285F4;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}

@@ -249,6 +249,36 @@ def user_search_books(
         "books": [dict(r) for r in rows]
     }
 
+import glob
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+def get_gdrive_files_for_book(title: str) -> List[Dict[str, Any]]:
+    if not title or not title.strip():
+        return []
+    try:
+        json_files = glob.glob(os.path.join("google", "*.json"))
+        if not json_files:
+            return []
+        
+        sa_file = json_files[0]
+        scopes = ['https://www.googleapis.com/auth/drive.readonly']
+        creds = service_account.Credentials.from_service_account_file(sa_file, scopes=scopes)
+        service = build('drive', 'v3', credentials=creds)
+
+        clean_title = title.strip().replace("'", "\\'")
+        query = f"name contains '{clean_title}' and trashed = false"
+        
+        results = service.files().list(
+            q=query,
+            pageSize=10,
+            fields="files(id, name, mimeType, webViewLink, iconLink)"
+        ).execute()
+        return results.get('files', [])
+    except Exception as e:
+        print(f"[Google Drive Service Error] {e}")
+        return []
+
 @app.get("/api/user/books/{book_id}")
 def user_get_book_detail(
     book_id: int,
@@ -261,7 +291,10 @@ def user_get_book_detail(
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
-    return {"book": dict(row)}
+    
+    book_data = dict(row)
+    gdrive_files = get_gdrive_files_for_book(book_data.get("Title", ""))
+    return {"book": book_data, "gdrive_files": gdrive_files}
 
 # --- User Student Registration & Search APIs ---
 @app.post("/api/user/students")

@@ -850,6 +850,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Keydown Enter Event Delegation for Search Inputs
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            if (e.target.id === 'studylog-search-q' || e.target.id === 'studylog-filter-date') {
+                e.preventDefault();
+                studylogSearchPage = 1;
+                loadStudyLogSearchResults();
+            } else if (e.target.id === 'book-search-q') {
+                e.preventDefault();
+                searchPage = 1;
+                loadBookSearchResults();
+            } else if (e.target.id === 'student-search-q') {
+                e.preventDefault();
+                studentSearchPage = 1;
+                loadStudentSearchResults();
+            }
+        }
+    });
+
     // Form Submit Event Handler
     document.addEventListener('submit', (e) => {
         if (e.target.id === 'form-user-studylog-reg') {
@@ -1545,6 +1564,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
+            const gdriveFiles = data.gdrive_files || [];
+            let gdriveSectionHtml = '';
+            if (gdriveFiles.length > 0) {
+                let fileItemsHtml = '';
+                gdriveFiles.forEach(f => {
+                    const fName = escapeHtml(f.name || '구글 드라이브 자료');
+                    const fLink = f.webViewLink || '#';
+                    let iconClass = 'fa-file-lines';
+                    if (f.mimeType && f.mimeType.includes('folder')) {
+                        iconClass = 'fa-folder';
+                    } else if (f.mimeType && f.mimeType.includes('document')) {
+                        iconClass = 'fa-file-word';
+                    } else if (f.mimeType && f.mimeType.includes('pdf')) {
+                        iconClass = 'fa-file-pdf';
+                    } else if (f.mimeType && f.mimeType.includes('spreadsheet')) {
+                        iconClass = 'fa-file-excel';
+                    }
+
+                    fileItemsHtml += `
+                        <a href="${fLink}" target="_blank" rel="noopener noreferrer" class="gdrive-file-link-card">
+                            <div class="gdrive-file-info">
+                                <i class="fa-solid ${iconClass} gdrive-icon"></i>
+                                <span class="gdrive-filename">${fName}</span>
+                            </div>
+                            <span class="gdrive-action"><i class="fa-solid fa-arrow-up-right-from-square"></i> 열기</span>
+                        </a>
+                    `;
+                });
+
+                gdriveSectionHtml = `
+                    <div style="margin-top: 1rem;">
+                        <div class="detail-section-title"><i class="fa-brands fa-google-drive" style="color: #4285F4;"></i> 관련 Google Drive 자료 (${gdriveFiles.length}건)</div>
+                        <div class="gdrive-files-grid">
+                            ${fileItemsHtml}
+                        </div>
+                    </div>
+                `;
+            } else {
+                gdriveSectionHtml = `
+                    <div style="margin-top: 1rem;">
+                        <div class="detail-section-title"><i class="fa-brands fa-google-drive" style="color: #4285F4;"></i> 관련 Google Drive 자료</div>
+                        <div class="detail-desc-box" style="color: var(--text-dim); font-size: 0.82rem;">
+                            <i class="fa-solid fa-info-circle"></i> 구글 드라이브에 이 도서 이름과 일치하는 관련 자료 파일이 없습니다.
+                        </div>
+                    </div>
+                `;
+            }
+
             let html = `
                 <div class="detail-header-block">
                     <div class="detail-title">${escapeHtml(b.Title || '제목 없음')}</div>
@@ -1593,6 +1660,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${b.IsMillieExist ? '<span class="tag-badge"><i class="fa-solid fa-tablet-screen-button"></i> 밀리의 서재</span>' : ''}
                     </div>
                 </div>
+
+                ${gdriveSectionHtml}
 
                 <div>
                     <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 상세 설명 및 메모</div>
