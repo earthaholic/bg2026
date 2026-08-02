@@ -1,0 +1,28 @@
+# Python & Virtual Environments
+.venv/
+venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment & Sensitive Credentials
+.env
+
+# SQLite Database Files
+data.db
+*.db
+*.sqlite3
+
+# Oracle Wallet Sensitive Files (Keys & SSOS)
+wallet/*.sso
+wallet/*.p12
+wallet/*.pem
+wallet/*.jks
+
+# IDE & System Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

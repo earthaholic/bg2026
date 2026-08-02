@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bg2026 - 꿈꾸는봄결 데이터 관리 시스템</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Modern CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="dark-theme">
+    <div id="app" class="app-layout">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-leaf"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">bg2026</span>
+                    <span class="brand-subtitle">꿈꾸는봄결 데이터 관리 시스템</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <!-- User Profile & Auth Status -->
+                <div id="user-profile-badge" class="user-badge hidden">
+                    <span class="avatar"><i class="fa-solid fa-user-shield"></i></span>
+                    <div class="user-info">
+                        <span id="badge-username" class="username">Guest</span>
+                        <span id="badge-role" class="role-pill">USER</span>
+                    </div>
+                </div>
+
+                <button id="btn-logout" class="btn btn-outline hidden">
+                    <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-container">
+            <!-- Sidebar: Main Feature Navigation Menu -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="fa-solid fa-compass"></i> 메인 메뉴</h3>
+                </div>
+
+                <nav id="sidebar-main-menu" class="sidebar-menu-nav">
+                    <div class="menu-section-label">도서 관리</div>
+                    <div class="menu-nav-item active" data-view="book-reg">
+                        <i class="fa-solid fa-book-medical nav-icon"></i>
+                        <span>새 도서 등록</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="book-search">
+                        <i class="fa-solid fa-magnifying-glass nav-icon"></i>
+                        <span>도서 검색 & 상세 조회</span>
+                    </div>
+
+                    <div class="menu-section-label">학생 관리</div>
+                    <div class="menu-nav-item" data-view="student-reg">
+                        <i class="fa-solid fa-user-plus nav-icon"></i>
+                        <span>새 학생 등록</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="student-search">
+                        <i class="fa-solid fa-users-viewfinder nav-icon"></i>
+                        <span>학생 검색 & 상세 조회</span>
+                    </div>
+
+                    <div class="menu-section-label">학습 기록 관리</div>
+                    <div class="menu-nav-item" data-view="studylog-reg">
+                        <i class="fa-solid fa-square-plus nav-icon"></i>
+                        <span>새 학습 기록 등록</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="studylog-search">
+                        <i class="fa-solid fa-book-bookmark nav-icon"></i>
+                        <span>학습 기록 검색 & 상세 조회</span>
+                    </div>
+
+                    <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
+                    <div class="menu-nav-item admin-only hidden" data-view="data-view">
+                        <i class="fa-solid fa-table-cells nav-icon"></i>
+                        <span>데이터 그리드 Studio</span>
+                    </div>
+                    <div class="menu-nav-item admin-only hidden" data-view="sql-console">
+                        <i class="fa-solid fa-terminal nav-icon"></i>
+                        <span>SQL 콘솔 & CSV</span>
+                    </div>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <div class="db-status-card">
+                        <i class="fa-solid fa-database"></i>
+                        <div>
+                            <div class="status-title">bg2026 DB</div>
+                            <div class="status-desc">꿈꾸는봄결 저장소</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Workspace Area -->
+            <main class="workspace">
+                <!-- Data Grid Studio Header Bar (Visible on Data View View) -->
+                <div id="data-studio-header-bar" class="data-studio-bar hidden">
+                    <div class="studio-left-controls">
+                        <div class="table-selector-group">
+                            <label for="select-active-table"><i class="fa-solid fa-table"></i> 테이블 선택:</label>
+                            <select id="select-active-table" class="form-control select-table-dropdown">
+                                <option value="">테이블 로딩 중...</option>
+                            </select>
+                        </div>
+
+                        <div class="sub-tab-group">
+                            <button class="sub-tab-btn active" id="sub-tab-btn-grid" data-subtab="grid">
+                                <i class="fa-solid fa-table"></i> 데이터 행
+                            </button>
+                            <button class="sub-tab-btn" id="sub-tab-btn-schema" data-subtab="schema">
+                                <i class="fa-solid fa-microchip"></i> 스키마 분석
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="data-studio-actions" class="studio-right-controls">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="input-search" placeholder="현재 테이블 검색...">
+                            <button id="btn-clear-search" class="btn-clear hidden">&times;</button>
+                        </div>
+                        <button id="btn-export-csv" class="btn btn-outline" title="현재 테이블 데이터 CSV 다운로드">
+                            <i class="fa-solid fa-file-csv"></i> CSV 내보내기
+                        </button>
+                        <button id="btn-batch-delete" class="btn btn-danger hidden" title="선택한 레코드 일괄 삭제">
+                            <i class="fa-solid fa-trash-can"></i> 선택 삭제 (<span id="selected-count">0</span>)
+                        </button>
+                        <button id="btn-add-row" class="btn btn-success">
+                            <i class="fa-solid fa-plus"></i> 레코드 추가
+                        </button>
+                    </div>
+                </div>
+
+                <!-- View 1: User Book Registration Form -->
+                <section id="view-book-reg" class="workspace-view active">
+                    <div class="book-reg-layout">
+                        <!-- Left: Registration Form Card -->
+                        <div class="card form-card">
+                            <div class="card-header-styled">
+                                <div>
+                                    <h2><i class="fa-solid fa-book-open-reader"></i> 꿈꾸는봄결 새 도서 등록</h2>
+                                    <p class="subtitle">도서 상세 정보를 입력하고 등록 버튼을 누르시면 Books 데이터베이스에 수록됩니다.</p>
+                                </div>
+                            </div>
+
+                            <form id="form-user-book-reg" class="book-form">
+                                <!-- Section 1: 기본 정보 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 기본 도서 정보</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label for="book-title">도서명 (Title) <span class="required">*</span></label>
+                                            <input type="text" id="book-title" name="Title" class="form-control" placeholder="예: 꿈꾸는봄결 독서 교재 1권" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-author">저자 (Author)</label>
+                                            <input type="text" id="book-author" name="Author" class="form-control" placeholder="저자명 입력">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-publisher">출판사 (Publisher)</label>
+                                            <input type="text" id="book-publisher" name="Publisher" class="form-control" placeholder="출판사명 입력">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-subject">주제 / 분야 (Subject)</label>
+                                            <input type="text" id="book-subject" name="Subject" class="form-control" placeholder="예: 문학 / 인문 / 과학">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-target">대상 학년 / 연령 (Target)</label>
+                                            <input type="text" id="book-target" name="Target" class="form-control" placeholder="예: 초등 고학년, 중등 1학년">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-length">분량 / 페이지 수 (BookLength)</label>
+                                            <select id="book-length" name="BookLength" class="form-control">
+                                                <option value="0">0 (미입력)</option>
+                                                <option value="1">1 단계</option>
+                                                <option value="2">2 단계</option>
+                                                <option value="3">3 단계</option>
+                                                <option value="4">4 단계</option>
+                                                <option value="5">5 단계</option>
+                                                <option value="6">6 단계</option>
+                                                <option value="7">7 단계</option>
+                                                <option value="8">8 단계</option>
+                                                <option value="9">9 단계</option>
+                                                <option value="10">10 단계</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-voca">어휘 수준 / 개수 (Voca)</label>
+                                            <select id="book-voca" name="Voca" class="form-control">
+                                                <option value="0">0 (미입력)</option>
+                                                <option value="1">1 단계</option>
+                                                <option value="2">2 단계</option>
+                                                <option value="3">3 단계</option>
+                                                <option value="4">4 단계</option>
+                                                <option value="5">5 단계</option>
+                                                <option value="6">6 단계</option>
+                                                <option value="7">7 단계</option>
+                                                <option value="8">8 단계</option>
+                                                <option value="9">9 단계</option>
+                                                <option value="10">10 단계</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="book-metaphor">비유 / 상징 수준 (Metaphor)</label>
+                                            <select id="book-metaphor" name="Metaphor" class="form-control">
+                                                <option value="0">0 (미입력)</option>
+                                                <option value="1">1 단계</option>
+                                                <option value="2">2 단계</option>
+                                                <option value="3">3 단계</option>
+                                                <option value="4">4 단계</option>
+                                                <option value="5">5 단계</option>
+                                                <option value="6">6 단계</option>
+                                                <option value="7">7 단계</option>
+                                                <option value="8">8 단계</option>
+                                                <option value="9">9 단계</option>
+                                                <option value="10">10 단계</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Section 2: 학습/교재 자료 유무 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-file-pen"></i> 학습자료 & 문제 보유 여부</h4>
+                                    <div class="checkbox-grid">
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasQuiz" value="1">
+                                            <span><i class="fa-solid fa-spell-check"></i> 어휘 퀴즈 (HasQuiz)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasReadingQuestion" value="1">
+                                            <span><i class="fa-solid fa-circle-question"></i> 독서 문제 (Reading Question)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasReadingAnswer" value="1">
+                                            <span><i class="fa-solid fa-circle-check"></i> 독서 답안 (Reading Answer)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasWritingQuestion" value="1">
+                                            <span><i class="fa-solid fa-pen-nib"></i> 글쓰기 문제 (Writing Question)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasWritingAnswer" value="1">
+                                            <span><i class="fa-solid fa-check-double"></i> 글쓰기 답안 (Writing Answer)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasAdvancedMaterial" value="1">
+                                            <span><i class="fa-solid fa-graduation-cap"></i> 심화 자료 (Advanced Material)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="HasDebateMaterial" value="1">
+                                            <span><i class="fa-solid fa-comments"></i> 토론 자료 (Debate Material)</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Section 3: 도서 형태 및 채널 유무 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-store"></i> 도서 포맷 및 유통 채널</h4>
+                                    <div class="checkbox-grid">
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="IsPaperbookExist" value="1">
+                                            <span><i class="fa-solid fa-book"></i> 종이책 보유 (Paperbook)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="IsPdfExist" value="1">
+                                            <span><i class="fa-solid fa-file-pdf"></i> PDF 파일 존재 (PDF)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="IsYes24Exist" value="1">
+                                            <span><i class="fa-solid fa-shopping-cart"></i> YES24 등록 (YES24)</span>
+                                        </label>
+                                        <label class="checkbox-pill">
+                                            <input type="checkbox" name="IsMillieExist" value="1">
+                                            <span><i class="fa-solid fa-tablet-screen-button"></i> 밀리의 서재 (Millie)</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Section 4: 도서 메모 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 상세 설명 및 메모 (Desc)</h4>
+                                    <div class="form-group">
+                                        <textarea id="book-desc" name="Desc" class="form-control" rows="3" placeholder="도서에 대한 상세 소개, 메모 또는 기타 참고사항을 입력하세요."></textarea>
+                                    </div>
+                                </div>
+
+                                <div id="user-book-msg" class="alert hidden"></div>
+
+                                <div class="form-submit-actions">
+                                    <button type="button" id="btn-reset-book-form" class="btn btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 폼 초기화
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg btn-glow">
+                                        <i class="fa-solid fa-paper-plane"></i> 새 도서 등록하기
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Right: Recent Registered Books Side Card -->
+                        <div class="card recent-books-card">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 최근 등록된 도서</h3>
+                                <button id="btn-refresh-recent" class="btn-icon"><i class="fa-solid fa-arrows-rotate"></i></button>
+                            </div>
+                            <div id="recent-books-list" class="recent-books-container">
+                                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 로딩 중...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 2: Book Search & Detail View -->
+                <section id="view-book-search" class="workspace-view">
+                    <div class="book-search-layout">
+                        <!-- Top Search & Filter Bar Card -->
+                        <div class="card search-filter-card">
+                            <div class="filter-row">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass filter-icon"></i>
+                                    <input type="text" id="book-search-q" class="form-control input-lg" placeholder="도서명, 저자, 출판사, 주제 키워드로 검색해보세요...">
+                                    <button id="btn-do-book-search" class="btn btn-primary btn-lg">
+                                        <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="filter-options-grid">
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-user-graduate"></i> 대상 학년</label>
+                                    <input type="text" id="filter-target" class="form-control" placeholder="예: 초등, 중등">
+                                </div>
+
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-spell-check"></i> 어휘 최소 단계</label>
+                                    <select id="filter-voca" class="form-control">
+                                        <option value="0">전체 (상관없음)</option>
+                                        <option value="1">1단계 이상</option>
+                                        <option value="3">3단계 이상</option>
+                                        <option value="5">5단계 이상</option>
+                                        <option value="7">7단계 이상</option>
+                                    </select>
+                                </div>
+
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-book-open"></i> 분량 최소 단계</label>
+                                    <select id="filter-length" class="form-control">
+                                        <option value="0">전체 (상관없음)</option>
+                                        <option value="1">1단계 이상</option>
+                                        <option value="3">3단계 이상</option>
+                                        <option value="5">5단계 이상</option>
+                                        <option value="7">7단계 이상</option>
+                                    </select>
+                                </div>
+
+                                <div class="filter-group span-full">
+                                    <label><i class="fa-solid fa-filter"></i> 보유 자료 조건</label>
+                                    <div class="checkbox-filter-row">
+                                        <label class="checkbox-pill sm">
+                                            <input type="checkbox" id="filter-chk-quiz" value="1">
+                                            <span>어휘 퀴즈</span>
+                                        </label>
+                                        <label class="checkbox-pill sm">
+                                            <input type="checkbox" id="filter-chk-reading" value="1">
+                                            <span>독서 문제/답안</span>
+                                        </label>
+                                        <label class="checkbox-pill sm">
+                                            <input type="checkbox" id="filter-chk-writing" value="1">
+                                            <span>글쓰기 문제/답안</span>
+                                        </label>
+                                        <label class="checkbox-pill sm">
+                                            <input type="checkbox" id="filter-chk-pdf" value="1">
+                                            <span>PDF 보유</span>
+                                        </label>
+                                        <button id="btn-reset-filters" class="btn btn-sm btn-outline">
+                                            <i class="fa-solid fa-rotate-left"></i> 필터 초기화
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Book Results Summary Bar -->
+                        <div class="results-bar">
+                            <span id="search-total-count" class="badge badge-info">총 0 건의 도서</span>
+                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 상세 정보를 확인하실 수 있습니다.</span>
+                        </div>
+
+                        <!-- Book Cards Grid -->
+                        <div id="book-cards-grid" class="book-cards-grid">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-book-open fa-3x"></i>
+                                <p>도서를 검색해 주세요.</p>
+                            </div>
+                        </div>
+
+                        <!-- Search Pagination -->
+                        <div class="search-pagination-bar">
+                            <div id="search-pagination-info" class="page-info">1 / 1 페이지</div>
+                            <div class="pagination-controls">
+                                <button id="btn-search-prev" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="search-current-page" class="page-num">1</span>
+                                <button id="btn-search-next" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 3: User Student Registration Form -->
+                <section id="view-student-reg" class="workspace-view">
+                    <div class="book-reg-layout">
+                        <!-- Left: Student Reg Form -->
+                        <div class="card form-card">
+                            <div class="card-header-styled">
+                                <div>
+                                    <h2><i class="fa-solid fa-user-plus"></i> 꿈꾸는봄결 새 학생 등록</h2>
+                                    <p class="subtitle">학생 인적사항 및 학습 메모를 입력하고 등록하시면 Students 데이터베이스에 수록됩니다.</p>
+                                </div>
+                            </div>
+
+                            <form id="form-user-student-reg" class="book-form" autocomplete="off">
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-user"></i> 학생 기본 인적사항</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label for="student-name">학생 이름 (Name) <span class="required">*</span></label>
+                                            <input type="text" id="student-name" name="Name" class="form-control" placeholder="예) 김봄결" autocomplete="off" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="student-sex">성별 (Sex)</label>
+                                            <select id="student-sex" name="Sex" class="form-control">
+                                                <option value="">성별 선택 (미선택)</option>
+                                                <option value="남">남</option>
+                                                <option value="여">여</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="student-birthday">생년월일 (Birthday)</label>
+                                            <input type="date" id="student-birthday" name="Birthday" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 참고사항 (Description)</h4>
+                                    <div class="form-group">
+                                        <textarea id="student-desc" name="Description" class="form-control" rows="4" placeholder="학생의 독서 습관, 성향, 특이사항 또는 메모를 입력하세요."></textarea>
+                                    </div>
+                                </div>
+
+                                <div id="user-student-msg" class="alert hidden"></div>
+
+                                <div class="form-submit-actions">
+                                    <button type="button" id="btn-reset-student-form" class="btn btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 폼 초기화
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg btn-glow">
+                                        <i class="fa-solid fa-user-check"></i> 새 학생 등록하기
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Right: Recent Registered Students Side Card -->
+                        <div class="card recent-books-card">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 최근 등록된 학생</h3>
+                                <button id="btn-refresh-recent-students" class="btn-icon"><i class="fa-solid fa-arrows-rotate"></i></button>
+                            </div>
+                            <div id="recent-students-list" class="recent-books-container">
+                                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 로딩 중...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 4: Student Search & Detail View -->
+                <section id="view-student-search" class="workspace-view">
+                    <div class="book-search-layout">
+                        <!-- Top Search & Filter Bar Card -->
+                        <div class="card search-filter-card">
+                            <div class="filter-row">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass filter-icon"></i>
+                                    <input type="text" id="student-search-q" class="form-control input-lg" placeholder="학생 이름, 생년월일, 메모 키워드로 검색해보세요...">
+                                    <button id="btn-do-student-search" class="btn btn-primary btn-lg">
+                                        <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="filter-options-grid" style="grid-template-columns: 200px 1fr;">
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-venus-mars"></i> 성별 필터</label>
+                                    <select id="student-filter-sex" class="form-control">
+                                        <option value="">전체 (성별 상관없음)</option>
+                                        <option value="남">남</option>
+                                        <option value="여">여</option>
+                                    </select>
+                                </div>
+
+                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                                    <button id="btn-reset-student-filters" class="btn btn-sm btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 검색 조건 초기화
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Student Results Summary Bar -->
+                        <div class="results-bar">
+                            <span id="student-search-total-count" class="badge badge-info">총 0 명의 학생</span>
+                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 학생 상세 인적사항을 확인하실 수 있습니다.</span>
+                        </div>
+
+                        <!-- Student Cards Grid -->
+                        <div id="student-cards-grid" class="book-cards-grid">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-users fa-3x"></i>
+                                <p>학생을 검색해 주세요.</p>
+                            </div>
+                        </div>
+
+                        <!-- Student Search Pagination -->
+                        <div class="search-pagination-bar">
+                            <div id="student-search-pagination-info" class="page-info">1 / 1 페이지</div>
+                            <div class="pagination-controls">
+                                <button id="btn-student-search-prev" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="student-search-current-page" class="page-num">1</span>
+                                <button id="btn-student-search-next" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 5: User StudyLog Registration Form -->
+                <section id="view-studylog-reg" class="workspace-view">
+                    <div class="book-reg-layout">
+                        <!-- Left: Registration Form Card -->
+                        <div class="card form-card">
+                            <div class="card-header-styled flex-between" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h2><i class="fa-solid fa-square-plus"></i> 꿈꾸는봄결 새 학습 기록 등록</h2>
+                                    <p class="subtitle">학생과 도서를 검색하여 선택 후 학습 일자를 입력하면 StudyLogs에 수록됩니다. (연속 입력 시 이전 선택 정보가 유지됩니다)</p>
+                                </div>
+                                <button type="button" id="btn-clear-studylog-cache" class="btn btn-sm btn-outline" title="캐싱된 선택 정보를 초기화합니다">
+                                    <i class="fa-solid fa-broom"></i> 선택 초기화
+                                </button>
+                            </div>
+
+                            <form id="form-user-studylog-reg" class="book-form">
+                                <div id="user-studylog-msg" class="alert hidden"></div>
+
+                                <!-- Section 1: 학생 선택 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 1. 학습 학생 선택</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label for="studylog-student-id">학생 선택 <span class="required">*</span></label>
+                                            <select id="studylog-student-id" name="StudentId" class="form-control" required>
+                                                <option value="">학생 로딩 중...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Section 2: 도서 선택 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 2. 학습 도서 선택</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label for="studylog-book-id">도서 선택 <span class="required">*</span></label>
+                                            <select id="studylog-book-id" name="BookId" class="form-control" required>
+                                                <option value="">도서 로딩 중...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Section 3: 학습 일자 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 3. 학습 수행 일자</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="studylog-date">학습 일자 (StudiedDay) <span class="required">*</span></label>
+                                            <input type="date" id="studylog-date" name="StudiedDay" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-success btn-lg">
+                                        <i class="fa-solid fa-floppy-disk"></i> 새 학습 기록 수록하기
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Right: Recent StudyLogs List -->
+                        <div class="card recent-card">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 최근 수록된 학습 기록</h3>
+                                <p class="subtitle">최신 5건의 학습 기록입니다.</p>
+                            </div>
+                            <div id="recent-studylogs-list" class="recent-books-container">
+                                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 로딩 중...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 6: User StudyLog Search & Detail View -->
+                <section id="view-studylog-search" class="workspace-view">
+                    <div class="book-search-layout">
+                        <!-- Top Search Bar Card -->
+                        <div class="card search-filter-card">
+                            <div class="filter-row">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass filter-icon"></i>
+                                    <input type="text" id="studylog-search-q" class="form-control input-lg" placeholder="학생 이름, 도서 제목, 저자 키워드로 검색해보세요...">
+                                    <button id="btn-do-studylog-search" class="btn btn-primary btn-lg">
+                                        <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="filter-options-grid" style="grid-template-columns: 250px 1fr;">
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-calendar-day"></i> 학습 일자 필터</label>
+                                    <input type="text" id="studylog-filter-date" class="form-control" placeholder="예: 2026-08 또는 2026-08-02">
+                                </div>
+
+                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                                    <button id="btn-reset-studylog-filter" class="btn btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 필터 초기화
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- StudyLog Results Summary Bar -->
+                        <div class="results-bar">
+                            <span id="studylog-search-total-count" class="badge badge-info">총 0 건의 학습 기록</span>
+                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 학습 기록 상세 정보 및 도서 특성을 확인하실 수 있습니다.</span>
+                        </div>
+
+                        <!-- StudyLog Cards Grid -->
+                        <div id="studylog-cards-grid" class="book-cards-grid">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-book-bookmark fa-3x"></i>
+                                <p>학습 기록을 검색해 주세요.</p>
+                            </div>
+                        </div>
+
+                        <!-- StudyLog Search Pagination -->
+                        <div class="search-pagination-bar">
+                            <div id="studylog-search-pagination-info" class="page-info">1 / 1 페이지</div>
+                            <div class="pagination-controls">
+                                <button id="btn-studylog-search-prev" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="studylog-search-current-page" class="page-num">1</span>
+                                <button id="btn-studylog-search-next" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 5: Data Grid Studio (Admin Only: Data Grid & Integrated Schema Inspector) -->
+                <section id="view-data-view" class="workspace-view">
+                    <!-- Sub-view 5-A: Data Grid Table -->
+                    <div id="subview-data-grid" class="table-card subview-content active">
+                        <div class="table-card-header">
+                            <h2 id="active-table-title"><i class="fa-solid fa-table"></i> 테이블을 선택해 주세요</h2>
+                            <span id="active-table-stats" class="badge badge-info">총 0 건</span>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table id="data-table" class="modern-table">
+                                <thead>
+                                    <tr id="table-head-tr">
+                                        <th>안내</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                    <tr>
+                                        <td class="empty-state">
+                                            <i class="fa-solid fa-database fa-3x"></i>
+                                            <p>상단 선택상자에서 테이블을 선택하세요.</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination Footer -->
+                        <div class="table-card-footer">
+                            <div id="pagination-info" class="page-info">1 / 1 페이지 (총 0건)</div>
+                            <div class="pagination-controls">
+                                <button id="btn-prev-page" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="current-page-num" class="page-num">1</span>
+                                <button id="btn-next-page" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sub-view 5-B: Integrated Schema Inspector -->
+                    <div id="subview-schema-view" class="schema-card subview-content">
+                        <div class="schema-header">
+                            <h3><i class="fa-solid fa-microchip"></i> 테이블 스키마 메타데이터 분석</h3>
+                            <p class="schema-desc">선택된 테이블의 컬럼 구성, 데이터 타입, Null 여부 및 Primary Key 구조를 분석합니다.</p>
+                        </div>
+                        <div id="schema-details" class="schema-body">
+                            <p class="text-muted">선택된 테이블이 없습니다.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 6: Raw SQL Console (Admin Only) -->
+                <section id="view-sql-console" class="workspace-view">
+                    <div class="sql-card">
+                        <div class="sql-header">
+                            <h3><i class="fa-solid fa-terminal"></i> SQL 쿼리 실행기 & 결과 CSV 다운로드</h3>
+                            <p class="sql-desc">자유로운 SQL문(SELECT, UPDATE, INSERT 등)을 실행하고 결과를 즉시 CSV 파일로 내보낼 수 있습니다.</p>
+                        </div>
+
+                        <div class="sql-editor-container">
+                            <textarea id="sql-query-input" class="sql-textarea" rows="4" placeholder="예: SELECT * FROM Students WHERE rowid <= 20"></textarea>
+                            <div class="sql-actions">
+                                <button id="btn-run-sql" class="btn btn-primary">
+                                    <i class="fa-solid fa-play"></i> 쿼리 실행
+                                </button>
+                                <button id="btn-export-sql-csv" class="btn btn-outline">
+                                    <i class="fa-solid fa-file-csv"></i> 쿼리 결과 CSV 다운로드
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="sql-result-alert" class="alert alert-info hidden" style="margin-top: 1rem;"></div>
+
+                        <div class="table-card style-sql-result" style="margin-top: 1rem; flex: 1;">
+                            <div class="table-card-header">
+                                <h2><i class="fa-solid fa-list-check"></i> 쿼리 실행 결과</h2>
+                                <span id="sql-result-stats" class="badge badge-info">0 건</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr id="sql-head-tr"><th>결과 목록</th></tr>
+                                    </thead>
+                                    <tbody id="sql-body">
+                                        <tr><td class="empty-state">SQL 쿼리를 입력하고 [쿼리 실행]을 클릭하세요.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="modal-login" class="modal-backdrop">
+        <div class="modal-card login-card">
+            <div class="modal-header">
+                <div class="login-brand">
+                    <i class="fa-solid fa-leaf logo-glow" style="color: #10b981;"></i>
+                    <h2>bg2026</h2>
+                    <p>꿈꾸는봄결 데이터 관리 시스템에 접속하세요</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <form id="form-login">
+                    <div class="form-group">
+                        <label for="login-username"><i class="fa-solid fa-user"></i> 아이디</label>
+                        <input type="text" id="login-username" class="form-control" placeholder="아이디 입력 (예: admin)" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password"><i class="fa-solid fa-lock"></i> 비밀번호</label>
+                        <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력" required>
+                    </div>
+                    <div id="login-error-msg" class="alert alert-danger hidden"></div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg">
+                        <i class="fa-solid fa-right-to-bracket"></i> 로그인
+                    </button>
+                </form>
+
+                <div class="login-hints">
+                    <div class="hint-item"><span class="badge badge-admin">Admin</span> 관리자 계정 (C/U/D 및 SQL 콘솔)</div>
+                    <div class="hint-item"><span class="badge badge-user">User</span> 일반 사용자 계정 (도서 & 학생 관리)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Book Detail Modal -->
+    <div id="modal-book-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-card">
+            <div class="modal-header">
+                <h3 id="modal-book-detail-title"><i class="fa-solid fa-book"></i> 도서 상세 정보</h3>
+                <div class="detail-header-actions">
+                    <div id="modal-book-detail-actions"></div>
+                    <button id="btn-close-detail-modal" class="btn-close">&times;</button>
+                </div>
+            </div>
+            <div id="modal-book-detail-body" class="modal-body detail-modal-body">
+                <!-- Dynamic Book Attributes / Edit Form -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Detail Modal -->
+    <div id="modal-student-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-card">
+            <div class="modal-header">
+                <h3 id="modal-student-detail-title"><i class="fa-solid fa-user-graduate"></i> 학생 상세 정보</h3>
+                <div class="detail-header-actions">
+                    <div id="modal-student-detail-actions"></div>
+                    <button id="btn-close-student-detail-modal" class="btn-close">&times;</button>
+                </div>
+            </div>
+            <div id="modal-student-detail-body" class="modal-body detail-modal-body">
+                <!-- Dynamic Student Attributes / Edit Form -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Book Delete Safety Confirmation Prompt Modal -->
+    <div id="modal-delete-confirm" class="modal-backdrop hidden">
+        <div class="modal-card confirm-delete-card">
+            <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 도서 삭제 확인 (Admin)</h3>
+                <button id="btn-close-delete-confirm" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 도서를 삭제하시겠습니까?<br>삭제된 데이터는 복구할 수 없습니다.
+                </div>
+                <div class="form-group">
+                    <label style="color: var(--text-main); font-weight: 600;">
+                        실수를 방지하기 위해 도서명 <strong id="target-delete-title-display" style="color: var(--warning);"></strong> 을(를) 아래에 그대로 입력해 주세요:
+                    </label>
+                    <input type="text" id="input-confirm-delete-title" class="form-control" placeholder="도서명 그대로 입력..." autocomplete="off">
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="btn-cancel-delete-confirm" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-delete-confirm" class="btn btn-danger" disabled>
+                        <i class="fa-solid fa-trash-can"></i> 도서 영구 삭제
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Student Delete Safety Confirmation Prompt Modal -->
+    <div id="modal-student-delete-confirm" class="modal-backdrop hidden">
+        <div class="modal-card confirm-delete-card">
+            <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학생 삭제 확인 (Admin)</h3>
+                <button id="btn-close-student-delete-confirm" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 학생 레코드를 삭제하시겠습니까?<br>삭제된 데이터는 복구할 수 없습니다.
+                </div>
+                <div class="form-group">
+                    <label style="color: var(--text-main); font-weight: 600;">
+                        실수를 방지하기 위해 학생 이름 <strong id="target-student-delete-name-display" style="color: var(--warning);"></strong> 을(를) 아래에 그대로 입력해 주세요:
+                    </label>
+                    <input type="text" id="input-confirm-delete-student-name" class="form-control" placeholder="학생 이름 그대로 입력..." autocomplete="off">
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="btn-cancel-student-delete-confirm" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-student-delete-confirm" class="btn btn-danger" disabled>
+                        <i class="fa-solid fa-trash-can"></i> 학생 레코드 영구 삭제
+                    </button>
+                </div>
+            </div>
+    <!-- Student Search Picker Modal Dialog -->
+    <div id="modal-student-picker" class="modal-backdrop hidden">
+        <div class="modal-card picker-modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-graduate"></i> 학습할 학생 선택</h3>
+                <button id="btn-close-student-picker" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="picker-search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="input-picker-student-q" class="form-control" placeholder="학생 이름, 생년월일 검색..." autocomplete="off">
+                </div>
+                <div id="picker-student-results" class="picker-results-container">
+                    <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Book Search Picker Modal Dialog -->
+    <div id="modal-book-picker" class="modal-backdrop hidden">
+        <div class="modal-card picker-modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-book"></i> 학습할 도서 선택</h3>
+                <button id="btn-close-book-picker" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="picker-search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="input-picker-book-q" class="form-control" placeholder="도서명, 저자, 출판사, 분야 검색..." autocomplete="off">
+                </div>
+                <div id="picker-book-results" class="picker-results-container">
+                    <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 도서 목록 로딩 중...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User StudyLog Detail View Modal -->
+    <div id="modal-studylog-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-modal-card">
+            <div class="modal-header">
+                <h3 id="modal-studylog-detail-title"><i class="fa-solid fa-book-bookmark"></i> 학습 기록 상세 정보</h3>
+                <div class="modal-header-right">
+                    <div id="modal-studylog-detail-actions" class="modal-admin-actions"></div>
+                    <button id="btn-close-studylog-detail" class="btn-close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" id="modal-studylog-detail-body">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 상세 정보 로딩 중...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin StudyLog Delete Safety Confirmation Prompt Modal -->
+    <div id="modal-studylog-delete-confirm" class="modal-backdrop hidden">
+        <div class="modal-card confirm-delete-card">
+            <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학습 기록 삭제 확인 (Admin)</h3>
+                <button id="btn-close-studylog-delete-confirm" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 학습 기록을 삭제하시겠습니까?<br>삭제된 데이터는 복구할 수 없습니다.
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="btn-cancel-studylog-delete-confirm" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-studylog-delete-confirm" class="btn btn-danger">
+                        <i class="fa-solid fa-trash-can"></i> 학습 기록 영구 삭제
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Add / Edit Row Modal -->
+    <div id="modal-crud" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-crud-title"><i class="fa-solid fa-pen-to-square"></i> 레코드 수정</h3>
+                <button id="btn-close-crud-modal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-crud">
+                    <div id="dynamic-form-fields" class="form-fields-grid">
+                        <!-- Dynamic Input Controls -->
+                    </div>
+                    <div id="crud-error-msg" class="alert alert-danger hidden"></div>
+                    <div class="modal-actions">
+                        <button type="button" id="btn-cancel-crud" class="btn btn-outline">취소</button>
+                        <button type="submit" id="btn-save-crud" class="btn btn-primary"><i class="fa-solid fa-check"></i> 저장</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
