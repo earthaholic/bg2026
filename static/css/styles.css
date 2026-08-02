@@ -1439,9 +1439,10 @@ body {
 
 /* Picker Modal Dialog Styles */
 .picker-modal-card {
-    max-width: 650px;
-    width: 90%;
-    max-height: 80vh;
+    width: 650px;
+    max-width: 92vw;
+    height: 580px;
+    max-height: 85vh;
     display: flex;
     flex-direction: column;
 }
@@ -1465,7 +1466,8 @@ body {
 
 .picker-results-container {
     flex: 1;
-    max-height: 50vh;
+    min-height: 380px;
+    max-height: 380px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;

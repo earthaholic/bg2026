@@ -220,13 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             adminOnlyItems.forEach(el => el.classList.remove('hidden'));
         } else {
             adminOnlyItems.forEach(el => el.classList.add('hidden'));
-            switchView('book-reg');
+            switchView('studylog-search');
         }
-
-        loadStudentOptions();
-        loadBookOptions();
-        loadRecentStudyLogs();
-        loadStudyLogSearchResults();
     }
 
     function switchView(targetView) {
@@ -249,8 +244,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (targetView === 'student-search') {
             loadStudentSearchResults();
         } else if (targetView === 'studylog-reg') {
-            loadStudentOptions();
-            loadBookOptions();
             loadRecentStudyLogs();
         } else if (targetView === 'studylog-search') {
             loadStudyLogSearchResults();
@@ -1059,18 +1052,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Handle StudyLog Form Submit (With Select Caching!)
+    // Handle StudyLog Form Submit (With Modal Picker Caching!)
     async function handleUserStudyLogSubmit(e) {
         e.preventDefault();
         const userStudyLogMsg = document.getElementById('user-studylog-msg');
-        const studylogStudentId = document.getElementById('studylog-student-id');
-        const studylogBookId = document.getElementById('studylog-book-id');
+        const selectedStudentId = document.getElementById('selected-student-id');
+        const selectedBookId = document.getElementById('selected-book-id');
         const studylogDate = document.getElementById('studylog-date');
 
         if (userStudyLogMsg) userStudyLogMsg.classList.add('hidden');
 
-        const sId = parseInt(studylogStudentId ? studylogStudentId.value : '0');
-        const bId = parseInt(studylogBookId ? studylogBookId.value : '0');
+        const sId = parseInt(selectedStudentId ? selectedStudentId.value : '0');
+        const bId = parseInt(selectedBookId ? selectedBookId.value : '0');
         const dateVal = studylogDate ? studylogDate.value : '';
 
         if (!sId || sId <= 0) {
@@ -1110,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (userStudyLogMsg) {
                 userStudyLogMsg.className = 'alert alert-success';
-                userStudyLogMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${result.message} (선택된 학생, 도서, 날짜가 드롭다운에 그대로 유지되어 연속 등록이 가능합니다)`;
+                userStudyLogMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${result.message} (선택된 학생·도서·날짜가 그대로 유지되어 연속 등록이 가능합니다)`;
                 userStudyLogMsg.classList.remove('hidden');
             }
 

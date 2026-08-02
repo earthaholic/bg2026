@@ -52,34 +52,34 @@
                 </div>
 
                 <nav id="sidebar-main-menu" class="sidebar-menu-nav">
-                    <div class="menu-section-label">도서 관리</div>
-                    <div class="menu-nav-item active" data-view="book-reg">
-                        <i class="fa-solid fa-book-medical nav-icon"></i>
-                        <span>새 도서 등록</span>
-                    </div>
-                    <div class="menu-nav-item" data-view="book-search">
-                        <i class="fa-solid fa-magnifying-glass nav-icon"></i>
-                        <span>도서 검색 & 상세 조회</span>
-                    </div>
-
-                    <div class="menu-section-label">학생 관리</div>
-                    <div class="menu-nav-item" data-view="student-reg">
-                        <i class="fa-solid fa-user-plus nav-icon"></i>
-                        <span>새 학생 등록</span>
-                    </div>
-                    <div class="menu-nav-item" data-view="student-search">
-                        <i class="fa-solid fa-users-viewfinder nav-icon"></i>
-                        <span>학생 검색 & 상세 조회</span>
-                    </div>
-
                     <div class="menu-section-label">학습 기록 관리</div>
+                    <div class="menu-nav-item active" data-view="studylog-search">
+                        <i class="fa-solid fa-book-bookmark nav-icon"></i>
+                        <span>학습 기록 검색 & 상세 조회</span>
+                    </div>
                     <div class="menu-nav-item" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
                     </div>
-                    <div class="menu-nav-item" data-view="studylog-search">
-                        <i class="fa-solid fa-book-bookmark nav-icon"></i>
-                        <span>학습 기록 검색 & 상세 조회</span>
+
+                    <div class="menu-section-label">학생 관리</div>
+                    <div class="menu-nav-item" data-view="student-search">
+                        <i class="fa-solid fa-users-viewfinder nav-icon"></i>
+                        <span>학생 검색 & 상세 조회</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="student-reg">
+                        <i class="fa-solid fa-user-plus nav-icon"></i>
+                        <span>새 학생 등록</span>
+                    </div>
+
+                    <div class="menu-section-label">도서 관리</div>
+                    <div class="menu-nav-item" data-view="book-search">
+                        <i class="fa-solid fa-magnifying-glass nav-icon"></i>
+                        <span>도서 검색 & 상세 조회</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="book-reg">
+                        <i class="fa-solid fa-book-medical nav-icon"></i>
+                        <span>새 도서 등록</span>
                     </div>
 
                     <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
@@ -145,7 +145,7 @@
                 </div>
 
                 <!-- View 1: User Book Registration Form -->
-                <section id="view-book-reg" class="workspace-view active">
+                <section id="view-book-reg" class="workspace-view">
                     <div class="book-reg-layout">
                         <!-- Left: Registration Form Card -->
                         <div class="card form-card">
@@ -578,10 +578,15 @@
                                     <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 1. 학습 학생 선택</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
-                                            <label for="studylog-student-id">학생 선택 <span class="required">*</span></label>
-                                            <select id="studylog-student-id" name="StudentId" class="form-control" required>
-                                                <option value="">학생 로딩 중...</option>
-                                            </select>
+                                            <label>학생 선택 <span class="required">*</span></label>
+                                            <div class="picker-input-group">
+                                                <input type="hidden" id="selected-student-id" name="StudentId">
+                                                <input type="text" id="selected-student-display" class="form-control" placeholder="아래 [학생 검색] 버튼을 클릭하여 학생을 선택하세요" readonly>
+                                                <button type="button" id="btn-open-student-picker" class="btn btn-primary">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 학생 검색
+                                                </button>
+                                            </div>
+                                            <div id="preview-selected-student" class="picker-preview-card hidden"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -591,10 +596,15 @@
                                     <h4 class="section-title"><i class="fa-solid fa-book"></i> 2. 학습 도서 선택</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
-                                            <label for="studylog-book-id">도서 선택 <span class="required">*</span></label>
-                                            <select id="studylog-book-id" name="BookId" class="form-control" required>
-                                                <option value="">도서 로딩 중...</option>
-                                            </select>
+                                            <label>도서 선택 <span class="required">*</span></label>
+                                            <div class="picker-input-group">
+                                                <input type="hidden" id="selected-book-id" name="BookId">
+                                                <input type="text" id="selected-book-display" class="form-control" placeholder="아래 [도서 검색] 버튼을 클릭하여 도서를 선택하세요" readonly>
+                                                <button type="button" id="btn-open-book-picker" class="btn btn-primary">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 도서 검색
+                                                </button>
+                                            </div>
+                                            <div id="preview-selected-book" class="picker-preview-card hidden"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -632,7 +642,7 @@
                 </section>
 
                 <!-- View 6: User StudyLog Search & Detail View -->
-                <section id="view-studylog-search" class="workspace-view">
+                <section id="view-studylog-search" class="workspace-view active">
                     <div class="book-search-layout">
                         <!-- Top Search Bar Card -->
                         <div class="card search-filter-card">
@@ -905,6 +915,9 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
     <!-- Student Search Picker Modal Dialog -->
     <div id="modal-student-picker" class="modal-backdrop hidden">
         <div class="modal-card picker-modal-card">
