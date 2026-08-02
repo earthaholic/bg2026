@@ -70,8 +70,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookSearchQ = document.getElementById('book-search-q');
     const btnDoBookSearch = document.getElementById('btn-do-book-search');
     const filterTarget = document.getElementById('filter-target');
-    const filterVoca = document.getElementById('filter-voca');
-    const filterLength = document.getElementById('filter-length');
+    const filterVocaMin = document.getElementById('filter-voca-min');
+    const filterVocaMax = document.getElementById('filter-voca-max');
+    const filterVocaVal = document.getElementById('filter-voca-val');
+    const vocaRangeFill = document.getElementById('voca-range-fill');
+
+    const filterLengthMin = document.getElementById('filter-length-min');
+    const filterLengthMax = document.getElementById('filter-length-max');
+    const filterLengthVal = document.getElementById('filter-length-val');
+    const lengthRangeFill = document.getElementById('length-range-fill');
     const filterChkQuiz = document.getElementById('filter-chk-quiz');
     const filterChkReading = document.getElementById('filter-chk-reading');
     const filterChkWriting = document.getElementById('filter-chk-writing');
@@ -352,9 +359,57 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        function updateDualSlider(minEl, maxEl, labelEl, fillEl, evt) {
+            if (!minEl || !maxEl || !labelEl) return;
+            let minVal = parseInt(minEl.value) || 0;
+            let maxVal = parseInt(maxEl.value) || 10;
+
+            if (minVal > maxVal) {
+                if (evt && evt.target === minEl) {
+                    minEl.value = maxVal;
+                    minVal = maxVal;
+                } else {
+                    maxEl.value = minVal;
+                    maxVal = minVal;
+                }
+            }
+
+            if (minVal === 0 && maxVal === 10) {
+                labelEl.textContent = '0 ~ 10단계 (전체)';
+            } else {
+                labelEl.textContent = `${minVal}단계 ~ ${maxVal}단계`;
+            }
+
+            if (fillEl) {
+                const left = (minVal / 10) * 100;
+                const right = 100 - (maxVal / 10) * 100;
+                fillEl.style.left = left + '%';
+                fillEl.style.right = right + '%';
+            }
+        }
+
         filterTarget.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
-        filterVoca.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
-        filterLength.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
+
+        if (filterVocaMin && filterVocaMax) {
+            const handleVocaChange = (e) => {
+                updateDualSlider(filterVocaMin, filterVocaMax, filterVocaVal, vocaRangeFill, e);
+                searchPage = 1;
+                loadBookSearchResults();
+            };
+            filterVocaMin.addEventListener('input', handleVocaChange);
+            filterVocaMax.addEventListener('input', handleVocaChange);
+        }
+
+        if (filterLengthMin && filterLengthMax) {
+            const handleLengthChange = (e) => {
+                updateDualSlider(filterLengthMin, filterLengthMax, filterLengthVal, lengthRangeFill, e);
+                searchPage = 1;
+                loadBookSearchResults();
+            };
+            filterLengthMin.addEventListener('input', handleLengthChange);
+            filterLengthMax.addEventListener('input', handleLengthChange);
+        }
+
         filterChkQuiz.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkReading.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkWriting.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
@@ -363,8 +418,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnResetFilters.addEventListener('click', () => {
             bookSearchQ.value = '';
             filterTarget.value = '';
-            filterVoca.value = '0';
-            filterLength.value = '0';
+            if (filterVocaMin && filterVocaMax) {
+                filterVocaMin.value = 0;
+                filterVocaMax.value = 10;
+                updateDualSlider(filterVocaMin, filterVocaMax, filterVocaVal, vocaRangeFill);
+            }
+            if (filterLengthMin && filterLengthMax) {
+                filterLengthMin.value = 0;
+                filterLengthMax.value = 10;
+                updateDualSlider(filterLengthMin, filterLengthMax, filterLengthVal, lengthRangeFill);
+            }
             filterChkQuiz.checked = false;
             filterChkReading.checked = false;
             filterChkWriting.checked = false;
@@ -1360,8 +1423,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const q = bookSearchQ.value.trim();
             const target = filterTarget.value.trim();
-            const vocaMin = filterVoca.value;
-            const lengthMin = filterLength.value;
+            const vocaMin = filterVocaMin ? parseInt(filterVocaMin.value) : 0;
+            const vocaMax = filterVocaMax ? parseInt(filterVocaMax.value) : 10;
+            const lengthMin = filterLengthMin ? parseInt(filterLengthMin.value) : 0;
+            const lengthMax = filterLengthMax ? parseInt(filterLengthMax.value) : 10;
             const hasQuiz = filterChkQuiz.checked ? 1 : 0;
             const hasReading = filterChkReading.checked ? 1 : 0;
             const hasWriting = filterChkWriting.checked ? 1 : 0;
@@ -1374,7 +1439,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (q) queryParams.append('q', q);
             if (target) queryParams.append('target', target);
             if (vocaMin > 0) queryParams.append('voca_min', vocaMin);
+            if (vocaMax < 10) queryParams.append('voca_max', vocaMax);
             if (lengthMin > 0) queryParams.append('length_min', lengthMin);
+            if (lengthMax < 10) queryParams.append('length_max', lengthMax);
             if (hasQuiz) queryParams.append('has_quiz', 1);
             if (hasReading) queryParams.append('has_reading', 1);
             if (hasWriting) queryParams.append('has_writing', 1);

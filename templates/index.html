@@ -346,25 +346,23 @@
                                 </div>
 
                                 <div class="filter-group">
-                                    <label><i class="fa-solid fa-spell-check"></i> 어휘 최소 단계</label>
-                                    <select id="filter-voca" class="form-control">
-                                        <option value="0">전체 (상관없음)</option>
-                                        <option value="1">1단계 이상</option>
-                                        <option value="3">3단계 이상</option>
-                                        <option value="5">5단계 이상</option>
-                                        <option value="7">7단계 이상</option>
-                                    </select>
+                                    <label><i class="fa-solid fa-spell-check"></i> 어휘 단계 범위: <strong id="filter-voca-val" style="color: var(--primary);">0 ~ 10단계 (전체)</strong></label>
+                                    <div class="dual-range-wrapper">
+                                        <div class="dual-range-track-bg"></div>
+                                        <div class="dual-range-track-fill" id="voca-range-fill"></div>
+                                        <input type="range" id="filter-voca-min" min="0" max="10" step="1" value="0" class="dual-slider">
+                                        <input type="range" id="filter-voca-max" min="0" max="10" step="1" value="10" class="dual-slider">
+                                    </div>
                                 </div>
 
                                 <div class="filter-group">
-                                    <label><i class="fa-solid fa-book-open"></i> 분량 최소 단계</label>
-                                    <select id="filter-length" class="form-control">
-                                        <option value="0">전체 (상관없음)</option>
-                                        <option value="1">1단계 이상</option>
-                                        <option value="3">3단계 이상</option>
-                                        <option value="5">5단계 이상</option>
-                                        <option value="7">7단계 이상</option>
-                                    </select>
+                                    <label><i class="fa-solid fa-book-open"></i> 분량 단계 범위: <strong id="filter-length-val" style="color: var(--primary);">0 ~ 10단계 (전체)</strong></label>
+                                    <div class="dual-range-wrapper">
+                                        <div class="dual-range-track-bg"></div>
+                                        <div class="dual-range-track-fill" id="length-range-fill"></div>
+                                        <input type="range" id="filter-length-min" min="0" max="10" step="1" value="0" class="dual-slider">
+                                        <input type="range" id="filter-length-max" min="0" max="10" step="1" value="10" class="dual-slider">
+                                    </div>
                                 </div>
 
                                 <div class="filter-group span-full">

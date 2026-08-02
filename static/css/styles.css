@@ -1567,3 +1567,81 @@ body {
     gap: 0.3rem;
     flex-shrink: 0;
 }
+
+/* Dual-Thumb Range Slider Custom Controls */
+.dual-range-wrapper {
+    position: relative;
+    width: 100%;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    margin-top: 0.25rem;
+}
+
+.dual-range-track-bg {
+    position: absolute;
+    height: 6px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+    z-index: 1;
+}
+
+.dual-range-track-fill {
+    position: absolute;
+    height: 6px;
+    background: var(--primary);
+    border-radius: 3px;
+    z-index: 2;
+    left: 0%;
+    right: 0%;
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.dual-slider {
+    position: absolute;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    pointer-events: none;
+    z-index: 3;
+    outline: none;
+    margin: 0;
+}
+
+.dual-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid var(--primary);
+    box-shadow: 0 0 10px var(--primary-glow);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 0.15s, background-color 0.15s;
+}
+
+.dual-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background: #93c5fd;
+}
+
+.dual-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 10px var(--primary-glow);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 0.15s, background-color 0.15s;
+}
+
+.dual-slider::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    background: #93c5fd;
+}

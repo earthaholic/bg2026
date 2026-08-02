@@ -179,7 +179,9 @@ def user_search_books(
     q: Optional[str] = Query(None),
     target: Optional[str] = Query(None),
     voca_min: Optional[int] = Query(None),
+    voca_max: Optional[int] = Query(None),
     length_min: Optional[int] = Query(None),
+    length_max: Optional[int] = Query(None),
     has_quiz: Optional[int] = Query(None),
     has_reading: Optional[int] = Query(None),
     has_writing: Optional[int] = Query(None),
@@ -207,9 +209,17 @@ def user_search_books(
         conditions.append('"Voca" >= ?')
         params.append(voca_min)
 
+    if voca_max is not None and voca_max < 10:
+        conditions.append('"Voca" <= ?')
+        params.append(voca_max)
+
     if length_min is not None and length_min > 0:
         conditions.append('"BookLength" >= ?')
         params.append(length_min)
+
+    if length_max is not None and length_max < 10:
+        conditions.append('"BookLength" <= ?')
+        params.append(length_max)
 
     if has_quiz == 1:
         conditions.append('"HasQuiz" = 1')
