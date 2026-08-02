@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
     <link rel="stylesheet" href="/static/css/styles.css">
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="dark-theme">
     <div id="app" class="app-layout">
@@ -28,6 +30,12 @@
             </div>
 
             <div class="nav-actions">
+                <!-- Theme Toggle Button -->
+                <button id="btn-theme-toggle" class="btn-theme-toggle" title="다크 / 라이트 테마 전환">
+                    <i id="theme-toggle-icon" class="fa-solid fa-moon"></i>
+                    <span id="theme-toggle-text">다크 모드</span>
+                </button>
+
                 <!-- User Profile & Auth Status -->
                 <div id="user-profile-badge" class="user-badge hidden">
                     <span class="avatar"><i class="fa-solid fa-user-shield"></i></span>
@@ -848,7 +856,7 @@
 
     <!-- Student Detail Modal -->
     <div id="modal-student-detail" class="modal-backdrop hidden">
-        <div class="modal-card detail-card">
+        <div class="modal-card detail-card student-wide-detail-card">
             <div class="modal-header">
                 <h3 id="modal-student-detail-title"><i class="fa-solid fa-user-graduate"></i> 학생 상세 정보</h3>
                 <div class="detail-header-actions">

@@ -406,11 +406,37 @@ def user_get_student_detail(
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT rowid as row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
+    student_row = cursor.fetchone()
+    if not student_row:
+        conn.close()
         raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
-    return {"student": dict(row)}
+    
+    student = dict(student_row)
+    s_row_id = student['row_id']
+    s_id = student.get('Id', s_row_id)
+    s_name = student.get('Name', '')
+
+    # Fetch all StudyLogs for this student joined with Books
+    studylogs_query = '''
+        SELECT sl.rowid as row_id, sl.*, 
+               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher,
+               b.Voca as BookVoca, b.BookLength as BookLength
+        FROM "StudyLogs" sl
+        LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
+        WHERE sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?
+        ORDER BY sl.rowid DESC
+    '''
+    cursor.execute(studylogs_query, (s_row_id, str(s_row_id), s_id, s_name))
+    logs_rows = cursor.fetchall()
+    conn.close()
+
+    studylogs = [dict(r) for r in logs_rows]
+
+    return {
+        "student": student,
+        "studylogs": studylogs,
+        "total_studylogs": len(studylogs)
+    }
 
 # --- Options List APIs for Forms ---
 @app.get("/api/user/students-options")

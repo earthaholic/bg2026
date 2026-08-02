@@ -22,6 +22,36 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentSearchTotalPages = 1;
 
     // DOM Elements
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const themeToggleIcon = document.getElementById('theme-toggle-icon');
+    const themeToggleText = document.getElementById('theme-toggle-text');
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('bg2026_theme', theme);
+
+        if (theme === 'light') {
+            if (themeToggleIcon) themeToggleIcon.className = 'fa-solid fa-sun';
+            if (themeToggleText) themeToggleText.textContent = '라이트 모드';
+        } else {
+            if (themeToggleIcon) themeToggleIcon.className = 'fa-solid fa-moon';
+            if (themeToggleText) themeToggleText.textContent = '다크 모드';
+        }
+    }
+
+    // Initialize Theme
+    const savedTheme = localStorage.getItem('bg2026_theme') || 
+        (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    applyTheme(savedTheme);
+
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme);
+        });
+    }
+
     const modalLogin = document.getElementById('modal-login');
     const formLogin = document.getElementById('form-login');
     const loginErrorMsg = document.getElementById('login-error-msg');
@@ -1770,25 +1800,318 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            let html = `
-                <div class="detail-header-block">
-                    <div class="detail-title">${escapeHtml(s.Name || '이름 없음')}</div>
-                    <div class="detail-meta-row">
-                        <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
-                        <span><i class="fa-solid fa-cake-candles"></i> 생년월일: <strong>${formatBirthday(s.Birthday)}</strong></span>
-                        <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
-                    </div>
-                </div>
+            const studylogs = data.studylogs || [];
+            const totalLogs = data.total_studylogs || 0;
 
-                <div>
-                    <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 특이사항 (Description)</div>
-                    <div class="detail-desc-box">${escapeHtml(s.Description || '등록된 메모나 특이사항이 없습니다.')}</div>
+            let studylogsHtml = '';
+            if (studylogs.length === 0) {
+                studylogsHtml = `
+                    <div class="empty-state" style="padding: 1.5rem !important;">
+                        <i class="fa-solid fa-folder-open fa-2x"></i>
+                        <p style="font-size: 0.85rem; margin-top: 0.5rem;">등록된 수업 진행 내역(학습 기록)이 없습니다.</p>
+                    </div>
+                `;
+            } else {
+                studylogsHtml = `
+                    <div class="student-studylog-list">
+                        ${studylogs.map(log => `
+                            <div class="student-studylog-item" data-log-id="${log.row_id}">
+                                <div class="log-item-header">
+                                    <span class="log-date"><i class="fa-regular fa-calendar-check"></i> ${escapeHtml(log.StudiedDay || log.CreatedDay || '날짜 미상')}</span>
+                                    <span class="log-book-title"><i class="fa-solid fa-book"></i> <strong>${escapeHtml(log.BookTitle || '도서 정보 없음')}</strong></span>
+                                </div>
+                                <div class="log-item-metrics">
+                                    <span class="metric-tag">어휘 <strong>${log.Voca || 0}단계</strong></span>
+                                    <span class="metric-tag">분량 <strong>${log.BookLength || 0}단계</strong></span>
+                                    ${log.Metaphor ? `<span class="metric-tag">비유 <strong>${log.Metaphor}단계</strong></span>` : ''}
+                                    ${log.Logic ? `<span class="metric-tag">논리 <strong>${log.Logic}단계</strong></span>` : ''}
+                                    ${log.Structure ? `<span class="metric-tag">구조 <strong>${log.Structure}단계</strong></span>` : ''}
+                                    ${log.Summary ? `<span class="metric-tag">요약 <strong>${log.Summary}단계</strong></span>` : ''}
+                                </div>
+                                ${log.TeacherMemo || log.Description ? `
+                                    <div class="log-item-memo"><i class="fa-solid fa-comment-dots"></i> ${escapeHtml(log.TeacherMemo || log.Description)}</div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            let html = `
+                <div class="student-detail-layout">
+                    <!-- Left Column: Student Info & Study History -->
+                    <div class="student-detail-left-col">
+                        <div class="detail-header-block">
+                            <div class="detail-title">${escapeHtml(s.Name || '이름 없음')}</div>
+                            <div class="detail-meta-row">
+                                <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
+                                <span><i class="fa-solid fa-cake-candles"></i> 생년월일: <strong>${formatBirthday(s.Birthday)}</strong></span>
+                                <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
+                                <span><i class="fa-solid fa-award"></i> 총 수업: <strong>${totalLogs}회</strong></span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 1rem;">
+                            <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 특이사항</div>
+                            <div class="detail-desc-box">${escapeHtml(s.Description || '등록된 메모나 특이사항이 없습니다.')}</div>
+                        </div>
+
+                        <div style="margin-top: 1.1rem;">
+                            <div class="detail-section-title">
+                                <span><i class="fa-solid fa-book-open-reader"></i> 최근 수업 진행 내역 (StudyLogs: 총 ${totalLogs}건)</span>
+                            </div>
+                            ${studylogsHtml}
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Yearly Combined Analytics Chart & Summary Table -->
+                    <div class="student-detail-right-col">
+                        <div class="chart-card-box">
+                            <div class="chart-card-header">
+                                <i class="fa-solid fa-chart-area" style="color: var(--primary);"></i>
+                                <span>연도별 학습 수량(막대) & 분량 평균(꺾은선) 통합 분석</span>
+                            </div>
+                            <div class="chart-canvas-container" style="position: relative; height: 310px;">
+                                <canvas id="chart-student-yearly-combined"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="chart-card-box" style="margin-top: 1rem;">
+                            <div class="chart-card-header">
+                                <i class="fa-solid fa-table-list" style="color: var(--success);"></i>
+                                <span>연도별 학습 성과 요약</span>
+                            </div>
+                            <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                                <table class="modern-table" style="font-size: 0.82rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>연도</th>
+                                            <th>수업 도서 수량</th>
+                                            <th>도서 분량 평균</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="student-summary-table-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
 
             modalStudentDetailBody.innerHTML = html;
+
+            modalStudentDetailBody.querySelectorAll('.student-studylog-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const logId = item.getAttribute('data-log-id');
+                    if (logId) {
+                        openStudyLogDetailModal(logId);
+                    }
+                });
+            });
+
+            // Render Combined Chart & Summary Table
+            renderStudentCharts(studylogs);
         } catch (err) {
             modalStudentDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    // Render Student Yearly Combined Dual-Y Chart (Book Count & Average Length)
+    let chartYearlyCombined = null;
+
+    function renderStudentCharts(studylogs) {
+        if (chartYearlyCombined) { chartYearlyCombined.destroy(); chartYearlyCombined = null; }
+
+        const yearlyDataMap = {};
+
+        studylogs.forEach(log => {
+            const rawDate = String(log.StudiedDay || log.CreatedDay || '').trim();
+            const match = rawDate.match(/\b(20\d\d)\b/);
+            if (match) {
+                const year = match[1];
+                const lengthVal = parseFloat(log.BookLength || log.b_BookLength || 0) || 0;
+                if (!yearlyDataMap[year]) {
+                    yearlyDataMap[year] = { sum: 0, count: 0 };
+                }
+                yearlyDataMap[year].sum += lengthVal;
+                yearlyDataMap[year].count += 1;
+            }
+        });
+
+        const sortedYears = Object.keys(yearlyDataMap).sort();
+        let labels = [];
+        let countValues = [];
+        let avgValues = [];
+
+        const summaryTableBody = document.getElementById('student-summary-table-body');
+
+        if (sortedYears.length === 0) {
+            labels = ['기록 없음'];
+            countValues = [0];
+            avgValues = [0];
+            if (summaryTableBody) {
+                summaryTableBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-dim);">수업 내역이 없습니다.</td></tr>`;
+            }
+        } else {
+            labels = sortedYears.map(y => `${y}년`);
+            countValues = sortedYears.map(y => yearlyDataMap[y].count);
+            avgValues = sortedYears.map(y => {
+                const d = yearlyDataMap[y];
+                return d.count > 0 ? parseFloat((d.sum / d.count).toFixed(1)) : 0;
+            });
+
+            if (summaryTableBody) {
+                summaryTableBody.innerHTML = sortedYears.map(y => {
+                    const cnt = yearlyDataMap[y].count;
+                    const avg = cnt > 0 ? (yearlyDataMap[y].sum / cnt).toFixed(1) : 0;
+                    return `
+                        <tr>
+                            <td><strong>${y}년</strong></td>
+                            <td><span class="metric-tag" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.3);">${cnt}권</span></td>
+                            <td><span class="metric-tag">${avg}단계</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        const textColor = isLight ? '#334155' : '#94a3b8';
+        const gridColor = isLight ? 'rgba(203, 213, 225, 0.5)' : 'rgba(255, 255, 255, 0.08)';
+
+        // Custom inline Data Labels plugin for Dual-Y Chart
+        const datalabelsPlugin = {
+            id: 'customDataLabels',
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    meta.data.forEach((element, index) => {
+                        const val = dataset.data[index];
+                        if (val !== null && val !== undefined) {
+                            const unit = dataset.unit || '';
+                            const text = `${val}${unit}`;
+                            ctx.save();
+                            ctx.font = '600 11px Inter, sans-serif';
+                            ctx.fillStyle = isLight ? (dataset.colorLight || '#0f172a') : (dataset.colorDark || '#f8fafc');
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'bottom';
+                            const yOffset = dataset.type === 'line' ? 8 : 6;
+                            ctx.fillText(text, element.x, element.y - yOffset);
+                            ctx.restore();
+                        }
+                    });
+                });
+            }
+        };
+
+        // Combined Dual-Y Axis Chart (Bar = Count, Line = Average)
+        const ctxCombined = document.getElementById('chart-student-yearly-combined');
+        if (ctxCombined && typeof Chart !== 'undefined') {
+            chartYearlyCombined = new Chart(ctxCombined, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: '수업 수량 (좌측 Y축)',
+                            data: countValues,
+                            yAxisID: 'y',
+                            backgroundColor: 'rgba(139, 92, 246, 0.75)',
+                            borderColor: '#8b5cf6',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            hoverBackgroundColor: '#8b5cf6',
+                            order: 2,
+                            unit: '권',
+                            colorLight: '#7c3aed',
+                            colorDark: '#c084fc'
+                        },
+                        {
+                            type: 'line',
+                            label: '분량 평균 (우측 Y축)',
+                            data: avgValues,
+                            yAxisID: 'y1',
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            fill: false,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#ffffff',
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            order: 1,
+                            unit: '단계',
+                            colorLight: '#2563eb',
+                            colorDark: '#60a5fa'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 28, left: 10, right: 10 } },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: textColor,
+                                font: { family: 'Inter', size: 11, weight: '500' },
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const unit = ctx.dataset.unit || '';
+                                    return `  ${ctx.dataset.label}: ${ctx.parsed.y}${unit}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: gridColor },
+                            ticks: { color: textColor, font: { family: 'Inter', size: 11, weight: '500' } }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: '수량 (권)',
+                                color: isLight ? '#7c3aed' : '#c084fc',
+                                font: { family: 'Inter', size: 11, weight: '600' }
+                            },
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            ticks: { color: textColor, font: { family: 'Inter', size: 11 } }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: '분량 평균 (단계)',
+                                color: isLight ? '#2563eb' : '#60a5fa',
+                                font: { family: 'Inter', size: 11, weight: '600' }
+                            },
+                            beginAtZero: true,
+                            suggestedMax: 10,
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: textColor, font: { family: 'Inter', size: 11 } }
+                        }
+                    }
+                },
+                plugins: [datalabelsPlugin]
+            });
         }
     }
 
