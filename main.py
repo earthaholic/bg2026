@@ -202,23 +202,32 @@ def user_search_books(
         params.extend([search_pattern] * 5)
 
     if target and target.strip():
-        conditions.append('"Target" LIKE ?')
-        params.append(f"%{target.strip()}%")
+        target_list = [t.strip() for t in target.split(',') if t.strip()]
+        if target_list:
+            or_conds = []
+            for t in target_list:
+                if t == '선택안함':
+                    or_conds.append('("Target" IS NULL OR "Target" = \'\' OR TRIM("Target") = \'\')')
+                else:
+                    or_conds.append('"Target" LIKE ?')
+                    params.append(f"%{t}%")
+            if or_conds:
+                conditions.append(f'({" OR ".join(or_conds)})')
 
-    if voca_min is not None and voca_min > 0:
-        conditions.append('"Voca" >= ?')
+    if voca_min is not None:
+        conditions.append('COALESCE("Voca", 0) >= ?')
         params.append(voca_min)
 
-    if voca_max is not None and voca_max < 10:
-        conditions.append('"Voca" <= ?')
+    if voca_max is not None:
+        conditions.append('COALESCE("Voca", 0) <= ?')
         params.append(voca_max)
 
-    if length_min is not None and length_min > 0:
-        conditions.append('"BookLength" >= ?')
+    if length_min is not None:
+        conditions.append('COALESCE("BookLength", 0) >= ?')
         params.append(length_min)
 
-    if length_max is not None and length_max < 10:
-        conditions.append('"BookLength" <= ?')
+    if length_max is not None:
+        conditions.append('COALESCE("BookLength", 0) <= ?')
         params.append(length_max)
 
     if has_quiz == 1:
@@ -420,7 +429,7 @@ def user_get_student_detail(
     studylogs_query = '''
         SELECT sl.rowid as row_id, sl.*, 
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher,
-               b.Voca as BookVoca, b.BookLength as BookLength
+               b.Voca as BookVoca, b.BookLength as BookLength, b.Target as BookTarget
         FROM "StudyLogs" sl
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
         WHERE sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?

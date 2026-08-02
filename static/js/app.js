@@ -391,8 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function updateDualSlider(minEl, maxEl, labelEl, fillEl, evt) {
             if (!minEl || !maxEl || !labelEl) return;
-            let minVal = parseInt(minEl.value) || 0;
-            let maxVal = parseInt(maxEl.value) || 10;
+            let minVal = (minEl.value !== '' && !isNaN(minEl.value)) ? parseInt(minEl.value) : 0;
+            let maxVal = (maxEl.value !== '' && !isNaN(maxEl.value)) ? parseInt(maxEl.value) : 10;
 
             if (minVal > maxVal) {
                 if (evt && evt.target === minEl) {
@@ -418,7 +418,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        filterTarget.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
+        document.querySelectorAll('.filter-target-chk').forEach(chk => {
+            chk.addEventListener('change', () => {
+                searchPage = 1;
+                loadBookSearchResults();
+            });
+        });
 
         if (filterVocaMin && filterVocaMax) {
             const handleVocaChange = (e) => {
@@ -447,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnResetFilters.addEventListener('click', () => {
             bookSearchQ.value = '';
-            filterTarget.value = '';
+            document.querySelectorAll('.filter-target-chk').forEach(chk => { chk.checked = false; });
             if (filterVocaMin && filterVocaMax) {
                 filterVocaMin.value = 0;
                 filterVocaMax.value = 10;
@@ -1445,6 +1450,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    function getSelectedTargetCheckboxes() {
+        const chks = document.querySelectorAll('.filter-target-chk:checked');
+        return Array.from(chks).map(c => c.value.trim()).filter(Boolean).join(',');
+    }
+
     // Book Search Handler
     async function loadBookSearchResults() {
         if (!token) return;
@@ -1452,11 +1462,11 @@ document.addEventListener('DOMContentLoaded', () => {
             bookCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>도서 검색 중...</p></div>';
 
             const q = bookSearchQ.value.trim();
-            const target = filterTarget.value.trim();
-            const vocaMin = filterVocaMin ? parseInt(filterVocaMin.value) : 0;
-            const vocaMax = filterVocaMax ? parseInt(filterVocaMax.value) : 10;
-            const lengthMin = filterLengthMin ? parseInt(filterLengthMin.value) : 0;
-            const lengthMax = filterLengthMax ? parseInt(filterLengthMax.value) : 10;
+            const target = getSelectedTargetCheckboxes();
+            const vocaMin = (filterVocaMin && filterVocaMin.value !== '' && !isNaN(filterVocaMin.value)) ? parseInt(filterVocaMin.value) : 0;
+            const vocaMax = (filterVocaMax && filterVocaMax.value !== '' && !isNaN(filterVocaMax.value)) ? parseInt(filterVocaMax.value) : 10;
+            const lengthMin = (filterLengthMin && filterLengthMin.value !== '' && !isNaN(filterLengthMin.value)) ? parseInt(filterLengthMin.value) : 0;
+            const lengthMax = (filterLengthMax && filterLengthMax.value !== '' && !isNaN(filterLengthMax.value)) ? parseInt(filterLengthMax.value) : 10;
             const hasQuiz = filterChkQuiz.checked ? 1 : 0;
             const hasReading = filterChkReading.checked ? 1 : 0;
             const hasWriting = filterChkWriting.checked ? 1 : 0;
@@ -1468,10 +1478,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (q) queryParams.append('q', q);
             if (target) queryParams.append('target', target);
-            if (vocaMin > 0) queryParams.append('voca_min', vocaMin);
-            if (vocaMax < 10) queryParams.append('voca_max', vocaMax);
-            if (lengthMin > 0) queryParams.append('length_min', lengthMin);
-            if (lengthMax < 10) queryParams.append('length_max', lengthMax);
+            if (vocaMin > 0 || vocaMax < 10) {
+                queryParams.append('voca_min', vocaMin);
+                queryParams.append('voca_max', vocaMax);
+            }
+            if (lengthMin > 0 || lengthMax < 10) {
+                queryParams.append('length_min', lengthMin);
+                queryParams.append('length_max', lengthMax);
+            }
             if (hasQuiz) queryParams.append('has_quiz', 1);
             if (hasReading) queryParams.append('has_reading', 1);
             if (hasWriting) queryParams.append('has_writing', 1);
@@ -1503,7 +1517,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const title = escapeHtml(b.Title || '제목 없음');
             const author = escapeHtml(b.Author || '저자 미상');
             const publisher = escapeHtml(b.Publisher || '출판사 미상');
-            const target = escapeHtml(b.Target || '전연령');
+            const target = escapeHtml(b.Target || '선택안함');
             const bookId = b.row_id || b.Id;
 
             // Badges
@@ -1527,7 +1541,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="book-card-bottom">
-                        <span><i class="fa-solid fa-user-graduate"></i> 대상: ${target}</span>
+                        <span><i class="fa-solid fa-layer-group"></i> 난이도: ${target}</span>
                         <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
                     </div>
                 </div>
@@ -1716,7 +1730,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span><i class="fa-solid fa-user"></i> 저자: <strong>${escapeHtml(b.Author || '-')}</strong></span>
                         <span><i class="fa-solid fa-building"></i> 출판사: <strong>${escapeHtml(b.Publisher || '-')}</strong></span>
                         <span><i class="fa-solid fa-layer-group"></i> 분야: <strong>${escapeHtml(b.Subject || '-')}</strong></span>
-                        <span><i class="fa-solid fa-user-graduate"></i> 대상: <strong>${escapeHtml(b.Target || '-')}</strong></span>
+                        <span><i class="fa-solid fa-layer-group"></i> 난이도: <strong>${escapeHtml(b.Target || '선택안함')}</strong></span>
                     </div>
                 </div>
 
@@ -1869,9 +1883,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="chart-card-box">
                             <div class="chart-card-header">
                                 <i class="fa-solid fa-chart-area" style="color: var(--primary);"></i>
-                                <span>연도별 학습 수량(막대) & 분량 평균(꺾은선) 통합 분석</span>
+                                <span>연도별 학습 수량(막대) & 가중 분량 평균(꺾은선) 통합 분석</span>
                             </div>
-                            <div class="chart-canvas-container" style="position: relative; height: 310px;">
+                            <div class="chart-weight-info-box" style="margin: 0.5rem 0.75rem 0 0.75rem; padding: 0.45rem 0.75rem; background: var(--bg-surface-hover); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;">
+                                <span><i class="fa-solid fa-scale-balanced" style="color: var(--primary);"></i> <strong>난이도 가중치 기준:</strong></span>
+                                <span>선택안함·초등부 <strong>1.0x</strong> | 중등부 <strong>2.0x</strong> | 심화반·독서모임 <strong>3.0x</strong></span>
+                            </div>
+                            <div class="chart-canvas-container" style="position: relative; height: 280px;">
                                 <canvas id="chart-student-yearly-combined"></canvas>
                             </div>
                         </div>
@@ -1879,7 +1897,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="chart-card-box" style="margin-top: 1rem;">
                             <div class="chart-card-header">
                                 <i class="fa-solid fa-table-list" style="color: var(--success);"></i>
-                                <span>연도별 학습 성과 요약</span>
+                                <span>연도별 학습 성과 요약 (난이도 가중치 반영)</span>
                             </div>
                             <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
                                 <table class="modern-table" style="font-size: 0.82rem;">
@@ -1887,7 +1905,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <tr>
                                             <th>연도</th>
                                             <th>수업 도서 수량</th>
-                                            <th>도서 분량 평균</th>
+                                            <th>순수 분량 평균</th>
+                                            <th>가중 분량 평균</th>
                                         </tr>
                                     </thead>
                                     <tbody id="student-summary-table-body">
@@ -1917,7 +1936,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Render Student Yearly Combined Dual-Y Chart (Book Count & Average Length)
+    // Difficulty Weight Helper (선택안함/초등부: 1.0, 중등부: 2.0, 심화반/독서모임: 3.0)
+    function getDifficultyWeight(targetStr) {
+        const t = String(targetStr || '').trim();
+        if (t === '중등부') return 2.0;
+        if (t === '심화반' || t === '독서모임') return 3.0;
+        return 1.0;
+    }
+
+    // Render Student Yearly Combined Dual-Y Chart (Book Count & Weighted Average Length)
     let chartYearlyCombined = null;
 
     function renderStudentCharts(studylogs) {
@@ -1930,11 +1957,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const match = rawDate.match(/\b(20\d\d)\b/);
             if (match) {
                 const year = match[1];
-                const lengthVal = parseFloat(log.BookLength || log.b_BookLength || 0) || 0;
+                const rawLength = parseFloat(log.BookLength || log.b_BookLength || 0) || 0;
+                const target = log.BookTarget || log.b_Target || log.Target || '';
+                const weight = getDifficultyWeight(target);
+                const weightedLength = rawLength * weight;
+
                 if (!yearlyDataMap[year]) {
-                    yearlyDataMap[year] = { sum: 0, count: 0 };
+                    yearlyDataMap[year] = { rawSum: 0, weightedSum: 0, count: 0 };
                 }
-                yearlyDataMap[year].sum += lengthVal;
+                yearlyDataMap[year].rawSum += rawLength;
+                yearlyDataMap[year].weightedSum += weightedLength;
                 yearlyDataMap[year].count += 1;
             }
         });
@@ -1942,34 +1974,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedYears = Object.keys(yearlyDataMap).sort();
         let labels = [];
         let countValues = [];
-        let avgValues = [];
+        let weightedAvgValues = [];
+        let rawAvgValues = [];
 
         const summaryTableBody = document.getElementById('student-summary-table-body');
 
         if (sortedYears.length === 0) {
             labels = ['기록 없음'];
             countValues = [0];
-            avgValues = [0];
+            weightedAvgValues = [0];
+            rawAvgValues = [0];
             if (summaryTableBody) {
-                summaryTableBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-dim);">수업 내역이 없습니다.</td></tr>`;
+                summaryTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim);">수업 내역이 없습니다.</td></tr>`;
             }
         } else {
             labels = sortedYears.map(y => `${y}년`);
             countValues = sortedYears.map(y => yearlyDataMap[y].count);
-            avgValues = sortedYears.map(y => {
+            weightedAvgValues = sortedYears.map(y => {
                 const d = yearlyDataMap[y];
-                return d.count > 0 ? parseFloat((d.sum / d.count).toFixed(1)) : 0;
+                return d.count > 0 ? parseFloat((d.weightedSum / d.count).toFixed(1)) : 0;
+            });
+            rawAvgValues = sortedYears.map(y => {
+                const d = yearlyDataMap[y];
+                return d.count > 0 ? parseFloat((d.rawSum / d.count).toFixed(1)) : 0;
             });
 
             if (summaryTableBody) {
                 summaryTableBody.innerHTML = sortedYears.map(y => {
                     const cnt = yearlyDataMap[y].count;
-                    const avg = cnt > 0 ? (yearlyDataMap[y].sum / cnt).toFixed(1) : 0;
+                    const rawAvg = cnt > 0 ? (yearlyDataMap[y].rawSum / cnt).toFixed(1) : 0;
+                    const weightedAvg = cnt > 0 ? (yearlyDataMap[y].weightedSum / cnt).toFixed(1) : 0;
                     return `
                         <tr>
                             <td><strong>${y}년</strong></td>
                             <td><span class="metric-tag" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.3);">${cnt}권</span></td>
-                            <td><span class="metric-tag">${avg}단계</span></td>
+                            <td><span class="metric-tag" style="background: rgba(148, 163, 184, 0.12); color: var(--text-main); border-color: rgba(148, 163, 184, 0.3);">${rawAvg}단계</span></td>
+                            <td><span class="metric-tag" style="background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); font-weight: 600;">${weightedAvg}단계</span></td>
                         </tr>
                     `;
                 }).join('');
@@ -2031,8 +2071,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         {
                             type: 'line',
-                            label: '분량 평균 (우측 Y축)',
-                            data: avgValues,
+                            label: '가중 분량 평균 (우측 Y축)',
+                            data: weightedAvgValues,
                             yAxisID: 'y1',
                             borderColor: '#3b82f6',
                             backgroundColor: 'rgba(59, 130, 246, 0.15)',
@@ -2099,7 +2139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             position: 'right',
                             title: {
                                 display: true,
-                                text: '분량 평균 (단계)',
+                                text: '가중 분량 평균 (단계)',
                                 color: isLight ? '#2563eb' : '#60a5fa',
                                 font: { family: 'Inter', size: 11, weight: '600' }
                             },
@@ -2349,9 +2389,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             <label>주제 / 분야 (Subject)</label>
                             <input type="text" name="Subject" class="form-control" value="${escapeHtml(b.Subject || '')}">
                         </div>
-                        <div class="form-group">
-                            <label>대상 학년 / 연령 (Target)</label>
-                            <input type="text" name="Target" class="form-control" value="${escapeHtml(b.Target || '')}">
+                        <div class="form-group span-2">
+                            <label>난이도</label>
+                            <div class="radio-group-inline">
+                                <label class="radio-item"><input type="radio" name="Target" value="" ${(!b.Target || !b.Target.trim()) ? 'checked' : ''}> 선택안함</label>
+                                <label class="radio-item"><input type="radio" name="Target" value="초등부" ${b.Target === '초등부' ? 'checked' : ''}> 초등부</label>
+                                <label class="radio-item"><input type="radio" name="Target" value="중등부" ${b.Target === '중등부' ? 'checked' : ''}> 중등부</label>
+                                <label class="radio-item"><input type="radio" name="Target" value="심화반" ${b.Target === '심화반' ? 'checked' : ''}> 심화반</label>
+                                <label class="radio-item"><input type="radio" name="Target" value="독서모임" ${b.Target === '독서모임' ? 'checked' : ''}> 독서모임</label>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>분량 / 페이지 수 (BookLength)</label>

@@ -983,6 +983,42 @@ body {
     border-radius: var(--radius-md);
 }
 
+/* Difficulty Checkbox & Radio Group Styles */
+.checkbox-group-inline,
+.radio-group-inline {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    padding: 0.45rem 0.25rem;
+}
+
+.chk-item,
+.radio-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.chk-item:hover,
+.radio-item:hover {
+    color: var(--primary);
+}
+
+.chk-item input[type="checkbox"],
+.radio-item input[type="radio"] {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
 .filter-options-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
