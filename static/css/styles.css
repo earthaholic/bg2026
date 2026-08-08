@@ -2153,3 +2153,12 @@ body {
     font-size: 0.78rem;
     font-weight: 600;
 }
+/* 학습 이력 일괄 등록 뷰: 수업 선택/정보/등록 카드가 세로로 쌓여 화면보다 길어지므로 뷰 전체 스크롤 허용 */
+#view-class-studylog-reg {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+/* 공용 .book-search-layout(overflow:hidden, flex:1)이 카드를 잘라내므로 이 뷰에서는 레이아웃이 직접 스크롤되도록 오버라이드 */
+#view-class-studylog-reg .book-search-layout {
+    overflow-y: auto;
+}
