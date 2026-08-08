@@ -21,6 +21,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentSearchLimit = 12;
     let studentSearchTotalPages = 1;
 
+    // Class Search State
+    let classSearchPage = 1;
+    let classSearchLimit = 12;
+    let classSearchTotalPages = 1;
+
+    // Class State
+    let currentDetailClass = null;
+    let pendingClassDeleteId = null;
+    let pendingClassDeleteName = '';
+    let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
+    let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
+    let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
+
     // DOM Elements
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
     const themeToggleIcon = document.getElementById('theme-toggle-icon');
@@ -221,6 +234,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCancelUserDelete = document.getElementById('btn-cancel-user-delete');
     const btnSubmitUserDelete = document.getElementById('btn-submit-user-delete');
 
+    // Class List View Elements
+    const classSearchQ = document.getElementById('class-search-q');
+    const btnDoClassSearch = document.getElementById('btn-do-class-search');
+    const btnResetClassFilter = document.getElementById('btn-reset-class-filter');
+    const classSearchTotalCount = document.getElementById('class-search-total-count');
+    const classCardsGrid = document.getElementById('class-cards-grid');
+    const classSearchPaginationInfo = document.getElementById('class-search-pagination-info');
+    const btnClassSearchPrev = document.getElementById('btn-class-search-prev');
+    const btnClassSearchNext = document.getElementById('btn-class-search-next');
+    const classSearchCurrentPageSpan = document.getElementById('class-search-current-page');
+
+    // Class Registration View Elements
+    const formUserClassReg = document.getElementById('form-user-class-reg');
+    const classRegMsg = document.getElementById('class-reg-msg');
+    const btnResetClassForm = document.getElementById('btn-reset-class-form');
+    const classStudentFilter = document.getElementById('class-student-filter');
+    const classStudentList = document.getElementById('class-student-list');
+    const classSelectedCount = document.getElementById('class-selected-count');
+
+    // Class Detail Modal Elements
+    const modalClassDetail = document.getElementById('modal-class-detail');
+    const modalClassDetailTitle = document.getElementById('modal-class-detail-title');
+    const modalClassDetailActions = document.getElementById('modal-class-detail-actions');
+    const modalClassDetailBody = document.getElementById('modal-class-detail-body');
+    const btnCloseClassDetail = document.getElementById('btn-close-class-detail');
+
+    // Class Delete Confirm Modal Elements
+    const modalClassDeleteConfirm = document.getElementById('modal-class-delete-confirm');
+    const targetClassDeleteNameDisplay = document.getElementById('target-class-delete-name-display');
+    const inputConfirmDeleteClassName = document.getElementById('input-confirm-delete-class-name');
+    const btnSubmitClassDeleteConfirm = document.getElementById('btn-submit-class-delete-confirm');
+    const btnCloseClassDeleteConfirm = document.getElementById('btn-close-class-delete-confirm');
+    const btnCancelClassDeleteConfirm = document.getElementById('btn-cancel-class-delete-confirm');
+
+    // Class Batch StudyLog Registration Elements
+    const classBatchSelect = document.getElementById('class-batch-select');
+    const classBatchInfo = document.getElementById('class-batch-info');
+    const batchClassName = document.getElementById('batch-class-name');
+    const batchClassTeacher = document.getElementById('batch-class-teacher');
+    const batchClassSchedule = document.getElementById('batch-class-schedule');
+    const batchClassStudentCount = document.getElementById('batch-class-student-count');
+    const classBatchRegCard = document.getElementById('class-batch-reg-card');
+    const formClassBatchStudyLog = document.getElementById('form-class-batch-studylog');
+    const batchStudiedDay = document.getElementById('batch-studied-day');
+    const btnBatchApplyDate = document.getElementById('btn-batch-apply-date');
+    const classBatchStudentsBody = document.getElementById('class-batch-students-body');
+    const classBatchResult = document.getElementById('class-batch-result');
+
     let pendingUserPwId = null;
     let pendingUserDeleteId = null;
 
@@ -251,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg'];
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage'];
 
     function isAdmin() {
@@ -342,6 +403,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStudyLogSearchResults();
         } else if (targetView === 'user-manage') {
             loadUserAccounts();
+        } else if (targetView === 'class-list') {
+            loadClassSearchResults();
+        } else if (targetView === 'class-reg') {
+            loadClassRegForm();
+        } else if (targetView === 'class-studylog-reg') {
+            loadClassOptionsForBatch();
         }
     }
 
@@ -666,6 +733,99 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCloseUserDelete.addEventListener('click', () => modalUserDelete.classList.add('hidden'));
         btnCancelUserDelete.addEventListener('click', () => modalUserDelete.classList.add('hidden'));
         btnSubmitUserDelete.addEventListener('click', handleUserDelete);
+
+        // Class List Search & Pagination
+        if (btnDoClassSearch) {
+            btnDoClassSearch.addEventListener('click', () => {
+                classSearchPage = 1;
+                loadClassSearchResults();
+            });
+        }
+        if (classSearchQ) {
+            classSearchQ.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    classSearchPage = 1;
+                    loadClassSearchResults();
+                }
+            });
+        }
+        if (btnResetClassFilter) {
+            btnResetClassFilter.addEventListener('click', () => {
+                classSearchQ.value = '';
+                classSearchPage = 1;
+                loadClassSearchResults();
+            });
+        }
+        if (btnClassSearchPrev) {
+            btnClassSearchPrev.addEventListener('click', () => {
+                if (classSearchPage > 1) {
+                    classSearchPage--;
+                    loadClassSearchResults();
+                }
+            });
+        }
+        if (btnClassSearchNext) {
+            btnClassSearchNext.addEventListener('click', () => {
+                if (classSearchPage < classSearchTotalPages) {
+                    classSearchPage++;
+                    loadClassSearchResults();
+                }
+            });
+        }
+
+        // Class Registration Form
+        if (formUserClassReg) {
+            formUserClassReg.addEventListener('submit', handleUserClassSubmit);
+        }
+        if (btnResetClassForm) {
+            btnResetClassForm.addEventListener('click', () => {
+                formUserClassReg.reset();
+                if (classRegMsg) classRegMsg.classList.add('hidden');
+                loadClassRegForm();
+            });
+        }
+        if (classStudentFilter) {
+            classStudentFilter.addEventListener('input', renderClassStudentCheckboxList);
+        }
+
+        // Class Detail Modal Close
+        if (btnCloseClassDetail) {
+            btnCloseClassDetail.addEventListener('click', () => modalClassDetail.classList.add('hidden'));
+        }
+
+        // Class Delete Confirm Modal Events
+        if (btnCloseClassDeleteConfirm) {
+            btnCloseClassDeleteConfirm.addEventListener('click', () => modalClassDeleteConfirm.classList.add('hidden'));
+        }
+        if (btnCancelClassDeleteConfirm) {
+            btnCancelClassDeleteConfirm.addEventListener('click', () => modalClassDeleteConfirm.classList.add('hidden'));
+        }
+        if (btnSubmitClassDeleteConfirm) {
+            btnSubmitClassDeleteConfirm.addEventListener('click', handleClassDeleteSubmit);
+        }
+        if (inputConfirmDeleteClassName) {
+            inputConfirmDeleteClassName.addEventListener('input', () => {
+                btnSubmitClassDeleteConfirm.disabled = (inputConfirmDeleteClassName.value.trim() !== pendingClassDeleteName);
+            });
+        }
+
+        // Class Batch StudyLog Registration
+        if (classBatchSelect) {
+            classBatchSelect.addEventListener('change', (e) => {
+                const classId = parseInt(e.target.value || '0');
+                if (classId > 0) {
+                    loadClassBatchForm(classId);
+                } else {
+                    resetBatchRegView();
+                }
+            });
+        }
+        if (btnBatchApplyDate) {
+            btnBatchApplyDate.addEventListener('click', applyBatchDateToAllStudents);
+        }
+        if (formClassBatchStudyLog) {
+            formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
+        }
     }
 
     // User Book Registration Handler
@@ -917,8 +1077,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Open Book Picker Modal
-        if (e.target.closest('#btn-open-book-picker, #selected-book-display')) {
+        // Open Book Picker Modal (studylog-reg 기본 대상 + data-picker-target 지원)
+        const bookPickerOpener = e.target.closest('#btn-open-book-picker, #selected-book-display, [data-picker-target="batch"]');
+        if (bookPickerOpener) {
+            activeBookPickerTarget = bookPickerOpener.getAttribute('data-picker-target') || 'studylog';
             const modal = document.getElementById('modal-book-picker');
             const inputQ = document.getElementById('input-picker-book-q');
             if (inputQ) inputQ.value = '';
@@ -1163,14 +1325,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     const author = btn.getAttribute('data-author');
                     const publisher = btn.getAttribute('data-publisher');
 
-                    const elId = document.getElementById('selected-book-id');
-                    const elDisp = document.getElementById('selected-book-display');
-                    const elPrev = document.getElementById('preview-selected-book');
+                    // 대상 요소 결정: 'batch' → 일괄 등록 폼, 그 외 → 기존 학습 기록 등록 폼
+                    const targetMap = {
+                        batch: { id: 'batch-book-id', display: 'batch-book-display', preview: 'preview-batch-book' },
+                        studylog: { id: 'selected-book-id', display: 'selected-book-display', preview: 'preview-selected-book' }
+                    };
+                    const t = targetMap[activeBookPickerTarget] || targetMap.studylog;
+
+                    const elId = document.getElementById(t.id);
+                    const elDisp = document.getElementById(t.display);
+                    const elPrev = document.getElementById(t.preview);
                     const elModal = document.getElementById('modal-book-picker');
 
                     if (elId) elId.value = id;
                     if (elDisp) elDisp.value = `${title} (${author} / ${publisher})`;
-                    
+
                     if (elPrev) {
                         elPrev.innerHTML = `
                             <div class="preview-info">
@@ -3325,6 +3494,544 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadTables();
         } catch (err) {
             alert(err.message);
+        }
+    }
+
+    // ==================== 수업(Class) 관리 ====================
+    const DAY_LABELS = { '월': '월요일', '화': '화요일', '수': '수요일', '목': '목요일', '금': '금요일', '토': '토요일', '일': '일요일' };
+    const BATCH_STATUS_CLASS = { created: 'res-status-created', skipped: 'res-status-skipped', duplicate: 'res-status-skipped', error: 'res-status-error' };
+    const BATCH_STATUS_ICON = { created: 'fa-circle-check', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
+
+    function formatDayOfWeek(d) {
+        return DAY_LABELS[d] || d || '-';
+    }
+
+    // 전체 학생 체크박스 목록 HTML 생성 (등록/편집 폼 공용)
+    function buildStudentCheckboxListHtml(filterText, checkedIds) {
+        filterText = (filterText || '').trim().toLowerCase();
+        let html = '';
+        classAllStudentsCache.forEach(s => {
+            const sId = s.row_id || s.Id;
+            const name = escapeHtml(s.Name || '이름 없음');
+            const sex = formatSex(s.Sex);
+            if (filterText && !name.toLowerCase().includes(filterText)) return;
+            const checked = checkedIds.has(sId) ? 'checked' : '';
+            html += `
+                <label class="class-student-checkbox-item">
+                    <input type="checkbox" value="${sId}" ${checked}>
+                    <span><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</span>
+                    <span class="stu-meta">${sex} | #${sId}</span>
+                </label>
+            `;
+        });
+        return html || '<div class="empty-state" style="padding: 1rem;"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
+    }
+
+    function updateClassSelectedCount() {
+        if (classSelectedCount && classStudentList) {
+            classSelectedCount.textContent = classStudentList.querySelectorAll('input[type="checkbox"]:checked').length;
+        }
+    }
+
+    // 수업 등록 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
+    function renderClassStudentCheckboxList() {
+        if (!classStudentList) return;
+        const filterText = classStudentFilter ? classStudentFilter.value : '';
+        const checkedIds = new Set(
+            Array.from(classStudentList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value))
+        );
+        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, checkedIds);
+        updateClassSelectedCount();
+        classStudentList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', updateClassSelectedCount);
+        });
+    }
+
+    function getSelectedClassStudentIds() {
+        if (!classStudentList) return [];
+        return Array.from(classStudentList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+    }
+
+    // 수업 등록 폼 초기화 (선생님 옵션 + 학생 목록 로드)
+    async function loadClassRegForm() {
+        if (!formUserClassReg) return;
+        formUserClassReg.reset();
+        if (classRegMsg) classRegMsg.classList.add('hidden');
+        if (classStudentFilter) classStudentFilter.value = '';
+        classStudentList.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>';
+        try {
+            const [tData, sData] = await Promise.all([
+                apiFetch('/api/user/teachers-options'),
+                apiFetch('/api/user/students-options')
+            ]);
+            const teacherSelect = document.getElementById('class-teacher');
+            let thtml = '<option value="">-- 담당 선생님 선택 --</option>';
+            (tData.teachers || []).forEach(t => {
+                const roleLabel = t.role === 'manager' ? '관리 선생님' : '선생님';
+                thtml += `<option value="${escapeHtml(t.username)}">${escapeHtml(t.username)} (${roleLabel})</option>`;
+            });
+            teacherSelect.innerHTML = thtml;
+            classAllStudentsCache = sData.students || [];
+            renderClassStudentCheckboxList();
+        } catch (err) {
+            classStudentList.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    // 수업 등록 제출
+    async function handleUserClassSubmit(e) {
+        e.preventDefault();
+        if (classRegMsg) classRegMsg.classList.add('hidden');
+        const name = document.getElementById('class-name').value.trim();
+        const teacher = document.getElementById('class-teacher').value;
+        const day = document.getElementById('class-day').value;
+        const time = document.getElementById('class-start-time').value || '';
+        if (!name) { classRegMsg.className = 'alert alert-danger'; classRegMsg.textContent = '수업명은 필수 입력 항목입니다.'; classRegMsg.classList.remove('hidden'); return; }
+        if (!teacher) { classRegMsg.className = 'alert alert-danger'; classRegMsg.textContent = '담당 선생님을 선택해 주세요.'; classRegMsg.classList.remove('hidden'); return; }
+        if (!day) { classRegMsg.className = 'alert alert-danger'; classRegMsg.textContent = '요일을 선택해 주세요.'; classRegMsg.classList.remove('hidden'); return; }
+        const studentIds = getSelectedClassStudentIds();
+        try {
+            const result = await apiFetch('/api/user/classes', {
+                method: 'POST',
+                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds })
+            });
+            classRegMsg.className = 'alert alert-success';
+            classRegMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}`;
+            classRegMsg.classList.remove('hidden');
+            formUserClassReg.reset();
+            await loadClassRegForm();
+            setTimeout(() => switchView('class-list'), 900);
+        } catch (err) {
+            classRegMsg.className = 'alert alert-danger';
+            classRegMsg.textContent = err.message;
+            classRegMsg.classList.remove('hidden');
+        }
+    }
+
+    // 수업 목록 검색
+    async function loadClassSearchResults() {
+        if (!token || !classCardsGrid) return;
+        try {
+            classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>수업 검색 중...</p></div>';
+            const q = classSearchQ ? classSearchQ.value.trim() : '';
+            const params = new URLSearchParams({ page: classSearchPage, limit: classSearchLimit });
+            if (q) params.append('q', q);
+            const data = await apiFetch(`/api/user/classes?${params.toString()}`);
+            classSearchTotalPages = data.total_pages;
+            if (classSearchTotalCount) classSearchTotalCount.textContent = `총 ${data.total_count} 건의 수업`;
+            if (classSearchPaginationInfo) classSearchPaginationInfo.textContent = `${classSearchPage} / ${classSearchTotalPages} 페이지 (총 ${data.total_count}건)`;
+            if (classSearchCurrentPageSpan) classSearchCurrentPageSpan.textContent = classSearchPage;
+            if (btnClassSearchPrev) btnClassSearchPrev.disabled = (classSearchPage <= 1);
+            if (btnClassSearchNext) btnClassSearchNext.disabled = (classSearchPage >= classSearchTotalPages);
+            renderClassCards(data.classes);
+        } catch (err) {
+            classCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
+        }
+    }
+
+    function renderClassCards(classes) {
+        if (!classCardsGrid) return;
+        if (classes.length === 0) {
+            classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div>';
+            return;
+        }
+        let html = '';
+        classes.forEach(c => {
+            const cId = c.Id;
+            const name = escapeHtml(c.ClassName || '수업명 없음');
+            const teacher = escapeHtml(c.TeacherUsername || '-');
+            const day = formatDayOfWeek(c.DayOfWeek);
+            const time = c.StartTime ? escapeHtml(c.StartTime) : '미지정';
+            const count = c.StudentCount || 0;
+            html += `
+                <div class="book-item-card class-item-card" data-class-id="${cId}">
+                    <div class="book-card-top">
+                        <div class="book-card-title"><i class="fa-solid fa-chalkboard-user" style="color: var(--primary);"></i> ${name}</div>
+                        <div class="book-card-author">
+                            <span><i class="fa-solid fa-user-tie"></i> ${teacher}</span>
+                        </div>
+                        <div class="book-card-badges">
+                            <span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span>
+                            <span class="tag-badge"><i class="fa-solid fa-clock"></i> ${time}</span>
+                            <span class="tag-badge success"><i class="fa-solid fa-users"></i> ${count}명</span>
+                        </div>
+                    </div>
+                    <div class="book-card-bottom">
+                        <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
+                        <button type="button" class="btn btn-sm btn-primary btn-class-batch" data-class-id="${cId}">
+                            <i class="fa-solid fa-square-plus"></i> 일괄 등록
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        classCardsGrid.innerHTML = html;
+
+        classCardsGrid.querySelectorAll('.book-item-card[data-class-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-class-batch')) return;
+                openClassDetailModal(card.getAttribute('data-class-id'));
+            });
+        });
+        classCardsGrid.querySelectorAll('.btn-class-batch').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToClassBatchReg(parseInt(btn.getAttribute('data-class-id')));
+            });
+        });
+    }
+
+    // 수업 상세 모달
+    async function openClassDetailModal(classId) {
+        modalClassDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>수업 상세 정보 조회 중...</p></div>';
+        modalClassDetailTitle.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> 수업 상세 정보';
+        modalClassDetailActions.innerHTML = '';
+        modalClassDetail.classList.remove('hidden');
+        try {
+            const data = await apiFetch(`/api/user/classes/${classId}`);
+            const cls = data.class_;
+            const students = data.students || [];
+            currentDetailClass = cls;
+
+            if (isStaff()) {
+                modalClassDetailActions.innerHTML = `
+                    <button id="btn-modal-edit-class" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>
+                    <button id="btn-modal-delete-class" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash-can"></i> 수업 삭제</button>
+                `;
+                document.getElementById('btn-modal-edit-class').addEventListener('click', () => renderClassDetailEditForm(cls, students, classId));
+                document.getElementById('btn-modal-delete-class').addEventListener('click', () => openClassDeleteConfirmModal(cls));
+            } else {
+                modalClassDetailActions.innerHTML = '';
+            }
+
+            let studentRows = '';
+            if (students.length === 0) {
+                studentRows = '<tr><td colspan="3" class="empty-state"><p>배정된 학생이 없습니다.</p></td></tr>';
+            } else {
+                students.forEach(s => {
+                    const name = escapeHtml(s.Name || '이름 없음');
+                    const sex = formatSex(s.Sex);
+                    const birthday = formatBirthday(s.Birthday);
+                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</td><td>${sex}</td><td>${birthday}</td></tr>`;
+                });
+            }
+
+            const day = formatDayOfWeek(cls.DayOfWeek);
+            const time = cls.StartTime ? escapeHtml(cls.StartTime) : '미지정';
+            modalClassDetailBody.innerHTML = `
+                <div class="detail-header-block">
+                    <div class="detail-title">${escapeHtml(cls.ClassName || '수업명 없음')}</div>
+                    <div class="detail-meta-row">
+                        <span><i class="fa-solid fa-user-tie"></i> 담당 선생님: <strong>${escapeHtml(cls.TeacherUsername || '-')}</strong></span>
+                        <span><i class="fa-solid fa-calendar-days"></i> 요일: <strong>${day}</strong></span>
+                        <span><i class="fa-solid fa-clock"></i> 시간: <strong>${time}</strong></span>
+                        <span><i class="fa-solid fa-users"></i> 수강 학생: <strong>${students.length}명</strong></span>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <div class="detail-section-title"><i class="fa-solid fa-users"></i> 수강 학생 명단</div>
+                    <div class="table-responsive">
+                        <table class="modern-table">
+                            <thead><tr><th>학생 이름</th><th>성별</th><th>생년월일</th></tr></thead>
+                            <tbody>${studentRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.25rem;">
+                    <button type="button" id="btn-modal-class-batch" class="btn btn-success"><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</button>
+                </div>
+            `;
+            document.getElementById('btn-modal-class-batch').addEventListener('click', () => {
+                modalClassDetail.classList.add('hidden');
+                goToClassBatchReg(classId);
+            });
+        } catch (err) {
+            modalClassDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    // 수업 상세 모달 내 편집 폼
+    async function renderClassDetailEditForm(cls, students, classId) {
+        modalClassDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 수업 정보 수정';
+        modalClassDetailActions.innerHTML = '';
+        modalClassDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 편집 폼 준비 중...</div>';
+        try {
+            const [tData, sData] = await Promise.all([
+                apiFetch('/api/user/teachers-options'),
+                apiFetch('/api/user/students-options')
+            ]);
+            classAllStudentsCache = sData.students || [];
+            const checkedIds = new Set(students.map(s => s.row_id || s.Id));
+
+            let teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>';
+            (tData.teachers || []).forEach(t => {
+                const sel = t.username === cls.TeacherUsername ? 'selected' : '';
+                const roleLabel = t.role === 'manager' ? '관리 선생님' : '선생님';
+                teacherOpts += `<option value="${escapeHtml(t.username)}" ${sel}>${escapeHtml(t.username)} (${roleLabel})</option>`;
+            });
+            const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
+                `<option value="${d}" ${cls.DayOfWeek === d ? 'selected' : ''}>${DAY_LABELS[d]}</option>`
+            ).join('');
+            const studentCheckboxes = buildStudentCheckboxListHtml('', checkedIds);
+
+            modalClassDetailBody.innerHTML = `
+                <form id="form-modal-edit-class" class="modal-edit-form">
+                    <div id="modal-class-edit-alert" class="alert hidden"></div>
+                    <div class="form-section">
+                        <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 수업 기본 정보 수정</h4>
+                        <div class="form-grid">
+                            <div class="form-group span-2">
+                                <label>수업명 <span class="required">*</span></label>
+                                <input type="text" name="ClassName" class="form-control" value="${escapeHtml(cls.ClassName || '')}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>담당 선생님 <span class="required">*</span></label>
+                                <select name="TeacherUsername" class="form-control">${teacherOpts}</select>
+                            </div>
+                            <div class="form-group">
+                                <label>요일 <span class="required">*</span></label>
+                                <select name="DayOfWeek" class="form-control">${dayOpts}</select>
+                            </div>
+                            <div class="form-group">
+                                <label>시작 시간</label>
+                                <input type="time" name="StartTime" class="form-control" value="${escapeHtml(cls.StartTime || '')}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h4 class="section-title"><i class="fa-solid fa-users"></i> 수강 학생 배정</h4>
+                        <div class="form-group">
+                            <div class="class-student-checkbox-list">${studentCheckboxes}</div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="btn-cancel-modal-edit-class" class="btn btn-outline">취소</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 수정 내용 저장</button>
+                    </div>
+                </form>
+            `;
+            document.getElementById('btn-cancel-modal-edit-class').addEventListener('click', () => openClassDetailModal(classId));
+            document.getElementById('form-modal-edit-class').addEventListener('submit', (e) => handleAdminSaveDetailClass(e, cls, classId));
+        } catch (err) {
+            modalClassDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        }
+    }
+
+    // 수업 편집 저장
+    async function handleAdminSaveDetailClass(e, origClass, classId) {
+        e.preventDefault();
+        const alertEl = document.getElementById('modal-class-edit-alert');
+        if (alertEl) alertEl.classList.add('hidden');
+        const f = e.target;
+        const name = (f.querySelector('[name="ClassName"]').value || '').trim();
+        const teacher = f.querySelector('[name="TeacherUsername"]').value;
+        const day = f.querySelector('[name="DayOfWeek"]').value;
+        const time = f.querySelector('[name="StartTime"]').value || '';
+        const studentIds = Array.from(f.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+        if (!name) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '수업명은 필수 입력 항목입니다.'; alertEl.classList.remove('hidden'); return; }
+        if (!teacher) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '담당 선생님을 선택해 주세요.'; alertEl.classList.remove('hidden'); return; }
+        if (!day) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '요일을 선택해 주세요.'; alertEl.classList.remove('hidden'); return; }
+        try {
+            await apiFetch(`/api/user/classes/${classId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds })
+            });
+            await openClassDetailModal(classId);
+            await loadClassSearchResults();
+        } catch (err) {
+            alertEl.className = 'alert alert-danger';
+            alertEl.textContent = err.message;
+            alertEl.classList.remove('hidden');
+        }
+    }
+
+    // 수업 삭제 확인 모달
+    function openClassDeleteConfirmModal(cls) {
+        pendingClassDeleteId = cls.Id;
+        pendingClassDeleteName = cls.ClassName || '';
+        targetClassDeleteNameDisplay.textContent = pendingClassDeleteName;
+        inputConfirmDeleteClassName.value = '';
+        btnSubmitClassDeleteConfirm.disabled = true;
+        modalClassDeleteConfirm.classList.remove('hidden');
+        inputConfirmDeleteClassName.focus();
+    }
+
+    async function handleClassDeleteSubmit() {
+        if (btnSubmitClassDeleteConfirm.disabled) return;
+        try {
+            const result = await apiFetch(`/api/user/classes/${pendingClassDeleteId}`, { method: 'DELETE' });
+            alert(result.message);
+            modalClassDeleteConfirm.classList.add('hidden');
+            modalClassDetail.classList.add('hidden');
+            pendingClassDeleteId = null;
+            await loadClassSearchResults();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    // 수업 → 일괄 등록 뷰 이동
+    async function goToClassBatchReg(classId) {
+        switchView('class-studylog-reg');
+        await loadClassOptionsForBatch(classId);
+    }
+
+    // 일괄 등록 뷰: 수업 선택 옵션 로드
+    async function loadClassOptionsForBatch(preselectClassId) {
+        if (!classBatchSelect) return;
+        try {
+            classBatchSelect.innerHTML = '<option value="">-- 수업을 불러오는 중... --</option>';
+            const data = await apiFetch('/api/user/classes?limit=100');
+            const classes = data.classes || [];
+            let html = '<option value="">-- 수업을 선택해 주세요 --</option>';
+            classes.forEach(c => {
+                const name = escapeHtml(c.ClassName || '수업명 없음');
+                const day = formatDayOfWeek(c.DayOfWeek);
+                const teacher = escapeHtml(c.TeacherUsername || '');
+                html += `<option value="${c.Id}">${name} (${day} ${c.StartTime ? c.StartTime : ''} · ${teacher})</option>`;
+            });
+            classBatchSelect.innerHTML = html;
+            if (preselectClassId) {
+                classBatchSelect.value = String(preselectClassId);
+                loadClassBatchForm(preselectClassId);
+            }
+        } catch (err) {
+            classBatchSelect.innerHTML = `<option value="">수업 로딩 실패: ${err.message}</option>`;
+        }
+    }
+
+    // 일괄 등록 뷰: 수업 상세 + 학생 테이블 로드
+    async function loadClassBatchForm(classId) {
+        activeBatchClassId = classId;
+        if (classBatchResult) classBatchResult.classList.add('hidden');
+        try {
+            const data = await apiFetch(`/api/user/classes/${classId}/batch-form`);
+            const cls = data.class_;
+            const students = data.students || [];
+            if (batchClassName) batchClassName.textContent = cls.ClassName || '-';
+            if (batchClassTeacher) batchClassTeacher.textContent = cls.TeacherUsername || '-';
+            if (batchClassSchedule) batchClassSchedule.textContent = `${formatDayOfWeek(cls.DayOfWeek)} ${cls.StartTime ? cls.StartTime : '(시간 미지정)'}`;
+            if (batchClassStudentCount) batchClassStudentCount.textContent = `${students.length}명`;
+            if (classBatchInfo) classBatchInfo.classList.remove('hidden');
+            if (classBatchRegCard) classBatchRegCard.classList.remove('hidden');
+            if (!batchStudiedDay.value) batchStudiedDay.value = new Date().toISOString().split('T')[0];
+            renderBatchStudentsTable(students);
+        } catch (err) {
+            resetBatchRegView();
+            if (classBatchInfo) classBatchInfo.classList.remove('hidden');
+            if (batchClassName) batchClassName.textContent = '조회 오류';
+            if (batchClassTeacher) batchClassTeacher.textContent = err.message;
+        }
+    }
+
+    function renderBatchStudentsTable(students) {
+        if (!classBatchStudentsBody) return;
+        if (students.length === 0) {
+            classBatchStudentsBody.innerHTML = '<tr><td colspan="3" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            return;
+        }
+        const dateVal = batchStudiedDay.value || new Date().toISOString().split('T')[0];
+        let html = '';
+        students.forEach(s => {
+            const sId = s.row_id || s.Id;
+            const name = escapeHtml(s.Name || '이름 없음');
+            const sex = formatSex(s.Sex);
+            html += `
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">
+                    </td>
+                    <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})</span></td>
+                    <td><input type="date" class="form-control class-batch-date-input batch-student-date" data-student-id="${sId}" value="${dateVal}"></td>
+                </tr>
+            `;
+        });
+        classBatchStudentsBody.innerHTML = html;
+    }
+
+    function applyBatchDateToAllStudents() {
+        if (!batchStudiedDay || !batchStudiedDay.value) {
+            alert('먼저 학습 일자를 선택해 주세요.');
+            return;
+        }
+        document.querySelectorAll('.batch-student-date').forEach(input => {
+            input.value = batchStudiedDay.value;
+        });
+    }
+
+    function resetBatchRegView() {
+        activeBatchClassId = null;
+        if (classBatchInfo) classBatchInfo.classList.add('hidden');
+        if (classBatchRegCard) classBatchRegCard.classList.add('hidden');
+        if (classBatchResult) classBatchResult.classList.add('hidden');
+        if (classBatchStudentsBody) classBatchStudentsBody.innerHTML = '';
+        const bId = document.getElementById('batch-book-id');
+        const bDisp = document.getElementById('batch-book-display');
+        const bPrev = document.getElementById('preview-batch-book');
+        if (bId) bId.value = '';
+        if (bDisp) bDisp.value = '';
+        if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+    }
+
+    // 일괄 학습 기록 등록 제출
+    async function handleBatchStudyLogSubmit(e) {
+        e.preventDefault();
+        if (classBatchResult) classBatchResult.classList.add('hidden');
+        if (!activeBatchClassId) { alert('먼저 수업을 선택해 주세요.'); return; }
+        const bookIdEl = document.getElementById('batch-book-id');
+        const bookId = bookIdEl ? parseInt(bookIdEl.value || '0') : 0;
+        if (!bookId || bookId <= 0) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = '도서를 선택해 주세요.';
+            classBatchResult.classList.remove('hidden');
+            return;
+        }
+        const logs = [];
+        let hasMissingDate = false;
+        document.querySelectorAll('.batch-attend').forEach(chk => {
+            const sId = parseInt(chk.getAttribute('data-student-id'));
+            const dateInput = classBatchStudentsBody.querySelector(`.batch-student-date[data-student-id="${sId}"]`);
+            const day = dateInput ? dateInput.value : '';
+            if (!day) { hasMissingDate = true; return; }
+            logs.push({ StudentId: sId, StudiedDay: day, include: chk.checked });
+        });
+        if (hasMissingDate) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = '학습 일자가 입력되지 않은 학생이 있습니다.';
+            classBatchResult.classList.remove('hidden');
+            return;
+        }
+        if (logs.length === 0) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = '등록할 학생이 없습니다.';
+            classBatchResult.classList.remove('hidden');
+            return;
+        }
+        try {
+            const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
+                method: 'POST',
+                body: JSON.stringify({ BookId: bookId, logs: logs })
+            });
+            let resList = '';
+            (result.results || []).forEach(r => {
+                const statusClass = BATCH_STATUS_CLASS[r.status] || '';
+                const icon = BATCH_STATUS_ICON[r.status] || 'fa-circle-info';
+                resList += `<div class="res-row"><span>${escapeHtml(r.Name || `학생 #${r.StudentId}`)}</span><span class="${statusClass}"><i class="fa-solid ${icon}"></i> ${escapeHtml(r.message || '')}</span></div>`;
+            });
+            classBatchResult.className = 'alert alert-success';
+            classBatchResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}${resList ? `<div class="class-batch-result-list">${resList}</div>` : ''}`;
+            classBatchResult.classList.remove('hidden');
+            // 도서 선택 초기화 (연속 등록 편의)
+            const bId = document.getElementById('batch-book-id');
+            const bDisp = document.getElementById('batch-book-display');
+            const bPrev = document.getElementById('preview-batch-book');
+            if (bId) bId.value = '';
+            if (bDisp) bDisp.value = '';
+            if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+        } catch (err) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = err.message;
+            classBatchResult.classList.remove('hidden');
         }
     }
 

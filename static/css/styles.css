@@ -2053,3 +2053,85 @@ body {
     outline: none;
     border-color: var(--primary);
 }
+
+/* ===== 수업(Class) 관리 ===== */
+.class-student-checkbox-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+    margin-top: 0.6rem;
+    background: var(--bg-section);
+}
+.class-student-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.class-student-checkbox-item:hover {
+    background: var(--bg-card-hover);
+}
+.class-student-checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.class-student-checkbox-item .stu-meta {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.class-selected-info {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.class-selected-info strong {
+    color: var(--primary);
+}
+.class-info-value {
+    font-weight: 700;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    padding-top: 0.25rem;
+}
+.class-item-card .book-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.class-batch-date-input {
+    max-width: 180px;
+}
+.class-batch-result-list {
+    margin-top: 0.75rem;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.6rem;
+    font-size: 0.85rem;
+    background: var(--bg-section);
+}
+.class-batch-result-list .res-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    border-bottom: 1px dashed var(--border-color);
+}
+.class-batch-result-list .res-row:last-child { border-bottom: none; }
+.res-status-created { color: var(--success); }
+.res-status-skipped, .res-status-duplicate { color: var(--warning); }
+.res-status-error { color: var(--danger); }

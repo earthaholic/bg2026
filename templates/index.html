@@ -90,6 +90,20 @@
                         <span>새 도서 등록</span>
                     </div>
 
+                    <div class="menu-section-label">수업 관리</div>
+                    <div class="menu-nav-item" data-view="class-list">
+                        <i class="fa-solid fa-chalkboard-user nav-icon"></i>
+                        <span>수업 목록 & 상세</span>
+                    </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="class-reg">
+                        <i class="fa-solid fa-calendar-plus nav-icon"></i>
+                        <span>새 수업 등록</span>
+                    </div>
+                    <div class="menu-nav-item" data-view="class-studylog-reg">
+                        <i class="fa-solid fa-users-viewfinder nav-icon"></i>
+                        <span>학습 이력 일괄 등록</span>
+                    </div>
+
                     <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
                     <div class="menu-nav-item admin-only hidden" data-view="data-view">
                         <i class="fa-solid fa-table-cells nav-icon"></i>
@@ -858,6 +872,258 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- View 8: 수업 목록 & 상세 조회 -->
+                <section id="view-class-list" class="workspace-view">
+                    <div class="book-search-layout">
+                        <!-- Class Search Bar -->
+                        <div class="card search-filter-card">
+                            <div class="filter-row">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass filter-icon"></i>
+                                    <input type="text" id="class-search-q" class="form-control input-lg" placeholder="수업명 또는 담당 선생님 키워드로 검색해보세요...">
+                                    <button id="btn-do-class-search" class="btn btn-primary btn-lg">
+                                        <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="filter-options-grid" style="grid-template-columns: 1fr;">
+                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                                    <button id="btn-reset-class-filter" class="btn btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 필터 초기화
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Class Results Summary Bar -->
+                        <div class="results-bar">
+                            <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
+                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 수업 상세 정보와 학생 명단을 확인하실 수 있습니다.</span>
+                        </div>
+
+                        <!-- Class Cards Grid -->
+                        <div id="class-cards-grid" class="book-cards-grid">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-chalkboard-user fa-3x"></i>
+                                <p>수업을 검색해 주세요.</p>
+                            </div>
+                        </div>
+
+                        <!-- Class Search Pagination -->
+                        <div class="search-pagination-bar">
+                            <div id="class-search-pagination-info" class="page-info">1 / 1 페이지</div>
+                            <div class="pagination-controls">
+                                <button id="btn-class-search-prev" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="class-search-current-page" class="page-num">1</span>
+                                <button id="btn-class-search-next" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 9: 새 수업 등록 (관리 선생님 이상) -->
+                <section id="view-class-reg" class="workspace-view">
+                    <div class="book-reg-layout">
+                        <!-- Left: Class Registration Form -->
+                        <div class="card form-card">
+                            <div class="card-header-styled">
+                                <div>
+                                    <h2><i class="fa-solid fa-calendar-plus"></i> 꿈꾸는봄결 새 수업 등록</h2>
+                                    <p class="subtitle">담당 선생님, 요일·시간, 수강 학생을 지정하여 수업(Class)을 등록합니다.</p>
+                                </div>
+                            </div>
+
+                            <form id="form-user-class-reg" class="book-form">
+                                <div id="class-reg-msg" class="alert hidden"></div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 수업 기본 정보</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label for="class-name">수업명 <span class="required">*</span></label>
+                                            <input type="text" id="class-name" name="ClassName" class="form-control" placeholder="예: 초등 독서반 A" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="class-teacher">담당 선생님 <span class="required">*</span></label>
+                                            <select id="class-teacher" name="TeacherUsername" class="form-control" required>
+                                                <option value="">-- 담당 선생님 선택 --</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="class-day">요일 <span class="required">*</span></label>
+                                            <select id="class-day" name="DayOfWeek" class="form-control" required>
+                                                <option value="">-- 요일 선택 --</option>
+                                                <option value="월">월요일</option>
+                                                <option value="화">화요일</option>
+                                                <option value="수">수요일</option>
+                                                <option value="목">목요일</option>
+                                                <option value="금">금요일</option>
+                                                <option value="토">토요일</option>
+                                                <option value="일">일요일</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="class-start-time">시작 시간</label>
+                                            <input type="time" id="class-start-time" name="StartTime" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 수강 학생 배정</h4>
+                                    <div class="form-group">
+                                        <div class="picker-input-group">
+                                            <input type="text" id="class-student-filter" class="form-control" placeholder="학생 이름으로 검색하여 목록을 필터링...">
+                                        </div>
+                                        <div id="class-student-list" class="class-student-checkbox-list">
+                                            <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>
+                                        </div>
+                                        <div class="class-selected-info">
+                                            <i class="fa-solid fa-user-check"></i> 선택된 학생: <strong id="class-selected-count">0</strong>명
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-submit-actions">
+                                    <button type="button" id="btn-reset-class-form" class="btn btn-outline">
+                                        <i class="fa-solid fa-rotate-left"></i> 폼 초기화
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg btn-glow">
+                                        <i class="fa-solid fa-paper-plane"></i> 새 수업 등록하기
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Right: Guide Card -->
+                        <div class="card recent-books-card">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-lightbulb"></i> 수업 등록 안내</h3>
+                            </div>
+                            <div class="recent-books-container" style="padding: 1rem;">
+                                <p class="text-muted" style="font-size: 0.85rem; line-height: 1.8;">
+                                    <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i> 수업은 담당 선생님 계정, 요일·시간, 수강 학생들로 구성됩니다.<br><br>
+                                    <i class="fa-solid fa-users" style="color: var(--primary);"></i> 수강 학생은 여러 명을 동시에 배정할 수 있습니다.<br><br>
+                                    <i class="fa-solid fa-calendar-days" style="color: var(--primary);"></i> 학습 이력 등록은 <strong>[학습 이력 일괄 등록]</strong> 메뉴에서 수업 단위로 한 번에 진행할 수 있습니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 10: 학습 이력 일괄 등록 (수업 단위) -->
+                <section id="view-class-studylog-reg" class="workspace-view">
+                    <div class="book-search-layout">
+                        <!-- Class Select Card -->
+                        <div class="card search-filter-card">
+                            <div class="filter-options-grid" style="grid-template-columns: 1fr;">
+                                <div class="filter-group">
+                                    <label><i class="fa-solid fa-chalkboard-user"></i> 일괄 등록할 수업 선택 <span class="required">*</span></label>
+                                    <select id="class-batch-select" class="form-control">
+                                        <option value="">-- 수업을 선택해 주세요 --</option>
+                                    </select>
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.35rem;">선생님 계정은 본인 수업만 표시됩니다.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Class Info Card -->
+                        <div id="class-batch-info" class="card hidden" style="margin-bottom: 0;">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-circle-info"></i> 수업 정보</h3>
+                            </div>
+                            <div class="filter-options-grid" style="padding: 1rem;">
+                                <div class="filter-group">
+                                    <label>수업명</label>
+                                    <div class="class-info-value" id="batch-class-name">-</div>
+                                </div>
+                                <div class="filter-group">
+                                    <label>담당 선생님</label>
+                                    <div class="class-info-value" id="batch-class-teacher">-</div>
+                                </div>
+                                <div class="filter-group">
+                                    <label>요일 / 시간</label>
+                                    <div class="class-info-value" id="batch-class-schedule">-</div>
+                                </div>
+                                <div class="filter-group">
+                                    <label>수강 학생</label>
+                                    <div class="class-info-value" id="batch-class-student-count">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Batch Registration Card -->
+                        <div id="class-batch-reg-card" class="card hidden">
+                            <div class="card-header-styled">
+                                <h3><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</h3>
+                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 체크를 해제하고, 학생별로 날짜를 개별 수정할 수 있습니다.</p>
+                            </div>
+
+                            <form id="form-class-batch-studylog" class="book-form">
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 1. 학습 도서 선택</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group span-2">
+                                            <label>도서 선택 <span class="required">*</span></label>
+                                            <div class="picker-input-group">
+                                                <input type="hidden" id="batch-book-id" name="BookId">
+                                                <input type="text" id="batch-book-display" class="form-control" placeholder="아래 [도서 검색] 버튼을 클릭하여 도서를 선택하세요" readonly>
+                                                <button type="button" id="btn-open-batch-book-picker" class="btn btn-primary" data-picker-target="batch">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 도서 검색
+                                                </button>
+                                            </div>
+                                            <div id="preview-batch-book" class="picker-preview-card hidden"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 2. 학습 일자 (전체 기본값)</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="batch-studied-day">학습 일자 <span class="required">*</span></label>
+                                            <input type="date" id="batch-studied-day" class="form-control" required>
+                                        </div>
+                                        <div class="form-group" style="justify-content: flex-end; align-items: flex-end;">
+                                            <button type="button" id="btn-batch-apply-date" class="btn btn-outline">
+                                                <i class="fa-solid fa-arrow-down-wide-short"></i> 전체 학생에 적용
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 3. 학생별 참석 여부 & 학습 일자</h4>
+                                    <div id="class-batch-students" class="table-responsive">
+                                        <table class="modern-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 70px;">참석</th>
+                                                    <th>학생 이름</th>
+                                                    <th style="width: 230px;">학습 일자 (개별 수정 가능)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="class-batch-students-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div id="class-batch-result" class="alert hidden"></div>
+
+                                <div class="form-submit-actions">
+                                    <button type="submit" class="btn btn-success btn-lg btn-glow">
+                                        <i class="fa-solid fa-floppy-disk"></i> 선택 학생 학습 기록 일괄 등록
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </section>
             </main>
         </div>
     </div>
@@ -1168,6 +1434,49 @@
                     <button type="button" id="btn-cancel-user-delete" class="btn btn-outline">취소</button>
                     <button type="button" id="btn-submit-user-delete" class="btn btn-danger" disabled>
                         <i class="fa-solid fa-trash-can"></i> 계정 삭제
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 수업 상세 정보 모달 -->
+    <div id="modal-class-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-card">
+            <div class="modal-header">
+                <h3 id="modal-class-detail-title"><i class="fa-solid fa-chalkboard-user"></i> 수업 상세 정보</h3>
+                <div class="detail-header-actions">
+                    <div id="modal-class-detail-actions"></div>
+                    <button id="btn-close-class-detail" class="btn-close">&times;</button>
+                </div>
+            </div>
+            <div id="modal-class-detail-body" class="modal-body detail-modal-body">
+                <!-- Dynamic Class Info / Edit Form -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 수업 삭제 확인 모달 -->
+    <div id="modal-class-delete-confirm" class="modal-backdrop hidden">
+        <div class="modal-card confirm-delete-card">
+            <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 수업 삭제 확인</h3>
+                <button id="btn-close-class-delete-confirm" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 수업을 삭제하시겠습니까?<br>수업에 배정된 학생 명단(수업-학생 관계)도 함께 삭제되며, 복구할 수 없습니다.
+                </div>
+                <div class="form-group">
+                    <label style="color: var(--text-main); font-weight: 600;">
+                        실수를 방지하기 위해 수업명 <strong id="target-class-delete-name-display" style="color: var(--warning);"></strong> 을(를) 아래에 그대로 입력해 주세요:
+                    </label>
+                    <input type="text" id="input-confirm-delete-class-name" class="form-control" placeholder="수업명 그대로 입력..." autocomplete="off">
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="btn-cancel-class-delete-confirm" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-class-delete-confirm" class="btn btn-danger" disabled>
+                        <i class="fa-solid fa-trash-can"></i> 수업 영구 삭제
                     </button>
                 </div>
             </div>
