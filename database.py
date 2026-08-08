@@ -76,6 +76,27 @@ def init_system_tables():
             (settings.TEACHER_USERNAME, hash_password(settings.TEACHER_PASSWORD), "teacher")
         )
 
+    # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블
+    # (로컬 전용 도메인 테이블 - oracle_sync.py 실행 시 DROP되므로 시작 시점에 재생성됨)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "Classes" (
+            "Id" INTEGER PRIMARY KEY,
+            "ClassName" TEXT NOT NULL,
+            "TeacherUsername" TEXT NOT NULL,
+            "DayOfWeek" TEXT NOT NULL,
+            "StartTime" TEXT DEFAULT '',
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "ClassStudents" (
+            "Id" INTEGER PRIMARY KEY,
+            "ClassId" INTEGER NOT NULL,
+            "StudentId" INTEGER NOT NULL,
+            UNIQUE("ClassId", "StudentId")
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -362,3 +383,145 @@ def delete_user(user_id: int) -> int:
     rowcount = cursor.rowcount
     conn.close()
     return rowcount
+
+
+# --- 수업(Classes) 관리 함수 ---
+
+def create_class(class_data: Dict[str, Any]) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO "Classes" ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime") VALUES (?, ?, ?, ?)',
+        (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
+         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "")
+    )
+    conn.commit()
+    inserted_id = cursor.lastrowid
+    conn.close()
+    return {"status": "success", "id": inserted_id}
+
+def update_class(class_id: int, class_data: Dict[str, Any]) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE "Classes" SET "ClassName" = ?, "TeacherUsername" = ?, "DayOfWeek" = ?, "StartTime" = ? WHERE "Id" = ?',
+        (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
+         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "", class_id)
+    )
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return {"status": "success", "updated_rows": rowcount}
+
+def delete_class(class_id: int) -> int:
+    """수업과 연결된 수업-학생 관계까지 함께 삭제한다."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM "ClassStudents" WHERE "ClassId" = ?', (class_id,))
+    cursor.execute('DELETE FROM "Classes" WHERE "Id" = ?', (class_id,))
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return rowcount
+
+def get_class_by_id(class_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM "Classes" WHERE "Id" = ?', (class_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+def search_classes(
+    q: Optional[str] = None,
+    page: int = 1,
+    limit: int = 12,
+    teacher_username: Optional[str] = None
+) -> Tuple[List[Dict[str, Any]], int]:
+    """수업 목록을 검색한다. teacher_username이 주어지면 해당 선생님 수업만 필터링."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        conditions.append('(c."ClassName" LIKE ? OR c."TeacherUsername" LIKE ?)')
+        params.extend([pattern, pattern])
+
+    if teacher_username:
+        conditions.append('c."TeacherUsername" = ?')
+        params.append(teacher_username)
+
+    where_str = ""
+    if conditions:
+        where_str = " WHERE " + " AND ".join(conditions)
+
+    count_query = f'SELECT COUNT(*) as total FROM "Classes" c{where_str}'
+    cursor.execute(count_query, params)
+    total_count = cursor.fetchone()['total']
+
+    offset = (page - 1) * limit
+    data_query = f'''
+        SELECT c."Id", c."ClassName", c."TeacherUsername", c."DayOfWeek", c."StartTime", c."CreatedAt",
+               (SELECT COUNT(*) FROM "ClassStudents" cs WHERE cs."ClassId" = c."Id") AS StudentCount
+        FROM "Classes" c
+        {where_str}
+        ORDER BY c."Id" DESC LIMIT {limit} OFFSET {offset}
+    '''
+    cursor.execute(data_query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [dict(r) for r in rows], total_count
+
+def set_class_students(class_id: int, student_ids: List[int]) -> None:
+    """수업의 학생 배정을 전체 교체한다 (기존 관계 삭제 후 재삽입)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM "ClassStudents" WHERE "ClassId" = ?', (class_id,))
+    for sid in student_ids:
+        cursor.execute(
+            'INSERT OR IGNORE INTO "ClassStudents" ("ClassId", "StudentId") VALUES (?, ?)',
+            (class_id, sid)
+        )
+    conn.commit()
+    conn.close()
+
+def get_class_students(class_id: int) -> List[Dict[str, Any]]:
+    """수업에 배정된 학생 목록을 이름 순으로 반환한다."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.rowid AS row_id, s.*
+        FROM "ClassStudents" cs
+        JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
+        WHERE cs."ClassId" = ?
+        ORDER BY s."Name" ASC
+    ''', (class_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_class_student_ids(class_id: int) -> List[int]:
+    """수업에 배정된 학생의 rowid 목록을 반환한다 (권한 검증용)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT "StudentId" FROM "ClassStudents" WHERE "ClassId" = ?', (class_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [r["StudentId"] for r in rows]
+
+def get_teacher_options() -> List[Dict[str, Any]]:
+    """수업 담당 선생님으로 지정 가능한 계정(teacher/manager) 목록을 반환한다."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager') ORDER BY username ASC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

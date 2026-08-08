@@ -1,6 +1,7 @@
 import os
 import io
 import csv
+import re
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -28,7 +29,16 @@ from database import (
     create_user,
     update_user_password,
     update_user_role,
-    delete_user
+    delete_user,
+    create_class,
+    update_class,
+    delete_class,
+    get_class_by_id,
+    search_classes,
+    set_class_students,
+    get_class_students,
+    get_class_student_ids,
+    get_teacher_options
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 
@@ -125,6 +135,22 @@ class UserStudyLogRegisterRequest(BaseModel):
     StudentId: int
     BookId: int
     StudiedDay: str
+
+class ClassRequest(BaseModel):
+    ClassName: str
+    TeacherUsername: str
+    DayOfWeek: str
+    StartTime: Optional[str] = ""
+    StudentIds: List[int] = []
+
+class ClassStudyLogItem(BaseModel):
+    StudentId: int
+    StudiedDay: str
+    include: bool = True
+
+class ClassStudyLogBatchRequest(BaseModel):
+    BookId: int
+    logs: List[ClassStudyLogItem]
 
 # --- Web UI Route ---
 
@@ -656,6 +682,218 @@ def user_get_studylog_detail(
     if not row:
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
     return {"studylog": dict(row)}
+
+# --- 수업(Classes) 관리 APIs ---
+# 조회: 모든 로그인 사용자 (선생님은 본인 수업만)
+# 등록/수정/삭제: 관리 선생님(manager) 이상 / 일괄 학습 이력 등록: staff + 본인 수업 선생님
+
+DAY_OF_WEEK_VALUES = ['월', '화', '수', '목', '금', '토', '일']
+
+def _get_accessible_class(class_id: int, current_user: Dict[str, Any]) -> Dict[str, Any]:
+    """수업을 조회한다. 선생님(teacher)은 본인 수업만 접근 가능."""
+    class_row = get_class_by_id(class_id)
+    if not class_row:
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    if current_user["role"] == "teacher" and class_row["TeacherUsername"] != current_user["username"]:
+        raise HTTPException(status_code=403, detail="본인 수업만 조회할 수 있습니다.")
+    return class_row
+
+def _validate_class_payload(payload: ClassRequest) -> None:
+    """수업 등록/수정 공통 검증 (오류 시 HTTPException 발생)."""
+    if not payload.ClassName or not payload.ClassName.strip():
+        raise HTTPException(status_code=400, detail="수업명은 필수 입력 항목입니다.")
+
+    teacher = get_user_by_username(payload.TeacherUsername)
+    if not teacher or teacher["role"] not in ("teacher", "manager"):
+        raise HTTPException(status_code=400, detail="담당 선생님 계정을 확인해 주세요.")
+
+    if payload.DayOfWeek not in DAY_OF_WEEK_VALUES:
+        raise HTTPException(status_code=400, detail="요일은 월~일 중 하나여야 합니다.")
+
+    if payload.StartTime and not re.match(r'^\d{2}:\d{2}$', payload.StartTime):
+        raise HTTPException(status_code=400, detail="시간은 HH:MM 형식으로 입력해 주세요.")
+
+def _resolve_student_row_id(student_id: int) -> Optional[int]:
+    """학생의 rowid 또는 Id 중 실제 행의 rowid를 반환한다. 없으면 None."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT rowid FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+@app.get("/api/user/classes")
+def user_list_classes(
+    q: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    teacher_username = current_user["username"] if current_user["role"] == "teacher" else None
+    rows, total_count = search_classes(q=q, page=page, limit=limit, teacher_username=teacher_username)
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+    return {
+        "page": page,
+        "limit": limit,
+        "total_count": total_count,
+        "total_pages": total_pages,
+        "classes": rows
+    }
+
+@app.get("/api/user/classes/{class_id}")
+def user_get_class_detail(
+    class_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    class_row = _get_accessible_class(class_id, current_user)
+    students = get_class_students(class_id)
+    return {"class_": class_row, "students": students}
+
+@app.post("/api/user/classes")
+def user_register_class(
+    payload: ClassRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    _validate_class_payload(payload)
+    try:
+        res = create_class(payload.dict())
+        class_id = res.get("id")
+        set_class_students(class_id, payload.StudentIds)
+        return {
+            "status": "success",
+            "message": f"'{payload.ClassName.strip()}' 수업이 성공적으로 등록되었습니다.",
+            "class_id": class_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"수업 등록 중 오류가 발생했습니다: {str(e)}")
+
+@app.put("/api/user/classes/{class_id}")
+def user_update_class(
+    class_id: int,
+    payload: ClassRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    if not get_class_by_id(class_id):
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    _validate_class_payload(payload)
+    try:
+        update_class(class_id, payload.dict())
+        set_class_students(class_id, payload.StudentIds)
+        return {"status": "success", "message": "수업 정보가 성공적으로 수정되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"수업 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.delete("/api/user/classes/{class_id}")
+def user_delete_class(
+    class_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    if not get_class_by_id(class_id):
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    try:
+        delete_class(class_id)
+        return {"status": "success", "message": "수업이 성공적으로 삭제되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"수업 삭제 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/user/teachers-options")
+def user_get_teachers_options(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {"teachers": get_teacher_options()}
+
+@app.get("/api/user/classes/{class_id}/batch-form")
+def user_get_class_batch_form(
+    class_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    class_row = _get_accessible_class(class_id, current_user)
+    students = get_class_students(class_id)
+    return {"class_": class_row, "students": students}
+
+@app.post("/api/user/classes/{class_id}/studylogs")
+def user_batch_register_class_studylogs(
+    class_id: int,
+    payload: ClassStudyLogBatchRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    _get_accessible_class(class_id, current_user)
+
+    if not payload.BookId or payload.BookId <= 0:
+        raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
+    if not payload.logs:
+        raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
+
+    book_row = _resolve_domain_pk("Books", payload.BookId)
+    if book_row is None:
+        raise HTTPException(status_code=400, detail="해당 도서를 찾을 수 없습니다.")
+
+    allowed_student_ids = set(get_class_student_ids(class_id))
+
+    # 학생 이름 lookup 캐시
+    name_cache: Dict[int, str] = {}
+
+    def student_name(sid: int) -> str:
+        if sid not in name_cache:
+            conn = get_db_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute('SELECT "Name" FROM "Students" WHERE rowid = ? OR "Id" = ?', (sid, sid))
+                row = cursor.fetchone()
+                name_cache[sid] = row[0] if row else f"학생 #{sid}"
+            finally:
+                conn.close()
+        return name_cache[sid]
+
+    created_count = 0
+    skipped_count = 0
+    results = []
+
+    for item in payload.logs:
+        sid = item.StudentId
+        name = student_name(sid)
+
+        if not item.include:
+            skipped_count += 1
+            results.append({"StudentId": sid, "Name": name, "status": "skipped", "message": "결석 처리로 건너뜀"})
+            continue
+
+        if sid not in allowed_student_ids:
+            results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
+            continue
+
+        day = (item.StudiedDay or "").strip()
+        if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
+            results.append({"StudentId": sid, "Name": name, "status": "error", "message": "학습 일자는 YYYY-MM-DD 형식이어야 합니다."})
+            continue
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT COUNT(*) as cnt FROM "StudyLogs" WHERE "StudentId" = ? AND "BookId" = ? AND "StudiedDay" = ?',
+                (sid, payload.BookId, day)
+            )
+            exists = cursor.fetchone()["cnt"] > 0
+            conn.close()
+            if exists:
+                skipped_count += 1
+                results.append({"StudentId": sid, "Name": name, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
+                continue
+
+            insert_table_row("StudyLogs", {"StudentId": sid, "BookId": payload.BookId, "StudiedDay": day})
+            created_count += 1
+            results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})
+        except Exception as e:
+            results.append({"StudentId": sid, "Name": name, "status": "error", "message": f"등록 실패: {str(e)}"})
+
+    return {
+        "status": "success",
+        "message": f"학습 이력 일괄 등록이 완료되었습니다. (등록 {created_count}건 / 건너뜀 {skipped_count}건)",
+        "created_count": created_count,
+        "skipped_count": skipped_count,
+        "results": results
+    }
 
 # --- Domain Data Update/Delete APIs (관리 선생님 이상 전용) ---
 def _resolve_domain_pk(table_name: str, id_val: Any) -> Optional[int]:
