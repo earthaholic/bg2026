@@ -24,7 +24,7 @@ from database import (
     execute_raw_sql,
     get_db_connection
 )
-from auth import create_access_token, get_current_user, get_current_admin
+from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 
 app = FastAPI(
     title="bg2026 - 꿈꾸는봄결 데이터 관리 시스템",
@@ -144,10 +144,11 @@ def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
     }
 
 # --- User Book Registration & Search APIs ---
+# 등록/수정/삭제: 관리 선생님(manager) 이상만 가능 / 조회: 모든 로그인 사용자 가능
 @app.post("/api/user/books")
 def user_register_book(
     payload: UserBookRegisterRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
     if not payload.Title or not payload.Title.strip():
         raise HTTPException(status_code=400, detail="도서명(Title)은 필수 입력 항목입니다.")
@@ -319,7 +320,7 @@ def user_get_book_detail(
 @app.post("/api/user/students")
 def user_register_student(
     payload: UserStudentRegisterRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
     if not payload.Name or not payload.Name.strip():
         raise HTTPException(status_code=400, detail="학생 이름(Name)은 필수 입력 항목입니다.")
@@ -509,7 +510,7 @@ def picker_search_books(
 @app.post("/api/user/studylogs")
 def user_register_studylog(
     payload: UserStudyLogRegisterRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
     if not payload.StudentId or payload.StudentId <= 0:
         raise HTTPException(status_code=400, detail="학생을 선택해 주세요.")
@@ -639,6 +640,112 @@ def user_get_studylog_detail(
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
     return {"studylog": dict(row)}
 
+# --- Domain Data Update/Delete APIs (관리 선생님 이상 전용) ---
+def _resolve_domain_pk(table_name: str, id_val: Any) -> Optional[int]:
+    """rowid 또는 Id 중 실제 행의 rowid를 찾는다. 없으면 None.
+    INTEGER PRIMARY KEY 컬럼(Id)이 rowid 별칭이므로 결과 키가 'Id'로 나올 수 있어
+    컬럼명 대신 인덱스(0)로 접근한다."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'SELECT rowid FROM "{table_name}" WHERE rowid = ? OR "Id" = ?', (id_val, id_val))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+@app.put("/api/user/books/{book_id}")
+def user_update_book(
+    book_id: int,
+    payload: RowDataRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("Books", book_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
+    try:
+        res = update_table_row("Books", "rowid", row_id, payload.data)
+        return {
+            "status": "success",
+            "message": "도서 정보가 성공적으로 수정되었습니다.",
+            "updated_rows": res.get("updated_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"도서 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.delete("/api/user/books/{book_id}")
+def user_delete_book(
+    book_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("Books", book_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
+    try:
+        res = delete_table_row("Books", "rowid", row_id)
+        return {
+            "status": "success",
+            "message": "도서가 성공적으로 삭제되었습니다.",
+            "deleted_rows": res.get("deleted_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"도서 삭제 중 오류가 발생했습니다: {str(e)}")
+
+@app.put("/api/user/students/{student_id}")
+def user_update_student(
+    student_id: int,
+    payload: RowDataRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("Students", student_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    try:
+        res = update_table_row("Students", "rowid", row_id, payload.data)
+        return {
+            "status": "success",
+            "message": "학생 정보가 성공적으로 수정되었습니다.",
+            "updated_rows": res.get("updated_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"학생 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.delete("/api/user/students/{student_id}")
+def user_delete_student(
+    student_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("Students", student_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    try:
+        res = delete_table_row("Students", "rowid", row_id)
+        return {
+            "status": "success",
+            "message": "학생이 성공적으로 삭제되었습니다.",
+            "deleted_rows": res.get("deleted_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"학생 삭제 중 오류가 발생했습니다: {str(e)}")
+
+@app.delete("/api/user/studylogs/{log_id}")
+def user_delete_studylog(
+    log_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("StudyLogs", log_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
+    try:
+        res = delete_table_row("StudyLogs", "rowid", row_id)
+        return {
+            "status": "success",
+            "message": "학습 기록이 성공적으로 삭제되었습니다.",
+            "deleted_rows": res.get("deleted_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"학습 기록 삭제 중 오류가 발생했습니다: {str(e)}")
+
 # --- Database & Table Metadata APIs (Admin Only) ---
 
 
@@ -650,7 +757,7 @@ def list_tables(current_user: Dict[str, Any] = Depends(get_current_user)):
     return {"tables": tables}
 
 @app.get("/api/tables/{table_name}/schema")
-def table_schema(table_name: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+def table_schema(table_name: str, current_user: Dict[str, Any] = Depends(get_current_admin)):
     schema = get_table_schema(table_name)
     if not schema:
         raise HTTPException(status_code=404, detail="테이블을 찾을 수 없습니다.")

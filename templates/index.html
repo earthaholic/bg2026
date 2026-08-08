@@ -65,7 +65,7 @@
                         <i class="fa-solid fa-book-bookmark nav-icon"></i>
                         <span>학습 기록 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item" data-view="studylog-reg">
+                    <div class="menu-nav-item staff-only hidden" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
                     </div>
@@ -75,7 +75,7 @@
                         <i class="fa-solid fa-users-viewfinder nav-icon"></i>
                         <span>학생 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item" data-view="student-reg">
+                    <div class="menu-nav-item staff-only hidden" data-view="student-reg">
                         <i class="fa-solid fa-user-plus nav-icon"></i>
                         <span>새 학생 등록</span>
                     </div>
@@ -85,7 +85,7 @@
                         <i class="fa-solid fa-magnifying-glass nav-icon"></i>
                         <span>도서 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item" data-view="book-reg">
+                    <div class="menu-nav-item staff-only hidden" data-view="book-reg">
                         <i class="fa-solid fa-book-medical nav-icon"></i>
                         <span>새 도서 등록</span>
                     </div>
@@ -843,8 +843,9 @@
                 </form>
 
                 <div class="login-hints">
-                    <div class="hint-item"><span class="badge badge-admin">Admin</span> 관리자 계정 (C/U/D 및 SQL 콘솔)</div>
-                    <div class="hint-item"><span class="badge badge-user">User</span> 일반 사용자 계정 (도서 & 학생 관리)</div>
+                    <div class="hint-item"><span class="badge badge-admin">Admin</span> 사이트 관리자 (전체 권한 + 시스템 데이터 Studio)</div>
+                    <div class="hint-item"><span class="badge badge-manager">Manager</span> 관리 선생님 (도서·학생·학습기록 등록/수정/삭제)</div>
+                    <div class="hint-item"><span class="badge badge-teacher">Teacher</span> 선생님 (각 섹션 조회 전용)</div>
                 </div>
             </div>
         </div>
@@ -886,7 +887,7 @@
     <div id="modal-delete-confirm" class="modal-backdrop hidden">
         <div class="modal-card confirm-delete-card">
             <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
-                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 도서 삭제 확인 (Admin)</h3>
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 도서 삭제 확인</h3>
                 <button id="btn-close-delete-confirm" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
@@ -913,7 +914,7 @@
     <div id="modal-student-delete-confirm" class="modal-backdrop hidden">
         <div class="modal-card confirm-delete-card">
             <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
-                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학생 삭제 확인 (Admin)</h3>
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학생 삭제 확인</h3>
                 <button id="btn-close-student-delete-confirm" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
@@ -994,7 +995,7 @@
     <div id="modal-studylog-delete-confirm" class="modal-backdrop hidden">
         <div class="modal-card confirm-delete-card">
             <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
-                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학습 기록 삭제 확인 (Admin)</h3>
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 학습 기록 삭제 확인</h3>
                 <button id="btn-close-studylog-delete-confirm" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">

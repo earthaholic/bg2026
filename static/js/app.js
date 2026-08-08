@@ -215,6 +215,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Init App
     init();
 
+    // Role Helpers
+    const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg'];
+    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console'];
+
+    function isAdmin() {
+        return !!(currentUser && currentUser.role === 'admin');
+    }
+
+    function isStaff() {
+        return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager'));
+    }
+
     async function init() {
         setupEventListeners();
         if (token) {
@@ -249,19 +262,28 @@ document.addEventListener('DOMContentLoaded', () => {
         userProfileBadge.classList.remove('hidden');
         btnLogout.classList.remove('hidden');
         badgeUsername.textContent = currentUser.username;
-        badgeRole.textContent = currentUser.role.toUpperCase();
+        badgeRole.textContent = (ROLE_LABELS[currentUser.role] || currentUser.role).toUpperCase();
         badgeRole.className = `role-pill ${currentUser.role}`;
 
         const adminOnlyItems = document.querySelectorAll('.admin-only');
-        if (currentUser.role === 'admin') {
-            adminOnlyItems.forEach(el => el.classList.remove('hidden'));
-        } else {
-            adminOnlyItems.forEach(el => el.classList.add('hidden'));
+        const staffOnlyItems = document.querySelectorAll('.staff-only');
+        adminOnlyItems.forEach(el => el.classList.toggle('hidden', !isAdmin()));
+        staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
+
+        // 선생님(조회 전용)은 검색/상세 조회 뷰로 이동
+        if (!isStaff()) {
             switchView('studylog-search');
         }
     }
 
     function switchView(targetView) {
+        // 권한 가드: 선생님은 등록 뷰, 사이트 관리자 외에는 Studio 뷰 접근 불가
+        if (STAFF_ONLY_VIEWS.includes(targetView) && !isStaff()) {
+            targetView = 'studylog-search';
+        } else if (ADMIN_ONLY_VIEWS.includes(targetView) && !isAdmin()) {
+            targetView = 'studylog-search';
+        }
+
         document.querySelectorAll('.menu-nav-item').forEach(item => {
             item.classList.toggle('active', item.getAttribute('data-view') === targetView);
         });
@@ -270,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
             view.classList.toggle('active', view.id === `view-${targetView}`);
         });
 
-        if (targetView === 'data-view' && currentUser && currentUser.role === 'admin') {
+        if (targetView === 'data-view' && isAdmin()) {
             dataStudioHeaderBar.classList.remove('hidden');
         } else {
             dataStudioHeaderBar.classList.add('hidden');
@@ -302,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userProfileBadge.classList.add('hidden');
         btnLogout.classList.add('hidden');
         document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.staff-only').forEach(el => el.classList.add('hidden'));
         dataStudioHeaderBar.classList.add('hidden');
         showLoginModal();
     }
@@ -643,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             formUserBookReg.reset();
             await loadRecentBooks();
-            if (currentUser.role === 'admin' && currentTable === 'Books') {
+            if (isAdmin() && currentTable === 'Books') {
                 await loadTableData();
             }
         } catch (err) {
@@ -685,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             formUserStudentReg.reset();
             await loadRecentStudents();
-            if (currentUser.role === 'admin' && currentTable === 'Students') {
+            if (isAdmin() && currentTable === 'Students') {
                 await loadTableData();
             }
         } catch (err) {
@@ -1226,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // NOTE: Do NOT reset the form! Selected student, book, and date remain intact!
             await loadRecentStudyLogs();
-            if (currentUser && currentUser.role === 'admin' && currentTable === 'StudyLogs') {
+            if (isAdmin() && currentTable === 'StudyLogs') {
                 await loadTableData();
             }
         } catch (err) {
@@ -1363,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/user/studylogs/${logId}`);
             const l = data.studylog;
 
-            if (currentUser && currentUser.role === 'admin') {
+            if (isStaff()) {
                 modalStudyLogDetailActions.innerHTML = `
                     <button id="btn-modal-delete-studylog" class="btn btn-sm btn-danger">
                         <i class="fa-solid fa-trash-can"></i> 학습 기록 삭제
@@ -1427,13 +1450,11 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudyLogDeleteConfirm.classList.remove('hidden');
 
         btnSubmitStudyLogDeleteConfirm.onclick = async () => {
-            const pkCol = l.row_id ? 'rowid' : 'Id';
             const pkVal = l.row_id || l.Id;
 
             try {
-                await apiFetch('/api/tables/StudyLogs/row', {
-                    method: 'DELETE',
-                    body: JSON.stringify({ pk_col: pkCol, pk_val: pkVal })
+                await apiFetch(`/api/user/studylogs/${pkVal}`, {
+                    method: 'DELETE'
                 });
 
                 modalStudyLogDeleteConfirm.classList.add('hidden');
@@ -1658,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const b = data.book;
             currentDetailBook = b;
 
-            if (currentUser && currentUser.role === 'admin') {
+            if (isStaff()) {
                 modalBookDetailActions.innerHTML = `
                     <button id="btn-modal-edit-book" class="btn btn-sm btn-primary">
                         <i class="fa-solid fa-pen-to-square"></i> 수정
@@ -1797,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/user/students/${studentId}`);
             const s = data.student;
 
-            if (currentUser && currentUser.role === 'admin') {
+            if (isStaff()) {
                 modalStudentDetailActions.innerHTML = `
                     <button id="btn-modal-edit-student" class="btn btn-sm btn-primary">
                         <i class="fa-solid fa-pen-to-square"></i> 수정
@@ -2179,13 +2200,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmitStudentDeleteConfirm.onclick = async () => {
             if (inputConfirmDeleteStudentName.value.trim() !== expectedName) return;
 
-            const pkCol = s.row_id ? 'rowid' : 'Id';
             const pkVal = s.row_id || s.Id;
 
             try {
-                await apiFetch('/api/tables/Students/row', {
-                    method: 'DELETE',
-                    body: JSON.stringify({ pk_col: pkCol, pk_val: pkVal })
+                await apiFetch(`/api/user/students/${pkVal}`, {
+                    method: 'DELETE'
                 });
 
                 modalStudentDeleteConfirm.classList.add('hidden');
@@ -2204,7 +2223,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render Admin Student Detail Edit Form Mode
     function renderStudentDetailEditForm(s, studentId) {
-        modalStudentDetailTitle.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 학생 정보 수정 (Admin)`;
+        modalStudentDetailTitle.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 학생 정보 수정`;
         modalStudentDetailActions.innerHTML = '';
 
         let html = `
@@ -2281,17 +2300,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const pkCol = origStudent.row_id ? 'rowid' : 'Id';
-        const pkVal = origStudent.row_id || origStudent.Id;
-
         try {
-            await apiFetch('/api/tables/Students/row', {
+            await apiFetch(`/api/user/students/${studentId}`, {
                 method: 'PUT',
-                body: JSON.stringify({
-                    pk_col: pkCol,
-                    pk_val: pkVal,
-                    data: data
-                })
+                body: JSON.stringify({ data: data })
             });
 
             await openStudentDetailModal(studentId);
@@ -2329,13 +2341,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmitDeleteConfirm.onclick = async () => {
             if (inputConfirmDeleteTitle.value.trim() !== expectedTitle) return;
 
-            const pkCol = b.row_id ? 'rowid' : 'Id';
             const pkVal = b.row_id || b.Id;
 
             try {
-                await apiFetch('/api/tables/Books/row', {
-                    method: 'DELETE',
-                    body: JSON.stringify({ pk_col: pkCol, pk_val: pkVal })
+                await apiFetch(`/api/user/books/${pkVal}`, {
+                    method: 'DELETE'
                 });
 
                 modalDeleteConfirm.classList.add('hidden');
@@ -2354,7 +2364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render Admin Book Detail Edit Form Mode
     function renderBookDetailEditForm(b, bookId) {
-        modalBookDetailTitle.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 도서 정보 수정 (Admin)`;
+        modalBookDetailTitle.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 도서 정보 수정`;
         modalBookDetailActions.innerHTML = '';
 
         function renderSelectOptions(currentVal) {
@@ -2540,17 +2550,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const pkCol = origBook.row_id ? 'rowid' : 'Id';
-        const pkVal = origBook.row_id || origBook.Id;
-
         try {
-            await apiFetch('/api/tables/Books/row', {
+            await apiFetch(`/api/user/books/${bookId}`, {
                 method: 'PUT',
-                body: JSON.stringify({
-                    pk_col: pkCol,
-                    pk_val: pkVal,
-                    data: data
-                })
+                body: JSON.stringify({ data: data })
             });
 
             await openBookDetailModal(bookId);
@@ -2566,7 +2569,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load Tables List (Admin Only) - Populates Table Selector Dropdown
     async function loadTables() {
-        if (!currentUser || currentUser.role !== 'admin') {
+        if (!isAdmin()) {
             selectActiveTable.innerHTML = '<option value="">권한 없음</option>';
             return;
         }
@@ -2608,7 +2611,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectActiveTable.value = tableName;
         activeTableTitle.innerHTML = `<i class="fa-solid fa-table"></i> ${tableName}`;
 
-        if (currentUser && currentUser.role === 'admin') {
+        if (isAdmin()) {
             await loadTableSchema();
             await loadTableData();
         }
@@ -2691,14 +2694,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render Headers
         let headHtml = '';
-        if (currentUser && currentUser.role === 'admin') {
+        if (isAdmin()) {
             headHtml += `<th style="width: 40px; text-align: center;"><input type="checkbox" id="chk-select-all"></th>`;
         }
 
         tableSchema.forEach(col => {
             headHtml += `<th>${col.name} ${col.pk ? '<i class="fa-solid fa-key" style="color: var(--warning); font-size: 0.7rem;"></i>' : ''}</th>`;
         });
-        if (currentUser && currentUser.role === 'admin') {
+        if (isAdmin()) {
             headHtml += '<th style="text-align: right;">작업 (Admin)</th>';
         }
         tableHeadTr.innerHTML = headHtml;
@@ -2732,7 +2735,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             bodyHtml += `<tr class="${isRowSelected ? 'row-selected' : ''}">`;
 
-            if (currentUser && currentUser.role === 'admin') {
+            if (isAdmin()) {
                 bodyHtml += `<td style="text-align: center;"><input type="checkbox" class="chk-row" data-pk="${escapeHtml(String(pkVal))}" ${isRowSelected ? 'checked' : ''}></td>`;
             }
 
@@ -2742,7 +2745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bodyHtml += `<td>${displayVal}</td>`;
             });
 
-            if (currentUser && currentUser.role === 'admin') {
+            if (isAdmin()) {
                 bodyHtml += `
                     <td style="text-align: right;" class="table-actions">
                         <button class="btn btn-sm btn-outline btn-edit-row" data-idx="${idx}"><i class="fa-solid fa-pen"></i> 수정</button>
@@ -2755,7 +2758,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tableBody.innerHTML = bodyHtml;
 
-        if (currentUser && currentUser.role === 'admin') {
+        if (isAdmin()) {
             document.querySelectorAll('.chk-row').forEach(chk => {
                 chk.addEventListener('change', (e) => {
                     const pkVal = e.target.getAttribute('data-pk');
@@ -2790,7 +2793,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateBatchDeleteUI() {
         const count = selectedPkValues.size;
         selectedCountSpan.textContent = count;
-        if (count > 0 && currentUser && currentUser.role === 'admin') {
+        if (count > 0 && isAdmin()) {
             btnBatchDelete.classList.remove('hidden');
         } else {
             btnBatchDelete.classList.add('hidden');

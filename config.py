@@ -19,11 +19,14 @@ class Settings:
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 12  # 12 Hours
 
-    # Default Users
+    # Default Users (roles: admin / manager / teacher)
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin").strip()
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123").strip()
-    USER_USERNAME: str = os.getenv("USER_USERNAME", "user").strip()
-    USER_PASSWORD: str = os.getenv("USER_PASSWORD", "user123").strip()
+    MANAGER_USERNAME: str = os.getenv("MANAGER_USERNAME", "manager").strip()
+    MANAGER_PASSWORD: str = os.getenv("MANAGER_PASSWORD", "manager123").strip()
+    # teacher 계정: TEACHER_* 미설정 시 기존 USER_* 값과 호환 (기존 user 계정이 teacher로 전환됨)
+    TEACHER_USERNAME: str = os.getenv("TEACHER_USERNAME", os.getenv("USER_USERNAME", "user")).strip()
+    TEACHER_PASSWORD: str = os.getenv("TEACHER_PASSWORD", os.getenv("USER_PASSWORD", "user123")).strip()
 
     # SQLite Settings
     SQLITE_DB_PATH: str = os.getenv("SQLITE_DB_PATH", "./data.db").strip()

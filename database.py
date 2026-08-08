@@ -15,19 +15,44 @@ def init_system_tables():
     """System table initialization for authentication and user management."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # User authentication table
+
+    # User authentication table (신규 스키마: admin / manager / teacher)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS _app_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
+            role TEXT NOT NULL CHECK(role IN ('admin', 'manager', 'teacher')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # Seed Admin User if not exists
+    # 구버전 스키마(role: admin/user)로 생성된 테이블이면 데이터 보존 마이그레이션
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='_app_users'")
+    row = cursor.fetchone()
+    existing_ddl = (row['sql'] or '') if row else ''
+    if existing_ddl and 'manager' not in existing_ddl:
+        cursor.execute("ALTER TABLE _app_users RENAME TO _app_users_legacy")
+        cursor.execute("""
+            CREATE TABLE _app_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('admin', 'manager', 'teacher')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 기존 'user' 역할 계정은 'teacher'(선생님: 조회 전용)로 전환
+        cursor.execute("""
+            INSERT INTO _app_users (id, username, password_hash, role, created_at)
+            SELECT id, username, password_hash,
+                   CASE WHEN role = 'user' THEN 'teacher' ELSE role END,
+                   created_at
+            FROM _app_users_legacy
+        """)
+        cursor.execute("DROP TABLE _app_users_legacy")
+
+    # Seed Admin User (사이트 관리자) if not exists
     cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.ADMIN_USERNAME,))
     if not cursor.fetchone():
         cursor.execute(
@@ -35,12 +60,20 @@ def init_system_tables():
             (settings.ADMIN_USERNAME, hash_password(settings.ADMIN_PASSWORD), "admin")
         )
 
-    # Seed Regular User if not exists
-    cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.USER_USERNAME,))
+    # Seed Manager User (관리 선생님) if not exists
+    cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.MANAGER_USERNAME,))
     if not cursor.fetchone():
         cursor.execute(
             "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
-            (settings.USER_USERNAME, hash_password(settings.USER_PASSWORD), "user")
+            (settings.MANAGER_USERNAME, hash_password(settings.MANAGER_PASSWORD), "manager")
+        )
+
+    # Seed Teacher User (선생님) if not exists
+    cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.TEACHER_USERNAME,))
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
+            (settings.TEACHER_USERNAME, hash_password(settings.TEACHER_PASSWORD), "teacher")
         )
 
     conn.commit()
