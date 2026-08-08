@@ -190,6 +190,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseCrudModal = document.getElementById('btn-close-crud-modal');
     const btnCancelCrud = document.getElementById('btn-cancel-crud');
 
+    // User Account Management Elements
+    const btnOpenUserCreate = document.getElementById('btn-open-user-create');
+    const userManageStats = document.getElementById('user-manage-stats');
+    const userManageHead = document.getElementById('user-manage-head');
+    const userManageBody = document.getElementById('user-manage-body');
+
+    const modalUserCreate = document.getElementById('modal-user-create');
+    const formUserCreate = document.getElementById('form-user-create');
+    const userCreateMsg = document.getElementById('user-create-msg');
+    const inputUserCreateUsername = document.getElementById('input-user-create-username');
+    const inputUserCreatePassword = document.getElementById('input-user-create-password');
+    const selectUserCreateRole = document.getElementById('select-user-create-role');
+    const btnCloseUserCreate = document.getElementById('btn-close-user-create');
+    const btnCancelUserCreate = document.getElementById('btn-cancel-user-create');
+    const btnSubmitUserCreate = document.getElementById('btn-submit-user-create');
+
+    const modalUserPassword = document.getElementById('modal-user-password');
+    const formUserPassword = document.getElementById('form-user-password');
+    const userPwMsg = document.getElementById('user-pw-msg');
+    const userPwTargetDisplay = document.getElementById('user-pw-target-display');
+    const userPwInput = document.getElementById('user-pw-input');
+    const btnCloseUserPw = document.getElementById('btn-close-user-pw');
+    const btnCancelUserPw = document.getElementById('btn-cancel-user-pw');
+
+    const modalUserDelete = document.getElementById('modal-user-delete');
+    const userDeleteTargetDisplay = document.getElementById('user-delete-target-display');
+    const inputConfirmUserDelete = document.getElementById('input-confirm-user-delete');
+    const btnCloseUserDelete = document.getElementById('btn-close-user-delete');
+    const btnCancelUserDelete = document.getElementById('btn-cancel-user-delete');
+    const btnSubmitUserDelete = document.getElementById('btn-submit-user-delete');
+
+    let pendingUserPwId = null;
+    let pendingUserDeleteId = null;
+
     // API Helper
     async function apiFetch(url, options = {}) {
         options.headers = options.headers || {};
@@ -218,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
     const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg'];
-    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console'];
+    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage'];
 
     function isAdmin() {
         return !!(currentUser && currentUser.role === 'admin');
@@ -306,6 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadRecentStudyLogs();
         } else if (targetView === 'studylog-search') {
             loadStudyLogSearchResults();
+        } else if (targetView === 'user-manage') {
+            loadUserAccounts();
         }
     }
 
@@ -616,6 +652,20 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCloseCrudModal.addEventListener('click', () => modalCrud.classList.add('hidden'));
         btnCancelCrud.addEventListener('click', () => modalCrud.classList.add('hidden'));
         formCrud.addEventListener('submit', handleSaveCrud);
+
+        // User Account Management Events
+        btnOpenUserCreate.addEventListener('click', openUserCreateModal);
+        btnCloseUserCreate.addEventListener('click', () => modalUserCreate.classList.add('hidden'));
+        btnCancelUserCreate.addEventListener('click', () => modalUserCreate.classList.add('hidden'));
+        formUserCreate.addEventListener('submit', handleUserCreate);
+
+        btnCloseUserPw.addEventListener('click', () => modalUserPassword.classList.add('hidden'));
+        btnCancelUserPw.addEventListener('click', () => modalUserPassword.classList.add('hidden'));
+        formUserPassword.addEventListener('submit', handleUserPasswordReset);
+
+        btnCloseUserDelete.addEventListener('click', () => modalUserDelete.classList.add('hidden'));
+        btnCancelUserDelete.addEventListener('click', () => modalUserDelete.classList.add('hidden'));
+        btnSubmitUserDelete.addEventListener('click', handleUserDelete);
     }
 
     // User Book Registration Handler
@@ -3053,6 +3103,229 @@ document.addEventListener('DOMContentLoaded', () => {
         if (val === 'M' || val === 'MALE' || val === '남' || val === '남성') return '남';
         if (val === 'F' || val === 'FEMALE' || val === '여' || val === '여성') return '여';
         return escapeHtml(s.trim());
+    }
+
+    // --- User Account Management (Admin Only) ---
+
+    async function loadUserAccounts() {
+        try {
+            userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
+            const data = await apiFetch('/api/admin/users');
+            renderUserAccounts(data.users);
+        } catch (err) {
+            userManageBody.innerHTML = `<tr><td colspan="4" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
+        }
+    }
+
+    function renderUserAccounts(users) {
+        userManageStats.textContent = `총 ${users.length} 명의 계정`;
+
+        if (users.length === 0) {
+            userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
+            return;
+        }
+
+        let headHtml = '<th>아이디</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
+        userManageHead.innerHTML = headHtml;
+
+        let bodyHtml = '';
+        users.forEach(u => {
+            const username = escapeHtml(u.username);
+            const roleLabel = ROLE_LABELS[u.role] || u.role;
+            const createdAt = escapeHtml(u.created_at || '-');
+
+            let actionsHtml = '';
+            if (u.role === 'admin') {
+                actionsHtml = '<span style="color: var(--text-dim); font-size: 0.8rem;">관리자</span>';
+            } else {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-outline btn-user-reset-pw" data-user-id="${u.id}" data-username="${username}">
+                        <i class="fa-solid fa-lock"></i> 비밀번호 초기화
+                    </button>
+                    <select class="select-user-role" data-user-id="${u.id}" data-username="${username}">
+                        <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>관리 선생님</option>
+                        <option value="teacher" ${u.role === 'teacher' ? 'selected' : ''}>선생님</option>
+                    </select>
+                    <button class="btn btn-sm btn-danger btn-user-delete" data-user-id="${u.id}" data-username="${username}" style="margin-left: 0.3rem;">
+                        <i class="fa-solid fa-trash-can"></i> 삭제
+                    </button>
+                `;
+            }
+
+            bodyHtml += `
+                <tr>
+                    <td><strong>${username}</strong></td>
+                    <td><span class="role-pill ${u.role}">${roleLabel}</span></td>
+                    <td>${createdAt}</td>
+                    <td style="text-align: right;">${actionsHtml}</td>
+                </tr>
+            `;
+        });
+
+        userManageBody.innerHTML = bodyHtml;
+
+        userManageBody.querySelectorAll('.btn-user-reset-pw').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const userId = parseInt(btn.getAttribute('data-user-id'));
+                const username = btn.getAttribute('data-username');
+                openUserPasswordResetModal(userId, username);
+            });
+        });
+
+        userManageBody.querySelectorAll('.select-user-role').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const userId = parseInt(sel.getAttribute('data-user-id'));
+                const username = sel.getAttribute('data-username');
+                handleUserRoleChange(userId, username, sel.value);
+            });
+        });
+
+        userManageBody.querySelectorAll('.btn-user-delete').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const userId = parseInt(btn.getAttribute('data-user-id'));
+                const username = btn.getAttribute('data-username');
+                openUserDeleteConfirmModal(userId, username);
+            });
+        });
+    }
+
+    function openUserCreateModal() {
+        formUserCreate.reset();
+        selectUserCreateRole.value = 'teacher';
+        userCreateMsg.classList.add('hidden');
+        modalUserCreate.classList.remove('hidden');
+        inputUserCreateUsername.focus();
+    }
+
+    async function handleUserCreate(e) {
+        e.preventDefault();
+        userCreateMsg.classList.add('hidden');
+
+        const username = inputUserCreateUsername.value.trim();
+        const password = inputUserCreatePassword.value;
+        const role = selectUserCreateRole.value;
+
+        if (!username) {
+            userCreateMsg.className = 'alert alert-danger';
+            userCreateMsg.textContent = '아이디는 필수 입력 항목입니다.';
+            userCreateMsg.classList.remove('hidden');
+            return;
+        }
+
+        if (password.length < 4) {
+            userCreateMsg.className = 'alert alert-danger';
+            userCreateMsg.textContent = '비밀번호는 4자 이상 입력해 주세요.';
+            userCreateMsg.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const result = await apiFetch('/api/admin/users', {
+                method: 'POST',
+                body: JSON.stringify({ username, password, role })
+            });
+
+            alert(result.message);
+            modalUserCreate.classList.add('hidden');
+            await loadUserAccounts();
+        } catch (err) {
+            userCreateMsg.className = 'alert alert-danger';
+            userCreateMsg.textContent = err.message;
+            userCreateMsg.classList.remove('hidden');
+        }
+    }
+
+    function openUserPasswordResetModal(userId, username) {
+        pendingUserPwId = userId;
+        userPwTargetDisplay.textContent = username;
+        userPwInput.value = '';
+        userPwMsg.classList.add('hidden');
+        modalUserPassword.classList.remove('hidden');
+        userPwInput.focus();
+    }
+
+    async function handleUserPasswordReset(e) {
+        e.preventDefault();
+        userPwMsg.classList.add('hidden');
+
+        const password = userPwInput.value;
+        if (password.length < 4) {
+            userPwMsg.className = 'alert alert-danger';
+            userPwMsg.textContent = '비밀번호는 4자 이상 입력해 주세요.';
+            userPwMsg.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const result = await apiFetch(`/api/admin/users/${pendingUserPwId}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ password })
+            });
+
+            alert(result.message);
+            modalUserPassword.classList.add('hidden');
+            await loadUserAccounts();
+        } catch (err) {
+            userPwMsg.className = 'alert alert-danger';
+            userPwMsg.textContent = err.message;
+            userPwMsg.classList.remove('hidden');
+        }
+    }
+
+    async function handleUserRoleChange(userId, username, newRole) {
+        const roleLabel = ROLE_LABELS[newRole] || newRole;
+        if (!confirm(`'${username}' 계정의 역할을 ${roleLabel}(으)로 변경하시겠습니까?`)) {
+            await loadUserAccounts();
+            return;
+        }
+
+        try {
+            const result = await apiFetch(`/api/admin/users/${userId}/role`, {
+                method: 'PUT',
+                body: JSON.stringify({ role: newRole })
+            });
+
+            alert(result.message);
+            await loadUserAccounts();
+        } catch (err) {
+            alert(err.message);
+            await loadUserAccounts();
+        }
+    }
+
+    function openUserDeleteConfirmModal(userId, username) {
+        pendingUserDeleteId = userId;
+        userDeleteTargetDisplay.textContent = username;
+        inputConfirmUserDelete.value = '';
+        btnSubmitUserDelete.disabled = true;
+        modalUserDelete.classList.remove('hidden');
+        inputConfirmUserDelete.focus();
+
+        inputConfirmUserDelete.oninput = () => {
+            if (inputConfirmUserDelete.value.trim() === username) {
+                btnSubmitUserDelete.disabled = false;
+            } else {
+                btnSubmitUserDelete.disabled = true;
+            }
+        };
+    }
+
+    async function handleUserDelete(e) {
+        e.preventDefault();
+        if (btnSubmitUserDelete.disabled) return;
+
+        try {
+            const result = await apiFetch(`/api/admin/users/${pendingUserDeleteId}`, {
+                method: 'DELETE'
+            });
+
+            alert(result.message);
+            modalUserDelete.classList.add('hidden');
+            await loadUserAccounts();
+            await loadTables();
+        } catch (err) {
+            alert(err.message);
+        }
     }
 
     function escapeHtml(str) {

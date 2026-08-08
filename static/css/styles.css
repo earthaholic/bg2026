@@ -2033,3 +2033,23 @@ body {
     transform: scale(1.2);
     background: #93c5fd;
 }
+
+/* User Account Management Styles */
+.select-user-role {
+    width: 130px;
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.35rem 0.5rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-size: 0.78rem;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.select-user-role:focus {
+    outline: none;
+    border-color: var(--primary);
+}

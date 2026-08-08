@@ -22,7 +22,13 @@ from database import (
     delete_table_row,
     batch_delete_table_rows,
     execute_raw_sql,
-    get_db_connection
+    get_db_connection,
+    list_all_users,
+    get_user_by_id,
+    create_user,
+    update_user_password,
+    update_user_role,
+    delete_user
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 
@@ -56,6 +62,17 @@ def on_startup():
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    role: str
+
+class UserPasswordResetRequest(BaseModel):
+    password: str
+
+class UserRoleUpdateRequest(BaseModel):
+    role: str
 
 class RowDataRequest(BaseModel):
     data: Dict[str, Any]
@@ -902,6 +919,101 @@ def export_sql_csv(
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- Admin User Management APIs (Admin Only) ---
+
+def _resolve_target_user(user_id: int) -> Dict[str, Any]:
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="해당 계정을 찾을 수 없습니다.")
+    return user
+
+
+@app.get("/api/admin/users")
+def admin_list_users(current_admin: Dict[str, Any] = Depends(get_current_admin)):
+    users = list_all_users()
+    return {"users": users}
+
+
+@app.post("/api/admin/users")
+def admin_create_user(
+    payload: UserCreateRequest,
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    username = payload.username.strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="아이디는 필수 입력 항목입니다.")
+    if len(payload.password) < 4:
+        raise HTTPException(status_code=400, detail="비밀번호는 4자 이상 입력해 주세요.")
+    if payload.role not in ("manager", "teacher"):
+        raise HTTPException(
+            status_code=400,
+            detail="발급 가능한 역할은 관리 선생님(manager) 또는 선생님(teacher)입니다."
+        )
+
+    try:
+        res = create_user(username, payload.password, payload.role)
+        return {
+            "status": "success",
+            "message": f"'{username}' 계정이 성공적으로 발급되었습니다.",
+            "id": res.get("id")
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/admin/users/{user_id}/password")
+def admin_reset_user_password(
+    user_id: int,
+    payload: UserPasswordResetRequest,
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    if len(payload.password) < 4:
+        raise HTTPException(status_code=400, detail="비밀번호는 4자 이상 입력해 주세요.")
+
+    user = _resolve_target_user(user_id)
+    if user["role"] == "admin":
+        raise HTTPException(status_code=400, detail="관리자(admin) 계정은 비밀번호를 변경할 수 없습니다.")
+
+    update_user_password(user_id, payload.password)
+    return {"status": "success", "message": "비밀번호가 성공적으로 초기화되었습니다."}
+
+
+@app.put("/api/admin/users/{user_id}/role")
+def admin_update_user_role(
+    user_id: int,
+    payload: UserRoleUpdateRequest,
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    if payload.role not in ("manager", "teacher"):
+        raise HTTPException(
+            status_code=400,
+            detail="변경 가능한 역할은 관리 선생님(manager) 또는 선생님(teacher)입니다."
+        )
+
+    user = _resolve_target_user(user_id)
+    if user["role"] == "admin":
+        raise HTTPException(status_code=400, detail="관리자(admin) 계정의 역할은 변경할 수 없습니다.")
+
+    update_user_role(user_id, payload.role)
+    return {"status": "success", "message": "계정 역할이 성공적으로 변경되었습니다."}
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(
+    user_id: int,
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    user = _resolve_target_user(user_id)
+    if user["role"] == "admin":
+        raise HTTPException(status_code=400, detail="관리자(admin) 계정은 삭제할 수 없습니다.")
+    if current_admin["id"] == user_id:
+        raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다.")
+
+    delete_user(user_id)
+    return {"status": "success", "message": "계정이 성공적으로 삭제되었습니다."}
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -99,6 +99,12 @@
                         <i class="fa-solid fa-terminal nav-icon"></i>
                         <span>SQL 콘솔 & CSV</span>
                     </div>
+
+                    <div class="menu-section-label admin-only hidden">계정 관리</div>
+                    <div class="menu-nav-item admin-only hidden" data-view="user-manage">
+                        <i class="fa-solid fa-user-gear nav-icon"></i>
+                        <span>선생님 계정 관리</span>
+                    </div>
                 </nav>
 
                 <div class="sidebar-footer">
@@ -812,6 +818,46 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- View 7: User Account Management (Admin Only) -->
+                <section id="view-user-manage" class="workspace-view">
+                    <div class="card form-card">
+                        <div class="card-header-styled">
+                            <div>
+                                <h2><i class="fa-solid fa-user-gear"></i> 선생님 계정 관리</h2>
+                                <p class="subtitle">관리 선생님(manager)과 선생님(teacher) 계정을 발급·수정·삭제할 수 있습니다. 관리자(admin) 계정은 여기서 변경할 수 없습니다.</p>
+                            </div>
+                            <button id="btn-open-user-create" class="btn btn-success">
+                                <i class="fa-solid fa-plus"></i> 새 계정 발급
+                            </button>
+                        </div>
+
+                        <div class="results-bar" style="margin-bottom: 0.75rem;">
+                            <span id="user-manage-stats" class="badge badge-info">총 0 명의 계정</span>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: calc(100vh - 280px);">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr id="user-manage-head">
+                                        <th>아이디</th>
+                                        <th>역할</th>
+                                        <th>가입일</th>
+                                        <th style="text-align: right;">작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="user-manage-body">
+                                    <tr>
+                                        <td colspan="4" class="empty-state">
+                                            <i class="fa-solid fa-user-gear fa-2x"></i>
+                                            <p>계정 목록을 불러오는 중...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
             </main>
         </div>
     </div>
@@ -1030,6 +1076,100 @@
                         <button type="submit" id="btn-save-crud" class="btn btn-primary"><i class="fa-solid fa-check"></i> 저장</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 계정 발급 모달 -->
+    <div id="modal-user-create" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-plus"></i> 새 계정 발급</h3>
+                <button id="btn-close-user-create" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-user-create">
+                    <div id="user-create-msg" class="alert hidden"></div>
+                    <div class="form-group">
+                        <label for="input-user-create-username">아이디</label>
+                        <input type="text" id="input-user-create-username" class="form-control" placeholder="발급할 계정의 아이디를 입력하세요" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="input-user-create-password">비밀번호</label>
+                        <input type="password" id="input-user-create-password" class="form-control" placeholder="비밀번호 (4자 이상)" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="select-user-create-role">역할</label>
+                        <select id="select-user-create-role" class="form-control">
+                            <option value="manager">관리 선생님</option>
+                            <option value="teacher">선생님</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="btn-cancel-user-create" class="btn btn-outline">취소</button>
+                        <button type="submit" id="btn-submit-user-create" class="btn btn-success">
+                            <i class="fa-solid fa-paper-plane"></i> 발급하기
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 비밀번호 초기화 모달 -->
+    <div id="modal-user-password" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-lock"></i> 비밀번호 초기화</h3>
+                <button id="btn-close-user-pw" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-user-password">
+                    <div id="user-pw-msg" class="alert hidden"></div>
+                    <div class="form-group">
+                        <label>대상 계정</label>
+                        <p style="font-size: 1.05rem; font-weight: 700; color: var(--primary);">
+                            <i class="fa-solid fa-user"></i> <strong id="user-pw-target-display">-</strong>
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="user-pw-input">새 비밀번호</label>
+                        <input type="password" id="user-pw-input" class="form-control" placeholder="새 비밀번호 (4자 이상)" required autocomplete="off">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="btn-cancel-user-pw" class="btn btn-outline">취소</button>
+                        <button type="submit" id="btn-submit-user-pw" class="btn btn-primary">
+                            <i class="fa-solid fa-rotate"></i> 초기화
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 계정 삭제 확인 모달 -->
+    <div id="modal-user-delete" class="modal-backdrop hidden">
+        <div class="modal-card confirm-delete-card">
+            <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 계정 삭제 확인</h3>
+                <button id="btn-close-user-delete" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 계정을 삭제하시겠습니까?<br>삭제된 계정은 복구할 수 없습니다.
+                </div>
+                <div class="form-group">
+                    <label style="color: var(--text-main); font-weight: 600;">
+                        실수를 방지하기 위해 아이디 <strong id="user-delete-target-display" style="color: var(--warning);"></strong> 을(를) 아래에 그대로 입력해 주세요:
+                    </label>
+                    <input type="text" id="input-confirm-user-delete" class="form-control" placeholder="아이디 그대로 입력..." autocomplete="off">
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="btn-cancel-user-delete" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-user-delete" class="btn btn-danger" disabled>
+                        <i class="fa-solid fa-trash-can"></i> 계정 삭제
+                    </button>
+                </div>
             </div>
         </div>
     </div>

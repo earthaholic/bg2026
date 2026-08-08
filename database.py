@@ -293,3 +293,72 @@ def execute_raw_sql(sql_query: str) -> Dict[str, Any]:
     except Exception as e:
         conn.close()
         raise Exception(f"SQL 실행 오류: {str(e)}")
+
+# --- 사용자 계정 관리 함수 ---
+
+def list_all_users() -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, role, created_at FROM _app_users ORDER BY id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM _app_users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+def create_user(username: str, password: str, role: str) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
+            (username, hash_password(password), role)
+        )
+        conn.commit()
+        inserted_id = cursor.lastrowid
+        return {"status": "success", "id": inserted_id}
+    except sqlite3.IntegrityError:
+        raise ValueError(f"이미 사용 중인 아이디입니다: {username}")
+    finally:
+        conn.close()
+
+def update_user_password(user_id: int, new_password: str) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE _app_users SET password_hash = ? WHERE id = ?",
+        (hash_password(new_password), user_id)
+    )
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return rowcount
+
+def update_user_role(user_id: int, new_role: str) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE _app_users SET role = ? WHERE id = ?",
+        (new_role, user_id)
+    )
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return rowcount
+
+def delete_user(user_id: int) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM _app_users WHERE id = ?", (user_id,))
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return rowcount
