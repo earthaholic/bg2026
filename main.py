@@ -135,6 +135,7 @@ class UserStudyLogRegisterRequest(BaseModel):
     StudentId: int
     BookId: int
     StudiedDay: str
+    Description: Optional[str] = ""
 
 class ClassRequest(BaseModel):
     ClassName: str
@@ -145,11 +146,12 @@ class ClassRequest(BaseModel):
 
 class ClassStudyLogItem(BaseModel):
     StudentId: int
-    StudiedDay: str
     include: bool = True
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: int
+    StudiedDay: str
+    Description: Optional[str] = ""
     logs: List[ClassStudyLogItem]
 
 # --- Web UI Route ---
@@ -565,7 +567,8 @@ def user_register_studylog(
     log_data = {
         "StudentId": payload.StudentId,
         "BookId": payload.BookId,
-        "StudiedDay": payload.StudiedDay.strip()
+        "StudiedDay": payload.StudiedDay.strip(),
+        "Description": (payload.Description or "").strip()
     }
 
     try:
@@ -824,6 +827,11 @@ def user_batch_register_class_studylogs(
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
 
+    day = (payload.StudiedDay or "").strip()
+    if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
+        raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+    description = (payload.Description or "").strip()
+
     book_row = _resolve_domain_pk("Books", payload.BookId)
     if book_row is None:
         raise HTTPException(status_code=400, detail="해당 도서를 찾을 수 없습니다.")
@@ -862,11 +870,6 @@ def user_batch_register_class_studylogs(
             results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
             continue
 
-        day = (item.StudiedDay or "").strip()
-        if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
-            results.append({"StudentId": sid, "Name": name, "status": "error", "message": "학습 일자는 YYYY-MM-DD 형식이어야 합니다."})
-            continue
-
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -881,7 +884,9 @@ def user_batch_register_class_studylogs(
                 results.append({"StudentId": sid, "Name": name, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
                 continue
 
-            insert_table_row("StudyLogs", {"StudentId": sid, "BookId": payload.BookId, "StudiedDay": day})
+            insert_table_row("StudyLogs", {
+                "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day, "Description": description
+            })
             created_count += 1
             results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})
         except Exception as e:

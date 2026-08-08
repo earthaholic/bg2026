@@ -97,6 +97,16 @@ def init_system_tables():
         )
     """)
 
+    # StudyLogs에 수업 내용 메모(Description) 컬럼 추가
+    # (StudyLogs는 oracle_sync.py가 만들므로, 재생성 후에도 시작 시점에 보완한다)
+    try:
+        cursor.execute('PRAGMA table_info("StudyLogs")')
+        studylog_cols = [r["name"] for r in cursor.fetchall()]
+        if "Description" not in studylog_cols:
+            cursor.execute('ALTER TABLE "StudyLogs" ADD COLUMN "Description" TEXT DEFAULT \'\'')
+    except Exception:
+        pass  # StudyLogs 테이블이 아직 없으면 스킵 (oracle_sync 후 생성됨)
+
     conn.commit()
     conn.close()
 
