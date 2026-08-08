@@ -658,6 +658,14 @@
                                     </div>
                                 </div>
 
+                                <!-- Section 4: 수업 내용 메모 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 4. 수업 내용 메모 (선택)</h4>
+                                    <div class="form-group">
+                                        <textarea id="studylog-desc" name="Description" class="form-control" rows="3" placeholder="이번 수업에서 다룬 내용, 학생의 특이사항 등을 간략히 적어두세요. (선택사항)"></textarea>
+                                    </div>
+                                </div>
+
                                 <div class="form-actions">
                                     <button type="submit" class="btn btn-success btn-lg">
                                         <i class="fa-solid fa-floppy-disk"></i> 새 학습 기록 수록하기
@@ -1062,7 +1070,7 @@
                         <div id="class-batch-reg-card" class="card hidden">
                             <div class="card-header-styled">
                                 <h3><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</h3>
-                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 체크를 해제하고, 학생별로 날짜를 개별 수정할 수 있습니다.</p>
+                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 체크를 해제하세요.</p>
                             </div>
 
                             <form id="form-class-batch-studylog" class="book-form">
@@ -1084,29 +1092,30 @@
                                 </div>
 
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 2. 학습 일자 (전체 기본값)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 2. 학습 일자 (전체 학생 공통)</h4>
                                     <div class="form-grid">
                                         <div class="form-group">
                                             <label for="batch-studied-day">학습 일자 <span class="required">*</span></label>
                                             <input type="date" id="batch-studied-day" class="form-control" required>
                                         </div>
-                                        <div class="form-group" style="justify-content: flex-end; align-items: flex-end;">
-                                            <button type="button" id="btn-batch-apply-date" class="btn btn-outline">
-                                                <i class="fa-solid fa-arrow-down-wide-short"></i> 전체 학생에 적용
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
 
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 3. 학생별 참석 여부 & 학습 일자</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 3. 수업 내용 메모 (선택)</h4>
+                                    <div class="form-group">
+                                        <textarea id="batch-description" name="Description" class="form-control" rows="3" placeholder="이번 수업에서 다룬 내용, 숙제, 특이사항 등을 간략히 적어두세요. 모든 학생의 학습 기록에 동일하게 저장됩니다. (선택사항)"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 4. 학생별 참석 여부</h4>
                                     <div id="class-batch-students" class="table-responsive">
                                         <table class="modern-table">
                                             <thead>
                                                 <tr>
                                                     <th style="width: 70px;">참석</th>
                                                     <th>학생 이름</th>
-                                                    <th style="width: 230px;">학습 일자 (개별 수정 가능)</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="class-batch-students-body"></tbody>

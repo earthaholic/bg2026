@@ -279,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const classBatchRegCard = document.getElementById('class-batch-reg-card');
     const formClassBatchStudyLog = document.getElementById('form-class-batch-studylog');
     const batchStudiedDay = document.getElementById('batch-studied-day');
-    const btnBatchApplyDate = document.getElementById('btn-batch-apply-date');
     const classBatchStudentsBody = document.getElementById('class-batch-students-body');
     const classBatchResult = document.getElementById('class-batch-result');
 
@@ -820,9 +819,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetBatchRegView();
                 }
             });
-        }
-        if (btnBatchApplyDate) {
-            btnBatchApplyDate.addEventListener('click', applyBatchDateToAllStudents);
         }
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
@@ -1453,7 +1449,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal };
+        const descEl = document.getElementById('studylog-desc');
+        const desc = descEl ? descEl.value.trim() : '';
+        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, Description: desc };
 
         try {
             const result = await apiFetch('/api/user/studylogs', {
@@ -1625,6 +1623,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const bSubject = escapeHtml(l.BookSubject || '분야 미상');
 
+            // 수업 내용 메모 (있을 때만 표시)
+            const descHtml = (l.Description && l.Description.trim()) ? `
+                <div style="margin-top: 1rem;">
+                    <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 수업 내용 메모</div>
+                    <div class="detail-desc-box" style="white-space: pre-wrap; background: var(--bg-surface); padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        ${escapeHtml(l.Description)}
+                    </div>
+                </div>
+            ` : '';
+
             let html = `
                 <div class="detail-header-block">
                     <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex}) 학생의 학습 기록</div>
@@ -1657,6 +1665,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 </div>
+
+                ${descHtml}
             `;
 
             modalStudyLogDetailBody.innerHTML = html;
@@ -3950,10 +3960,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBatchStudentsTable(students) {
         if (!classBatchStudentsBody) return;
         if (students.length === 0) {
-            classBatchStudentsBody.innerHTML = '<tr><td colspan="3" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            classBatchStudentsBody.innerHTML = '<tr><td colspan="2" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
             return;
         }
-        const dateVal = batchStudiedDay.value || new Date().toISOString().split('T')[0];
         let html = '';
         students.forEach(s => {
             const sId = s.row_id || s.Id;
@@ -3965,21 +3974,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">
                     </td>
                     <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})</span></td>
-                    <td><input type="date" class="form-control class-batch-date-input batch-student-date" data-student-id="${sId}" value="${dateVal}"></td>
                 </tr>
             `;
         });
         classBatchStudentsBody.innerHTML = html;
-    }
-
-    function applyBatchDateToAllStudents() {
-        if (!batchStudiedDay || !batchStudiedDay.value) {
-            alert('먼저 학습 일자를 선택해 주세요.');
-            return;
-        }
-        document.querySelectorAll('.batch-student-date').forEach(input => {
-            input.value = batchStudiedDay.value;
-        });
     }
 
     function resetBatchRegView() {
@@ -3996,7 +3994,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
     }
 
-    // 일괄 학습 기록 등록 제출
+    // 일괄 학습 기록 등록 제출 (단일 학습 일자 + 수업 내용 메모, 학생별로는 참석 여부만)
     async function handleBatchStudyLogSubmit(e) {
         e.preventDefault();
         if (classBatchResult) classBatchResult.classList.add('hidden');
@@ -4009,21 +4007,20 @@ document.addEventListener('DOMContentLoaded', () => {
             classBatchResult.classList.remove('hidden');
             return;
         }
-        const logs = [];
-        let hasMissingDate = false;
-        document.querySelectorAll('.batch-attend').forEach(chk => {
-            const sId = parseInt(chk.getAttribute('data-student-id'));
-            const dateInput = classBatchStudentsBody.querySelector(`.batch-student-date[data-student-id="${sId}"]`);
-            const day = dateInput ? dateInput.value : '';
-            if (!day) { hasMissingDate = true; return; }
-            logs.push({ StudentId: sId, StudiedDay: day, include: chk.checked });
-        });
-        if (hasMissingDate) {
+        const dateVal = batchStudiedDay ? batchStudiedDay.value : '';
+        if (!dateVal) {
             classBatchResult.className = 'alert alert-danger';
-            classBatchResult.textContent = '학습 일자가 입력되지 않은 학생이 있습니다.';
+            classBatchResult.textContent = '학습 일자를 입력해 주세요.';
             classBatchResult.classList.remove('hidden');
             return;
         }
+        const descEl = document.getElementById('batch-description');
+        const desc = descEl ? descEl.value.trim() : '';
+
+        const logs = [];
+        document.querySelectorAll('.batch-attend').forEach(chk => {
+            logs.push({ StudentId: parseInt(chk.getAttribute('data-student-id')), include: chk.checked });
+        });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
             classBatchResult.textContent = '등록할 학생이 없습니다.';
@@ -4033,7 +4030,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, logs: logs })
+                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, Description: desc, logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {
