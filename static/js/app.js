@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pendingClassDeleteId = null;
     let pendingClassDeleteName = '';
     let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
+    let classRegSelectedStudentIds = new Set(); // 수업 등록 폼에서 선택된 학생 ID (필터 재렌더 시에도 유지)
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
 
@@ -3528,34 +3529,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateClassSelectedCount() {
-        if (classSelectedCount && classStudentList) {
-            classSelectedCount.textContent = classStudentList.querySelectorAll('input[type="checkbox"]:checked').length;
+        if (classSelectedCount) {
+            classSelectedCount.textContent = classRegSelectedStudentIds.size;
         }
     }
 
     // 수업 등록 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
+    // 선택 상태는 DOM이 아닌 classRegSelectedStudentIds(Set)에 보관하므로,
+    // 필터로 학생을 검색해도 기존에 선택한 학생의 선택이 유지된다.
     function renderClassStudentCheckboxList() {
         if (!classStudentList) return;
         const filterText = classStudentFilter ? classStudentFilter.value : '';
-        const checkedIds = new Set(
-            Array.from(classStudentList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value))
-        );
-        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, checkedIds);
+        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, classRegSelectedStudentIds);
         updateClassSelectedCount();
         classStudentList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            cb.addEventListener('change', updateClassSelectedCount);
+            cb.addEventListener('change', () => {
+                const sid = parseInt(cb.value);
+                if (cb.checked) {
+                    classRegSelectedStudentIds.add(sid);
+                } else {
+                    classRegSelectedStudentIds.delete(sid);
+                }
+                updateClassSelectedCount();
+            });
         });
     }
 
     function getSelectedClassStudentIds() {
-        if (!classStudentList) return [];
-        return Array.from(classStudentList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+        return Array.from(classRegSelectedStudentIds);
     }
 
     // 수업 등록 폼 초기화 (선생님 옵션 + 학생 목록 로드)
     async function loadClassRegForm() {
         if (!formUserClassReg) return;
         formUserClassReg.reset();
+        classRegSelectedStudentIds = new Set();
         if (classRegMsg) classRegMsg.classList.add('hidden');
         if (classStudentFilter) classStudentFilter.value = '';
         classStudentList.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>';
