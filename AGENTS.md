@@ -18,6 +18,7 @@ No tests, no lint/typecheck, no CI, no README. Frontend is a single Jinja2 SPA (
 - `main.py` = all routes (user + admin APIs). `database.py` = SQLite helpers, raw SQL. `auth.py` = JWT (python-jose HS256, roles `admin`/`manager`/`teacher`); `get_current_admin` gates admin APIs (테이블 CRUD, raw SQL runner, CSV export), `get_current_staff`(admin/manager) gates 도메인 등록·수정·삭제. `config.py` = settings from `.env`.
 - Backing store is SQLite `data.db` (gitignored). Oracle ADB (`.env`) is the upstream source.
 - Domain tables `Books`, `Students`, `StudyLogs` are NOT created by app code — they must pre-exist in `data.db` (created by `oracle_sync.py` or manually). Startup only creates the `_app_users` auth table. If `data.db` is deleted, re-run `python oracle_sync.py`.
+- 수업 기능: `init_system_tables()`가 시작 시 `Classes`(Id/ClassName/TeacherUsername/DayOfWeek/StartTime)와 `ClassStudents`(ClassId↔StudentId, UNIQUE)를 생성한다. 수업-학생 관계는 `set_class_students()`로 전체 교체 방식. `StudyLogs`에는 시간 컬럼이 없다(시간 미저장).
 
 ## 권한 체계 (Roles)
 JWT `role` 클레임 / `_app_users.role` 기준 3단계:
@@ -26,15 +27,17 @@ JWT `role` 클레임 / `_app_users.role` 기준 3단계:
 |---|---|---|
 | 사이트 관리자 | `admin` | 전체 권한 + 시스템 데이터 Studio (데이터 그리드, SQL 콘솔 & CSV, 테이블 CRUD) |
 | 관리 선생님 | `manager` | 도서/학생/학습기록 등록·수정·삭제 + 전체 조회 (Studio 제외) |
-| 선생님 | `teacher` | 각 섹션 검색 & 상세 조회만 |
+| 선생님 | `teacher` | 각 섹션 검색 & 상세 조회만 + 본인 수업 조회·일괄 등록 |
 
 - 백엔드 가드: `get_current_admin`(admin 전용) → `/api/tables/*`, `/api/admin/sql/*`. `get_current_staff`(admin+manager) → `/api/user/*`의 등록·수정·삭제(POST/PUT/DELETE). 조회 GET은 모든 로그인 사용자 허용.
 - 도메인 수정/삭제는 전용 엔드포인트 `PUT/DELETE /api/user/books/{id}`, `PUT/DELETE /api/user/students/{id}`, `DELETE /api/user/studylogs/{id}`를 사용 (manager 권한). `/api/tables/*`의 행 CRUD는 admin 전용.
-- 프론트 가드: `.admin-only`(Studio 메뉴)는 admin만, `.staff-only`(등록 메뉴)는 admin+manager만 표시. `switchView()`는 권한 없는 뷰를 `studylog-search`로 리다이렉트. 상세 모달의 수정/삭제 버튼도 `isStaff()` 기준.
+- 수업: `GET /api/user/classes*` 조회는 teacher에게 `TeacherUsername = 본인 username`으로만 필터링(타인 수업 403). 수업 CRUD(`POST/PUT/DELETE /api/user/classes*`)는 staff 전용. `POST /api/user/classes/{id}/studylogs`(일괄 등록)는 staff + 본인 수업 teacher 허용.
+- 프론트 가드: `.admin-only`(Studio 메뉴)는 admin만, `.staff-only`(등록 메뉴, `class-reg` 포함)는 admin+manager만 표시. `switchView()`는 권한 없는 뷰를 `studylog-search`로 리다이렉트. 상세 모달의 수정/삭제 버튼도 `isStaff()` 기준.
 - `init_system_tables()`가 구버전 스키마(`role IN ('admin','user')`)를 감지하면 데이터 보존 재생성 후 기존 `user` 계정을 `teacher`로 전환하고 manager/teacher 기본 계정을 시드한다.
 
 ## Gotchas
 - `oracle_sync.py` DROPS every user table and rebuilds from Oracle; it falls back to demo tables (EMPLOYEES/PRODUCTS/SYSTEM_LOGS) when Oracle is unreachable. Never run it against data you want to keep.
+- ⚠️ `oracle_sync.py`는 `Classes`/`ClassStudents`도 DROP한다. 실행 후 서버를 재시작하면 스키마는 다시 생성되지만 수업 데이터는 소실된다(수업 데이터는 로컬 전용).
 - Dual-key matching: Oracle tables have an `Id` PK plus SQLite `rowid`. Queries frequently join/filter with `OR x = rowid OR x = Id` (e.g. StudyLogs→Books/Students). Keep both in sync or rows go unmatched.
 - Passwords use SHA-256 (`database.hash_password`), NOT bcrypt/passlib despite those being pinned in `requirements.txt` (`bcrypt==4.0.1`).
 - Table/column names are double-quoted and case-sensitive in SQL (e.g. `"Books"`, `"Id"`).
