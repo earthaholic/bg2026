@@ -2135,3 +2135,21 @@ body {
 .res-status-created { color: var(--success); }
 .res-status-skipped, .res-status-duplicate { color: var(--warning); }
 .res-status-error { color: var(--danger); }
+.class-selected-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+}
+.selected-student-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.22rem 0.65rem;
+    border-radius: var(--radius-full);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 600;
+}

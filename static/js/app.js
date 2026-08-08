@@ -3532,6 +3532,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classSelectedCount) {
             classSelectedCount.textContent = classRegSelectedStudentIds.size;
         }
+        // 선택된 학생 이름 태그 렌더링 (선택 개수와 함께 이름을 보여준다)
+        const namesEl = document.getElementById('class-selected-names');
+        if (!namesEl) return;
+        if (classRegSelectedStudentIds.size === 0) {
+            namesEl.innerHTML = '';
+            return;
+        }
+        const names = [];
+        classAllStudentsCache.forEach(s => {
+            const sId = s.row_id || s.Id;
+            if (classRegSelectedStudentIds.has(sId)) {
+                names.push(escapeHtml(s.Name || `학생 #${sId}`));
+            }
+        });
+        namesEl.innerHTML = names.map(n => `<span class="selected-student-tag"><i class="fa-solid fa-user"></i> ${n}</span>`).join('');
     }
 
     // 수업 등록 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
