@@ -457,7 +457,7 @@ def user_register_student(
 def user_get_recent_students(current_user: Dict[str, Any] = Depends(get_current_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT rowid as row_id, * FROM "Students" ORDER BY rowid DESC LIMIT 5')
+    cursor.execute('SELECT rowid as row_id, * FROM "Students" WHERE (COALESCE("IsClassEnded", 0) = 0) ORDER BY rowid DESC LIMIT 5')
     rows = cursor.fetchall()
     conn.close()
     return {"students": [dict(r) for r in rows]}
@@ -596,10 +596,14 @@ def user_get_student_detail(
 
 # --- Options List APIs for Forms ---
 @app.get("/api/user/students-options")
-def user_get_students_options(current_user: Dict[str, Any] = Depends(get_current_user)):
+def user_get_students_options(
+    include_ended: bool = Query(False),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT rowid as row_id, * FROM "Students" ORDER BY "Name" ASC')
+    where_clause = '' if include_ended else ' WHERE (COALESCE("IsClassEnded", 0) = 0)'
+    cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_clause} ORDER BY "Name" ASC')
     rows = cursor.fetchall()
     conn.close()
     return {"students": [dict(r) for r in rows]}
@@ -617,17 +621,21 @@ def user_get_books_options(current_user: Dict[str, Any] = Depends(get_current_us
 @app.get("/api/user/picker/students")
 def picker_search_students(
     q: Optional[str] = Query(None),
+    include_ended: bool = Query(False),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
-    where_str = ""
+    conds = []
     params = []
+    if not include_ended:
+        conds.append('(COALESCE("IsClassEnded", 0) = 0)')
     if q and q.strip():
         pattern = f"%{q.strip()}%"
-        where_str = ' WHERE ("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)'
+        conds.append('("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)')
         params = [pattern] * 4
 
+    where_str = f' WHERE {" AND ".join(conds)}' if conds else ''
     cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT 25', params)
     rows = cursor.fetchall()
     conn.close()
