@@ -2,7 +2,7 @@
 
 ## Overview
 FastAPI + SQLite app for 꿈꾸는봄결 (reading/debate tutoring): manages students, books, and study logs.
-No tests, no lint/typecheck, no CI, no README. Frontend is a single Jinja2 SPA (vanilla JS + CSS, no build step).
+No tests, no lint/typecheck, no CI. Frontend is a single Jinja2 SPA (vanilla JS + CSS, no build step).
 
 ## 사용자 요구사항
 - 모든 사용자 대상 답변(작업 요약, 진행 상황, 질문에 대한 답변, 제안 등)은 반드시 한국어로 작성할 것.

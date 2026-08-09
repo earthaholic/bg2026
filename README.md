@@ -57,15 +57,21 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_admin_password
 ```
 
-### 3. 개발 서버 실행
+### 3. 개발 서버 실행 (`uvicorn` 전용)
+개발 서버는 **Uvicorn(uvicorn)** 패키지를 통해 실행됩니다:
+
 ```bash
-# 일반 실행 (Uvicorn Reload)
+# uvicorn 직접 실행 (코드 변경 시 자동 리로드)
+uvicorn main:app --reload
+
+# 또는 python 스크립트로 실행 (내부에서 uvicorn 구동)
 python main.py
 
-# 또는 백그라운드 데몬으로 실행 (Windows 권장)
+# 또는 백그라운드 데몬 프로세스로 실행 (Windows 환경 권장)
 python server_daemon.py
 ```
 * 웹 브라우저 접속: `http://127.0.0.1:8000`
+* API 문서 (Swagger UI): `http://127.0.0.1:8000/docs`
 
 ---
 
