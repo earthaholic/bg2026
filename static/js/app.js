@@ -2312,6 +2312,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
                                 <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
                                 <span><i class="fa-solid fa-user-plus"></i> 추천인: <strong>${formatReferrer(s.Referrer) || '미입력'}</strong></span>
+                                ${s.IsClassEnded ? '<span class="badge badge-warning"><i class="fa-solid fa-graduation-cap"></i> 수업 종료</span>' : ''}
                                 <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
                                 <span><i class="fa-solid fa-award"></i> 총 수업: <strong>${totalLogs}회</strong></span>
                             </div>
@@ -2694,6 +2695,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-graduation-cap"></i> 수업 상태</h4>
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="IsClassEnded" value="1" ${s.IsClassEnded ? 'checked' : ''}>
+                        <span>수업 종료</span>
+                    </label>
+                </div>
+
                 <div class="modal-actions">
                     <button type="button" id="btn-cancel-modal-edit-student" class="btn btn-outline">취소</button>
                     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 수정 내용 저장</button>
@@ -2726,7 +2735,8 @@ document.addEventListener('DOMContentLoaded', () => {
             Sex: (formData.get('Sex') || '').trim(),
             Grade: (formData.get('Grade') || '').trim(),
             Referrer: (formData.get('Referrer') || '').trim(),
-            Description: (formData.get('Description') || '').trim()
+            Description: (formData.get('Description') || '').trim(),
+            IsClassEnded: formData.get('IsClassEnded') ? 1 : 0
         };
 
         if (!data.Name) {
