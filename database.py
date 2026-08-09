@@ -60,21 +60,8 @@ def init_system_tables():
             (settings.ADMIN_USERNAME, hash_password(settings.ADMIN_PASSWORD), "admin")
         )
 
-    # Seed Manager User (관리 선생님) if not exists
-    cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.MANAGER_USERNAME,))
-    if not cursor.fetchone():
-        cursor.execute(
-            "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
-            (settings.MANAGER_USERNAME, hash_password(settings.MANAGER_PASSWORD), "manager")
-        )
-
-    # Seed Teacher User (선생님) if not exists
-    cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.TEACHER_USERNAME,))
-    if not cursor.fetchone():
-        cursor.execute(
-            "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
-            (settings.TEACHER_USERNAME, hash_password(settings.TEACHER_PASSWORD), "teacher")
-        )
+    # 참고: 기본 manager/teacher 계정은 시드하지 않는다. (배포 시 admin 계정만 존재)
+    # 필요한 staff(manager/teacher) 계정은 admin이 계정 관리 UI에서 직접 발급한다.
 
     # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블
     # (로컬 전용 도메인 테이블 - oracle_sync.py 실행 시 DROP되므로 시작 시점에 재생성됨)
