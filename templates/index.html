@@ -501,8 +501,18 @@
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <label for="student-birthday">생년월일 (Birthday)</label>
-                                            <input type="date" id="student-birthday" name="Birthday" class="form-control">
+                                            <label for="student-grade">학년 (Grade)</label>
+                                            <input type="text" id="student-grade" name="Grade" class="form-control" list="student-grade-options" placeholder="예) 초3" autocomplete="off">
+                                            <datalist id="student-grade-options">
+                                                <option value="초1"></option><option value="초2"></option><option value="초3"></option>
+                                                <option value="초4"></option><option value="초5"></option><option value="초6"></option>
+                                                <option value="중1"></option><option value="중2"></option><option value="중3"></option>
+                                                <option value="고1"></option><option value="고2"></option><option value="고3"></option>
+                                            </datalist>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="student-referrer">추천인 (Referrer)</label>
+                                            <input type="text" id="student-referrer" name="Referrer" class="form-control" placeholder="예) 김OO 학부모" autocomplete="off">
                                         </div>
                                     </div>
                                 </div>
