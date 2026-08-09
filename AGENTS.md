@@ -7,7 +7,6 @@ No tests, no lint/typecheck, no CI. Frontend is a single Jinja2 SPA (vanilla JS 
 ## 사용자 요구사항
 - 모든 사용자 대상 답변(작업 요약, 진행 상황, 질문에 대한 답변, 제안 등)은 반드시 한국어로 작성할 것.
 - 코드/파일 안의 주석·메시지 등 사용자에게 노출되는 텍스트 역시 한국어를 기본으로 한다 (기존 UI 문자열, 에러 메시지가 전부 한국어임).
-- **Metis 서브에이전트(플랜 갭 분석)는 사용하지 않는다.** 갭 분석이 필요한 경우 오케스트레이터가 직접 수행한다.
 
 ## Run / Verify
 - Dev server: `python main.py` (uvicorn reload at `http://127.0.0.1:8000`) or `uvicorn main:app --reload`.
