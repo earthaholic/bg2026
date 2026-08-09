@@ -3746,7 +3746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" class="cs-special-chk" value="${sId}" ${specialChecked} ${specialDisabled} style="accent-color: var(--warning);">
                         <span style="font-size: 0.8rem; color: var(--warning); white-space: nowrap;"><i class="fa-solid fa-star"></i> 특강</span>
                     </label>
-                    <span class="stu-meta">${sex} | #${sId}</span>
+                    <span class="stu-meta">${sex} | ${s.Referrer ? '추천: ' + formatReferrer(s.Referrer) + ' | ' : ''}#${sId}</span>
                 </div>
             `;
         });
@@ -3770,13 +3770,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedSet.has(sId)) {
                 names.push({
                     name: escapeHtml(s.Name || `학생 #${sId}`),
+                    referrer: s.Referrer || '',
                     special: specialSet.has(sId)
                 });
             }
         });
         // 특강 지정 학생의 배지는 다른 색상(주황) + 별 아이콘으로 표시
         namesEl.innerHTML = names.map(n =>
-            `<span class="selected-student-tag${n.special ? ' special' : ''}"><i class="fa-solid ${n.special ? 'fa-star' : 'fa-user'}"></i> ${n.name}</span>`
+            `<span class="selected-student-tag${n.special ? ' special' : ''}"><i class="fa-solid ${n.special ? 'fa-star' : 'fa-user'}"></i> ${n.name}${n.referrer ? `<span class="chip-referrer" style="opacity:.75;font-size:.68rem;"> · 추천:${escapeHtml(n.referrer)}</span>` : ''}</span>`
         ).join('');
     }
 
@@ -3991,9 +3992,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 students.forEach(s => {
                     const name = escapeHtml(s.Name || '이름 없음');
                     const sex = formatSex(s.Sex);
-                    const birthday = formatBirthday(s.Birthday);
+                    const referrerText = s.Referrer ? `<span class="text-muted" style="font-size: 0.75rem; margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : '';
                     const specialBadge = s.IsSpecial ? '<span class="badge" style="margin-left: 0.4rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : '';
-                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${specialBadge}</td><td>${sex}</td><td>${birthday}</td></tr>`;
+                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${referrerText}${specialBadge}</td><td>${sex}</td><td>${formatGrade(s.Grade)}</td></tr>`;
                 });
             }
 
@@ -4013,7 +4014,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="detail-section-title"><i class="fa-solid fa-users"></i> 수강 학생 명단</div>
                     <div class="table-responsive">
                         <table class="modern-table">
-                            <thead><tr><th>학생 이름</th><th>성별</th><th>생년월일</th></tr></thead>
+                            <thead><tr><th>학생 이름</th><th>성별</th><th>학년</th></tr></thead>
                             <tbody>${studentRows}</tbody>
                         </table>
                     </div>
@@ -4255,7 +4256,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="text-align: center;">
                         <input type="checkbox" class="batch-special" data-student-id="${sId}" ${specialChecked} title="특강 수업 여부" style="width: 16px; height: 16px; accent-color: var(--warning); cursor: pointer;">
                     </td>
-                    <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})</span></td>
+                    <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
                 </tr>
             `;
         });
