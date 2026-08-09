@@ -2458,3 +2458,33 @@ body {
     overflow: auto;
     padding: 1.25rem;
 }
+
+
+
+/* 제목/이름 중복 경고 박스 (도서·학생 등록 폼 공용) */
+.title-similar-box {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+}
+.title-similar-list {
+    max-height: 10rem;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-surface);
+}
+.title-similar-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.title-similar-item:last-child { border-bottom: none; }
+.title-similar-item .tsi-title { font-weight: 600; color: var(--text-main); }
+.title-similar-item .tsi-meta { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
