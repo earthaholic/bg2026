@@ -4643,6 +4643,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await loadMonthlyReportStudentOptions(preselectStudentId);
 
+        // 수업 종료 학생은 students-options(기본 exclude)에 없으므로,
+        // 상세 모달에서 넘어온 preselectStudentId가 셀렉트에 없으면
+        // 해당 학생을 직접 조회해 "(수업 종료)" 옵션으로 추가한다.
+        if (preselectStudentId) {
+            const select = document.getElementById('monthly-report-student-select');
+            if (select && select.value !== String(preselectStudentId)) {
+                try {
+                    const data = await apiFetch(`/api/user/students/${preselectStudentId}`);
+                    const s = data.student;
+                    const sId = s.row_id || s.Id;
+                    const opt = document.createElement('option');
+                    opt.value = String(sId);
+                    opt.textContent = `${s.Name || '이름 없음'} (${formatSex(s.Sex)}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} (수업 종료) [#${sId}]`;
+                    select.appendChild(opt);
+                    select.value = String(sId);
+                } catch (e) {
+                    /* 조용히 무시 */
+                }
+            }
+        }
+
         if (preselectStudentId) {
             await loadMonthlyReportLogs();
         }
