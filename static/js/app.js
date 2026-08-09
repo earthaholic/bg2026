@@ -1096,12 +1096,13 @@ document.addEventListener('DOMContentLoaded', () => {
             students.forEach(s => {
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
-                const birthday = formatBirthday(s.Birthday);
+                const grade = formatGrade(s.Grade);
                 html += `
                     <div class="recent-book-item">
                         <div class="recent-book-title" title="${name}"><i class="fa-solid fa-user-graduate" style="color: var(--primary); margin-right: 0.3rem;"></i> ${name} (${sex})</div>
                         <div class="recent-book-meta">
-                            <span><i class="fa-solid fa-cake-candles"></i> ${birthday}</span>
+                            <span><i class="fa-solid fa-graduation-cap"></i> ${grade}</span>
+                            ${s.Referrer ? `<span><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -2024,7 +2025,6 @@ document.addEventListener('DOMContentLoaded', () => {
         students.forEach(s => {
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
-            const birthday = formatBirthday(s.Birthday);
             const desc = escapeHtml(s.Description || '등록된 메모가 없습니다.');
             const studentId = s.row_id || s.Id;
 
@@ -2044,10 +2044,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="student-avatar ${avatarClass}">
                             <i class="fa-solid ${avatarIcon}"></i>
                         </div>
-                        <div class="book-card-title">${name}</div>
+                        <div class="book-card-title">${name}${s.Referrer ? `<span class="tag-badge" style="margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : ''}</div>
                         <div class="book-card-author" style="margin-bottom: 0.5rem;">
                             <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${sex}</strong></span>
-                            <span><i class="fa-solid fa-cake-candles"></i> 생일: <strong>${birthday}</strong></span>
+                            <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
                         </div>
                         <div class="text-muted" style="font-size: 0.78rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                             ${desc}
@@ -2299,7 +2299,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="detail-title">${escapeHtml(s.Name || '이름 없음')}</div>
                             <div class="detail-meta-row">
                                 <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
-                                <span><i class="fa-solid fa-cake-candles"></i> 생년월일: <strong>${formatBirthday(s.Birthday)}</strong></span>
+                                <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
+                                <span><i class="fa-solid fa-user-plus"></i> 추천인: <strong>${formatReferrer(s.Referrer) || '미입력'}</strong></span>
                                 <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
                                 <span><i class="fa-solid fa-award"></i> 총 수업: <strong>${totalLogs}회</strong></span>
                             </div>
