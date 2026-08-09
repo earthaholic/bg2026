@@ -1010,7 +1010,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             Name: (formData.get('Name') || '').trim(),
             Sex: (formData.get('Sex') || '').trim(),
-            Birthday: (formData.get('Birthday') || '').trim() || '1970-01-01',
+            Grade: (formData.get('Grade') || '').trim(),
+            Referrer: (formData.get('Referrer') || '').trim(),
             Description: (formData.get('Description') || '').trim()
         };
 
