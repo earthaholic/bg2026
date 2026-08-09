@@ -368,6 +368,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearBookSimilar() { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); }
 
+    // Student Name Similarity Warning (동명이인 경고)
+    const studentNameInput = document.getElementById('student-name');
+    const studentNameSimilarBox = document.getElementById('student-name-similar-box');
+    let studentNameSeq = 0;
+
+    function renderStudentSimilar(data) {
+        const { total, summary, matches } = data;
+        if (!total) { studentNameSimilarBox.classList.add('hidden'); return; }
+        let html = `<span class="badge badge-danger"><i class="fa-solid fa-circle-exclamation"></i> 같은 이름의 학생 ${summary.exact}명이 이미 등록되어 있습니다.</span>`;
+        if (matches.length > 0) {
+            html += `<div class="title-similar-list">`;
+            matches.forEach(m => {
+                const name = escapeHtml(m.Name || '');
+                const meta = escapeHtml([formatSex(m.Sex), formatBirthday(m.Birthday)].filter(Boolean).join(' · '));
+                html += `<div class="title-similar-item"><span class="tsi-title">${name}</span>${meta ? `<span class="tsi-meta">${meta}</span>` : ''}</div>`;
+            });
+            html += `</div>`;
+            if (total > matches.length) { html += `<div class="text-muted">... 외 ${total - matches.length}명</div>`; }
+        }
+        studentNameSimilarBox.innerHTML = html;
+        studentNameSimilarBox.classList.remove('hidden');
+    }
+
+    async function fetchStudentSimilar(name) {
+        const seq = ++studentNameSeq;
+        try {
+            const data = await apiFetch(`/api/user/students/similar?q=${encodeURIComponent(name)}`);
+            if (seq !== studentNameSeq) return;
+            renderStudentSimilar(data);
+        } catch (err) {
+            if (seq !== studentNameSeq) return;
+            studentNameSimilarBox.classList.add('hidden');
+            console.warn('[동명이인 경고] 조회 실패:', err.message);
+        }
+    }
+
+    const debouncedStudentSimilar = debounce((e) => {
+        const name = (e.target.value || '').trim();
+        if (!name) { studentNameSeq++; studentNameSimilarBox.classList.add('hidden'); return; }
+        fetchStudentSimilar(name);
+    }, 300);
+
+    function clearStudentSimilar() { studentNameSeq++; studentNameSimilarBox.classList.add('hidden'); }
+
     // Init App
     init();
 
@@ -561,9 +605,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // User Student Registration Form Submit
         formUserStudentReg.addEventListener('submit', handleUserStudentSubmit);
+        studentNameInput.addEventListener('input', debouncedStudentSimilar);
         btnResetStudentForm.addEventListener('click', () => {
             formUserStudentReg.reset();
             userStudentMsg.classList.add('hidden');
+            clearStudentSimilar();
         });
         btnRefreshRecentStudents.addEventListener('click', loadRecentStudents);
 
@@ -980,6 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userStudentMsg.classList.remove('hidden');
 
             formUserStudentReg.reset();
+            clearStudentSimilar();
             await loadRecentStudents();
             if (isAdmin() && currentTable === 'Students') {
                 await loadTableData();
