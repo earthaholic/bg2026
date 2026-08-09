@@ -135,6 +135,7 @@ class UserStudyLogRegisterRequest(BaseModel):
     StudentId: int
     BookId: int
     StudiedDay: str
+    IsSpecial: Optional[bool] = False
     LessonContent: Optional[str] = ""
     Description: Optional[str] = ""
 
@@ -144,10 +145,12 @@ class ClassRequest(BaseModel):
     DayOfWeek: str
     StartTime: Optional[str] = ""
     StudentIds: List[int] = []
+    StudentIsSpecial: Optional[Dict[int, bool]] = {}
 
 class ClassStudyLogItem(BaseModel):
     StudentId: int
     include: bool = True
+    is_special: bool = False
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: int
@@ -570,6 +573,7 @@ def user_register_studylog(
         "StudentId": payload.StudentId,
         "BookId": payload.BookId,
         "StudiedDay": payload.StudiedDay.strip(),
+        "IsSpecial": 1 if payload.IsSpecial else 0,
         "LessonContent": (payload.LessonContent or "").strip(),
         "Description": (payload.Description or "").strip()
     }
@@ -689,6 +693,154 @@ def user_get_studylog_detail(
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
     return {"studylog": dict(row)}
 
+# --- 월말 보고 문자 양식 생성 APIs ---
+
+class MonthlyReportPreviewPayload(BaseModel):
+    student_name: str
+    period_label: Optional[str] = ""
+    report_month: Optional[str] = ""
+    start_lecture_num: Optional[int] = 1
+    special_teacher_name: Optional[str] = ""
+    logs: List[Dict[str, Any]] = []
+
+def _get_korean_name_with_yi(name: str) -> str:
+    if not name or len(name) == 0:
+        return ""
+    last_char_code = ord(name[-1])
+    if 0xAC00 <= last_char_code <= 0xD7A3:
+        has_patchim = (last_char_code - 0xAC00) % 28 > 0
+        return name + "이" if has_patchim else name
+    return name
+
+def _format_date_korean(studied_day: str) -> str:
+    """StudiedDay (e.g. 2026-07-02) -> 7/2(목)"""
+    if not studied_day:
+        return ""
+    clean_date = str(studied_day).strip().split('T')[0].split(' ')[0]
+    parts = clean_date.replace('.', '-').replace('/', '-').split('-')
+    if len(parts) >= 3:
+        try:
+            year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+            import datetime
+            dt = datetime.date(year, month, day)
+            days_kr = ['월', '화', '수', '목', '금', '토', '일']
+            dow = days_kr[dt.weekday()]
+            return f"{month}/{day}({dow})"
+        except Exception:
+            pass
+    return studied_day
+
+def build_monthly_report_text(
+    student_name: str,
+    period_label: str,
+    report_month: str,
+    start_lecture_num: int,
+    special_teacher_name: str,
+    logs: List[Dict[str, Any]]
+) -> str:
+    name_yi = _get_korean_name_with_yi(student_name)
+    lines = []
+    lines.append(f"{name_yi} 어머니")
+    lines.append("안녕하세요")
+
+    period_str = (period_label or "").strip()
+    month_str = (report_month or "").strip()
+    if period_str and month_str:
+        lines.append(f"{period_str}중 {month_str} 수업보고드립니다^^")
+    elif month_str:
+        lines.append(f"{month_str} 수업보고드립니다^^")
+    elif period_str:
+        lines.append(f"{period_str} 수업보고드립니다^^")
+    else:
+        lines.append("수업보고드립니다^^")
+
+    lines.append("")
+
+    current_lecture = start_lecture_num or 1
+    teacher_suffix = (special_teacher_name or "").strip()
+    if teacher_suffix and not teacher_suffix.endswith("선생님"):
+        teacher_suffix += " 선생님"
+
+    for i, log in enumerate(logs):
+        if i > 0:
+            lines.append("")
+
+        is_special = bool(log.get("IsSpecial") or log.get("is_special"))
+        if is_special:
+            if teacher_suffix:
+                lines.append(f"<특강> {teacher_suffix}")
+            else:
+                lines.append("<특강>")
+        else:
+            lines.append(f"<{current_lecture}강>")
+            current_lecture += 1
+
+        book_title = (log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
+        lines.append(f"도서 : {book_title}")
+
+        date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
+        lesson_content = (log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
+        if date_str and lesson_content:
+            lines.append(f"{date_str} {lesson_content}")
+        elif date_str:
+            lines.append(f"{date_str}")
+        elif lesson_content:
+            lines.append(f"{lesson_content}")
+
+    return "\n".join(lines)
+
+@app.get("/api/user/monthly-report/studylogs")
+def user_get_monthly_report_studylogs(
+    student_id: int = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT rowid as row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
+    student_row = cursor.fetchone()
+    if not student_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    student = dict(student_row)
+    s_row_id = student['row_id']
+    s_id = student.get('Id', s_row_id)
+    s_name = student.get('Name', '')
+
+    query = '''
+        SELECT sl.rowid as row_id, sl.*, 
+               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher
+        FROM "StudyLogs" sl
+        LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
+        WHERE sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?
+        ORDER BY sl.StudiedDay DESC, sl.rowid DESC
+    '''
+    cursor.execute(query, (s_row_id, str(s_row_id), s_id, s_name))
+    rows = cursor.fetchall()
+    conn.close()
+
+    logs = [dict(r) for r in rows]
+    return {
+        "student": student,
+        "logs": logs,
+        "total_count": len(logs)
+    }
+
+@app.post("/api/user/monthly-report/preview")
+def user_generate_monthly_report_preview(
+    payload: MonthlyReportPreviewPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    text = build_monthly_report_text(
+        student_name=payload.student_name,
+        period_label=payload.period_label or "2학기(5, 6, 7월)",
+        report_month=payload.report_month or "7월",
+        start_lecture_num=payload.start_lecture_num or 23,
+        special_teacher_name=payload.special_teacher_name or "",
+        logs=payload.logs
+    )
+    return {"text": text}
+
 # --- 수업(Classes) 관리 APIs ---
 # 조회: 모든 로그인 사용자 (선생님은 본인 수업만)
 # 등록/수정/삭제: 관리 선생님(manager) 이상 / 일괄 학습 이력 등록: staff + 본인 수업 선생님
@@ -730,6 +882,14 @@ def _resolve_student_row_id(student_id: int) -> Optional[int]:
     finally:
         conn.close()
 
+def _class_student_items(payload: ClassRequest) -> List[dict]:
+    """수업 배정 학생 목록을 ClassStudents 행 구조(StudentId + IsSpecial)로 변환한다."""
+    special_map = payload.StudentIsSpecial or {}
+    return [
+        {"StudentId": sid, "IsSpecial": 1 if special_map.get(sid) else 0}
+        for sid in payload.StudentIds
+    ]
+
 @app.get("/api/user/classes")
 def user_list_classes(
     q: Optional[str] = Query(None),
@@ -766,7 +926,7 @@ def user_register_class(
     try:
         res = create_class(payload.dict())
         class_id = res.get("id")
-        set_class_students(class_id, payload.StudentIds)
+        set_class_students(class_id, _class_student_items(payload))
         return {
             "status": "success",
             "message": f"'{payload.ClassName.strip()}' 수업이 성공적으로 등록되었습니다.",
@@ -786,7 +946,7 @@ def user_update_class(
     _validate_class_payload(payload)
     try:
         update_class(class_id, payload.dict())
-        set_class_students(class_id, payload.StudentIds)
+        set_class_students(class_id, _class_student_items(payload))
         return {"status": "success", "message": "수업 정보가 성공적으로 수정되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"수업 수정 중 오류가 발생했습니다: {str(e)}")
@@ -890,7 +1050,8 @@ def user_batch_register_class_studylogs(
 
             insert_table_row("StudyLogs", {
                 "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
-                "LessonContent": lesson_content, "Description": description
+                "LessonContent": lesson_content, "Description": description,
+                "IsSpecial": 1 if item.is_special else 0
             })
             created_count += 1
             results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})

@@ -32,8 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let pendingClassDeleteName = '';
     let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
     let classRegSelectedStudentIds = new Set(); // 수업 등록 폼에서 선택된 학생 ID (필터 재렌더 시에도 유지)
+    let classRegStudentSpecialIds = new Set(); // 수업 등록 폼에서 특강으로 지정된 학생 ID (배정된 학생만 유효)
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
+    let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
+    let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
 
     // DOM Elements
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
@@ -409,6 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadClassRegForm();
         } else if (targetView === 'class-studylog-reg') {
             loadClassOptionsForBatch();
+        } else if (targetView === 'monthly-report') {
+            initMonthlyReportView();
         }
     }
 
@@ -1058,7 +1063,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global Event Delegation for Pickers & StudyLog Modals
     document.addEventListener('click', (e) => {
         // Open Student Picker Modal
-        if (e.target.closest('#btn-open-student-picker, #selected-student-display')) {
+        const studentPickerOpener = e.target.closest('#btn-open-student-picker, #selected-student-display, #btn-open-picker-monthly-student');
+        if (studentPickerOpener) {
+            activeStudentPickerTarget = studentPickerOpener.id === 'btn-open-picker-monthly-student' ? 'monthly' : 'studylog';
             const modal = document.getElementById('modal-student-picker');
             const inputQ = document.getElementById('input-picker-student-q');
             if (inputQ) inputQ.value = '';
@@ -1250,6 +1257,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const name = btn.getAttribute('data-name');
                     const sex = btn.getAttribute('data-sex');
                     const birthday = btn.getAttribute('data-birthday');
+
+                    if (activeStudentPickerTarget === 'monthly') {
+                        const monthlySelect = document.getElementById('monthly-report-student-select');
+                        const elModal = document.getElementById('modal-student-picker');
+                        if (monthlySelect) {
+                            monthlySelect.value = id;
+                            loadMonthlyReportLogs();
+                        }
+                        if (elModal) elModal.classList.add('hidden');
+                        activeStudentPickerTarget = 'studylog';
+                        return;
+                    }
 
                     const elId = document.getElementById('selected-student-id');
                     const elDisp = document.getElementById('selected-student-display');
@@ -1453,7 +1472,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const desc = descEl ? descEl.value.trim() : '';
         const contentEl = document.getElementById('studylog-content');
         const content = contentEl ? contentEl.value.trim() : '';
-        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, LessonContent: content, Description: desc };
+        const specialEl = document.getElementById('studylog-special');
+        const isSpecial = specialEl ? specialEl.checked : false;
+        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, IsSpecial: isSpecial, LessonContent: content, Description: desc };
 
         try {
             const result = await apiFetch('/api/user/studylogs', {
@@ -1506,6 +1527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="recent-book-meta">
                             <span><i class="fa-solid fa-calendar-check"></i> ${day}</span>
+                            ${l.IsSpecial ? '<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}
                         </div>
                     </div>
                 `;
@@ -1590,6 +1612,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="badge badge-warning" style="align-self: flex-start; margin-bottom: 0.5rem;">
                             <i class="fa-solid fa-calendar-check"></i> ${day}
                         </div>
+                        ${l.IsSpecial ? '<span class="badge" style="align-self: flex-start; margin-bottom: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}
                         <div class="book-card-title" style="font-size: 1.05rem;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})</div>
                         <div class="book-card-author" style="margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--text-main);">
                             <i class="fa-solid fa-book" style="color: var(--success);"></i> ${bTitle}
@@ -1669,7 +1692,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let html = `
                 <div class="detail-header-block">
-                    <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex}) 학생의 학습 기록</div>
+                    <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex}) 학생의 학습 기록 ${l.IsSpecial ? '<span class="badge" style="margin-left: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}</div>
                     <div class="detail-meta-row">
                         <span><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자: <strong>${escapeHtml(l.StudiedDay || '미상')}</strong></span>
                         <span><i class="fa-solid fa-cake-candles"></i> 학생 생년월일: <strong>${sBirthday}</strong></span>
@@ -2084,8 +2107,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/user/students/${studentId}`);
             const s = data.student;
 
+            let actionsHtml = `
+                <button id="btn-modal-monthly-report-student" class="btn btn-sm btn-success">
+                    <i class="fa-solid fa-comment-sms"></i> 월말보고 문자 생성
+                </button>
+            `;
             if (isStaff()) {
-                modalStudentDetailActions.innerHTML = `
+                actionsHtml += `
                     <button id="btn-modal-edit-student" class="btn btn-sm btn-primary">
                         <i class="fa-solid fa-pen-to-square"></i> 수정
                     </button>
@@ -2093,6 +2121,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fa-solid fa-trash-can"></i> 학생 삭제
                     </button>
                 `;
+            }
+            modalStudentDetailActions.innerHTML = actionsHtml;
+
+            document.getElementById('btn-modal-monthly-report-student').addEventListener('click', () => {
+                modalStudentDetail.classList.add('hidden');
+                switchView('monthly-report');
+                initMonthlyReportView(studentId);
+            });
+
+            if (isStaff()) {
                 document.getElementById('btn-modal-edit-student').addEventListener('click', () => {
                     renderStudentDetailEditForm(s, studentId);
                 });
@@ -3554,8 +3592,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 전체 학생 체크박스 목록 HTML 생성 (등록/편집 폼 공용)
-    function buildStudentCheckboxListHtml(filterText, checkedIds) {
+    // checkedIds: 수강 배정된 학생 ID Set, specialIds: 특강으로 지정된 학생 ID Set
+    function buildStudentCheckboxListHtml(filterText, checkedIds, specialIds) {
         filterText = (filterText || '').trim().toLowerCase();
+        specialIds = specialIds || new Set();
         let html = '';
         classAllStudentsCache.forEach(s => {
             const sId = s.row_id || s.Id;
@@ -3563,12 +3603,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const sex = formatSex(s.Sex);
             if (filterText && !name.toLowerCase().includes(filterText)) return;
             const checked = checkedIds.has(sId) ? 'checked' : '';
+            const specialChecked = specialIds.has(sId) ? 'checked' : '';
+            const specialDisabled = checked ? '' : 'disabled';
             html += `
-                <label class="class-student-checkbox-item">
-                    <input type="checkbox" value="${sId}" ${checked}>
-                    <span><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</span>
+                <div class="class-student-checkbox-item">
+                    <label class="cs-select" style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; flex: 1; min-width: 0;">
+                        <input type="checkbox" class="cs-chk" value="${sId}" ${checked}>
+                        <span style="white-space: nowrap;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</span>
+                    </label>
+                    <label class="cs-special" title="이 학생의 이 수업을 특강으로 지정 (배정된 학생만 설정 가능)" style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; flex-shrink: 0; opacity: ${checked ? 1 : 0.45};">
+                        <input type="checkbox" class="cs-special-chk" value="${sId}" ${specialChecked} ${specialDisabled} style="accent-color: var(--warning);">
+                        <span style="font-size: 0.8rem; color: var(--warning); white-space: nowrap;"><i class="fa-solid fa-star"></i> 특강</span>
+                    </label>
                     <span class="stu-meta">${sex} | #${sId}</span>
-                </label>
+                </div>
             `;
         });
         return html || '<div class="empty-state" style="padding: 1rem;"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
@@ -3589,10 +3637,16 @@ document.addEventListener('DOMContentLoaded', () => {
         classAllStudentsCache.forEach(s => {
             const sId = s.row_id || s.Id;
             if (classRegSelectedStudentIds.has(sId)) {
-                names.push(escapeHtml(s.Name || `학생 #${sId}`));
+                names.push({
+                    name: escapeHtml(s.Name || `학생 #${sId}`),
+                    special: classRegStudentSpecialIds.has(sId)
+                });
             }
         });
-        namesEl.innerHTML = names.map(n => `<span class="selected-student-tag"><i class="fa-solid fa-user"></i> ${n}</span>`).join('');
+        // 특강 지정 학생의 배지는 다른 색상(주황) + 별 아이콘으로 표시
+        namesEl.innerHTML = names.map(n =>
+            `<span class="selected-student-tag${n.special ? ' special' : ''}"><i class="fa-solid ${n.special ? 'fa-star' : 'fa-user'}"></i> ${n.name}</span>`
+        ).join('');
     }
 
     // 수업 등록 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
@@ -3601,15 +3655,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderClassStudentCheckboxList() {
         if (!classStudentList) return;
         const filterText = classStudentFilter ? classStudentFilter.value : '';
-        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, classRegSelectedStudentIds);
+        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, classRegSelectedStudentIds, classRegStudentSpecialIds);
         updateClassSelectedCount();
-        classStudentList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        classStudentList.querySelectorAll('input.cs-chk').forEach(cb => {
             cb.addEventListener('change', () => {
                 const sid = parseInt(cb.value);
                 if (cb.checked) {
                     classRegSelectedStudentIds.add(sid);
                 } else {
                     classRegSelectedStudentIds.delete(sid);
+                    classRegStudentSpecialIds.delete(sid); // 배정 해제 시 특강 지정도 해제
+                }
+                updateClassSelectedCount();
+                // 동일 행의 특강 체크박스 활성/비활성 동기화
+                const row = cb.closest('.class-student-checkbox-item');
+                const sp = row ? row.querySelector('input.cs-special-chk') : null;
+                if (sp) {
+                    sp.disabled = !cb.checked;
+                    if (!cb.checked) sp.checked = false;
+                    const lbl = row.querySelector('.cs-special');
+                    if (lbl) lbl.style.opacity = cb.checked ? '1' : '0.45';
+                }
+            });
+        });
+        classStudentList.querySelectorAll('input.cs-special-chk').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const sid = parseInt(cb.value);
+                if (cb.checked) {
+                    classRegStudentSpecialIds.add(sid);
+                } else {
+                    classRegStudentSpecialIds.delete(sid);
                 }
                 updateClassSelectedCount();
             });
@@ -3625,6 +3700,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!formUserClassReg) return;
         formUserClassReg.reset();
         classRegSelectedStudentIds = new Set();
+        classRegStudentSpecialIds = new Set();
         if (classRegMsg) classRegMsg.classList.add('hidden');
         if (classStudentFilter) classStudentFilter.value = '';
         classStudentList.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>';
@@ -3659,10 +3735,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!teacher) { classRegMsg.className = 'alert alert-danger'; classRegMsg.textContent = '담당 선생님을 선택해 주세요.'; classRegMsg.classList.remove('hidden'); return; }
         if (!day) { classRegMsg.className = 'alert alert-danger'; classRegMsg.textContent = '요일을 선택해 주세요.'; classRegMsg.classList.remove('hidden'); return; }
         const studentIds = getSelectedClassStudentIds();
+        const specialMap = {};
+        classRegStudentSpecialIds.forEach(sid => {
+            if (studentIds.includes(sid)) specialMap[sid] = true;
+        });
         try {
             const result = await apiFetch('/api/user/classes', {
                 method: 'POST',
-                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds })
+                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds, StudentIsSpecial: specialMap })
             });
             classRegMsg.className = 'alert alert-success';
             classRegMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}`;
@@ -3781,7 +3861,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const name = escapeHtml(s.Name || '이름 없음');
                     const sex = formatSex(s.Sex);
                     const birthday = formatBirthday(s.Birthday);
-                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</td><td>${sex}</td><td>${birthday}</td></tr>`;
+                    const specialBadge = s.IsSpecial ? '<span class="badge" style="margin-left: 0.4rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : '';
+                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${specialBadge}</td><td>${sex}</td><td>${birthday}</td></tr>`;
                 });
             }
 
@@ -3831,6 +3912,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ]);
             classAllStudentsCache = sData.students || [];
             const checkedIds = new Set(students.map(s => s.row_id || s.Id));
+            const specialIds = new Set(students.filter(s => s.IsSpecial).map(s => s.row_id || s.Id));
 
             let teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>';
             (tData.teachers || []).forEach(t => {
@@ -3841,7 +3923,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
                 `<option value="${d}" ${cls.DayOfWeek === d ? 'selected' : ''}>${DAY_LABELS[d]}</option>`
             ).join('');
-            const studentCheckboxes = buildStudentCheckboxListHtml('', checkedIds);
+            const studentCheckboxes = buildStudentCheckboxListHtml('', checkedIds, specialIds);
 
             modalClassDetailBody.innerHTML = `
                 <form id="form-modal-edit-class" class="modal-edit-form">
@@ -3896,14 +3978,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const teacher = f.querySelector('[name="TeacherUsername"]').value;
         const day = f.querySelector('[name="DayOfWeek"]').value;
         const time = f.querySelector('[name="StartTime"]').value || '';
-        const studentIds = Array.from(f.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+        const studentIds = Array.from(f.querySelectorAll('input.cs-chk:checked')).map(cb => parseInt(cb.value));
+        const specialMap = {};
+        f.querySelectorAll('input.cs-special-chk:checked').forEach(cb => {
+            const sid = parseInt(cb.value);
+            if (studentIds.includes(sid)) specialMap[sid] = true;
+        });
         if (!name) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '수업명은 필수 입력 항목입니다.'; alertEl.classList.remove('hidden'); return; }
         if (!teacher) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '담당 선생님을 선택해 주세요.'; alertEl.classList.remove('hidden'); return; }
         if (!day) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '요일을 선택해 주세요.'; alertEl.classList.remove('hidden'); return; }
         try {
             await apiFetch(`/api/user/classes/${classId}`, {
                 method: 'PUT',
-                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds })
+                body: JSON.stringify({ ClassName: name, TeacherUsername: teacher, DayOfWeek: day, StartTime: time, StudentIds: studentIds, StudentIsSpecial: specialMap })
             });
             await openClassDetailModal(classId);
             await loadClassSearchResults();
@@ -3996,7 +4083,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBatchStudentsTable(students) {
         if (!classBatchStudentsBody) return;
         if (students.length === 0) {
-            classBatchStudentsBody.innerHTML = '<tr><td colspan="2" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            classBatchStudentsBody.innerHTML = '<tr><td colspan="3" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
             return;
         }
         let html = '';
@@ -4004,10 +4091,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const sId = s.row_id || s.Id;
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
+            const specialChecked = s.IsSpecial ? 'checked' : '';
             html += `
                 <tr>
                     <td style="text-align: center;">
                         <input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="batch-special" data-student-id="${sId}" ${specialChecked} title="특강 수업 여부" style="width: 16px; height: 16px; accent-color: var(--warning); cursor: pointer;">
                     </td>
                     <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})</span></td>
                 </tr>
@@ -4030,7 +4121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
     }
 
-    // 일괄 학습 기록 등록 제출 (단일 학습 일자 + 수업 내용 메모, 학생별로는 참석 여부만)
+    // 일괄 학습 기록 등록 제출 (단일 학습 일자 + 수업 내용 메모, 학생별로는 참석 여부·특강 여부)
     async function handleBatchStudyLogSubmit(e) {
         e.preventDefault();
         if (classBatchResult) classBatchResult.classList.add('hidden');
@@ -4057,7 +4148,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const logs = [];
         document.querySelectorAll('.batch-attend').forEach(chk => {
-            logs.push({ StudentId: parseInt(chk.getAttribute('data-student-id')), include: chk.checked });
+            const sid = parseInt(chk.getAttribute('data-student-id'));
+            const specialEl = document.querySelector(`.batch-special[data-student-id="${sid}"]`);
+            logs.push({ StudentId: sid, include: chk.checked, is_special: specialEl ? specialEl.checked : false });
         });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
@@ -4100,5 +4193,363 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    // --- 월말 보고 문자 양식 자동 생성 로직 ---
+    function getKoreanNameWithYi(name) {
+        if (!name || name.length === 0) return '';
+        const lastChar = name.charCodeAt(name.length - 1);
+        if (lastChar >= 0xAC00 && lastChar <= 0xD7A3) {
+            const hasPatchim = (lastChar - 0xAC00) % 28 > 0;
+            return hasPatchim ? name + '이' : name;
+        }
+        return name;
+    }
+
+    function formatDateKorean(studiedDay) {
+        if (!studiedDay) return '';
+        const cleanDate = String(studiedDay).trim().split('T')[0].split(' ')[0];
+        const parts = cleanDate.replace(/\./g, '-').replace(/\//g, '-').split('-');
+        if (parts.length >= 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const d = parseInt(parts[2], 10);
+            if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                const dateObj = new Date(y, m - 1, d);
+                const daysKr = ['일', '월', '화', '수', '목', '금', '토'];
+                const dow = daysKr[dateObj.getDay()];
+                return `${m}/${d}(${dow})`;
+            }
+        }
+        return studiedDay;
+    }
+
+    function generateMonthlyReportText() {
+        const studentSelect = document.getElementById('monthly-report-student-select');
+        const periodLabelInput = document.getElementById('monthly-report-period-label');
+        const monthLabelInput = document.getElementById('monthly-report-month-label');
+        const startLectureInput = document.getElementById('monthly-report-start-lecture');
+        const specialTeacherInput = document.getElementById('monthly-report-special-teacher');
+        const resultTextarea = document.getElementById('monthly-report-result-text');
+
+        if (!resultTextarea) return;
+
+        let studentName = '';
+        if (studentSelect && studentSelect.selectedIndex >= 0) {
+            const selectedOpt = studentSelect.options[studentSelect.selectedIndex];
+            if (selectedOpt && selectedOpt.value) {
+                const text = selectedOpt.text;
+                studentName = text.split(' (')[0].trim();
+            }
+        }
+
+        const periodLabel = periodLabelInput ? periodLabelInput.value.trim() : '';
+        const reportMonth = monthLabelInput ? monthLabelInput.value.trim() : `${new Date().getMonth() + 1}월`;
+        let startLectureNum = startLectureInput ? parseInt(startLectureInput.value, 10) : 1;
+        if (isNaN(startLectureNum) || startLectureNum < 1) startLectureNum = 1;
+
+        let specialTeacherName = specialTeacherInput ? specialTeacherInput.value.trim() : '';
+
+        const container = document.getElementById('monthly-report-logs-container');
+        const checkedLogItems = [];
+
+        if (container) {
+            const itemRows = container.querySelectorAll('.report-log-item');
+            itemRows.forEach(row => {
+                const chk = row.querySelector('.chk-log-include');
+                if (chk && chk.checked) {
+                    const logIndex = parseInt(row.getAttribute('data-index'), 10);
+                    if (!isNaN(logIndex) && currentMonthlyLogs[logIndex]) {
+                        checkedLogItems.push(currentMonthlyLogs[logIndex]);
+                    }
+                }
+            });
+        }
+
+        if (!studentName && checkedLogItems.length === 0) {
+            resultTextarea.value = '';
+            return;
+        }
+
+        // 선택된 기록들은 문자에 작성할 때 날짜 오름차순(StudiedDay ASC)으로 정렬하여 <N강> 번호 부여
+        checkedLogItems.sort((a, b) => {
+            const dayA = String(a.StudiedDay || a.studied_day || '');
+            const dayB = String(b.StudiedDay || b.studied_day || '');
+            if (dayA < dayB) return -1;
+            if (dayA > dayB) return 1;
+            const idA = a.row_id || a.Id || 0;
+            const idB = b.row_id || b.Id || 0;
+            return idA - idB;
+        });
+
+        const nameYi = getKoreanNameWithYi(studentName);
+        const lines = [];
+        lines.push(`${nameYi} 어머니`);
+        lines.push('안녕하세요');
+
+        if (periodLabel && reportMonth) {
+            lines.push(`${periodLabel}중 ${reportMonth} 수업보고드립니다^^`);
+        } else if (reportMonth) {
+            lines.push(`${reportMonth} 수업보고드립니다^^`);
+        } else if (periodLabel) {
+            lines.push(`${periodLabel} 수업보고드립니다^^`);
+        } else {
+            lines.push('수업보고드립니다^^');
+        }
+
+        lines.push('');
+
+        let currentLecture = startLectureNum;
+        let teacherSuffix = specialTeacherName;
+        if (teacherSuffix && !teacherSuffix.endsWith('선생님')) {
+            teacherSuffix += ' 선생님';
+        }
+
+        checkedLogItems.forEach((log, idx) => {
+            if (idx > 0) {
+                lines.push('');
+            }
+
+            const isSpecial = !!(log.IsSpecial || log.is_special);
+            if (isSpecial) {
+                if (teacherSuffix) {
+                    lines.push(`<특강> ${teacherSuffix}`);
+                } else {
+                    lines.push('<특강>');
+                }
+            } else {
+                lines.push(`<${currentLecture}강>`);
+                currentLecture++;
+            }
+
+            const bookTitle = (log.BookTitle || log.book_title || log.Title || '').trim();
+            lines.push(`도서 : ${bookTitle}`);
+
+            const dateStr = formatDateKorean(log.StudiedDay || log.studied_day || '');
+            const lessonContent = (log.LessonContent || log.lesson_content || log.Description || '').trim();
+            if (dateStr && lessonContent) {
+                lines.push(`${dateStr} ${lessonContent}`);
+            } else if (dateStr) {
+                lines.push(`${dateStr}`);
+            } else if (lessonContent) {
+                lines.push(`${lessonContent}`);
+            }
+        });
+
+        resultTextarea.value = lines.join('\n');
+    }
+
+    async function loadMonthlyReportLogs() {
+        const studentSelect = document.getElementById('monthly-report-student-select');
+        const container = document.getElementById('monthly-report-logs-container');
+
+        if (!studentSelect || !container) return;
+
+        const studentId = studentSelect.value;
+        if (!studentId) {
+            showToast('학생을 선택해 주세요.', 'warning');
+            return;
+        }
+
+        container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학습 기록 불러오는 중...</div>';
+        currentMonthlyLogs = [];
+
+        try {
+            const res = await apiFetch(`/api/user/monthly-report/studylogs?student_id=${studentId}`);
+            currentMonthlyLogs = res.logs || []; // 최신순(StudiedDay DESC) 반환
+
+            if (currentMonthlyLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state-sm">
+                        <i class="fa-solid fa-folder-open"></i>
+                        <p>해당 학생의 등록된 학습 기록이 없습니다.</p>
+                    </div>
+                `;
+                generateMonthlyReportText();
+                return;
+            }
+
+            let html = '';
+            currentMonthlyLogs.forEach((log, idx) => {
+                const isSpecial = !!(log.IsSpecial || log.is_special);
+                const dateStr = formatDateKorean(log.StudiedDay);
+                const bookTitle = escapeHtml(log.BookTitle || '도서 제목 미입력');
+                const lessonContent = escapeHtml(log.LessonContent || log.Description || '수업 내용 미입력');
+                const specialBadge = isSpecial
+                    ? '<span class="tag-badge warning">특강</span>'
+                    : '<span class="tag-badge primary">일반강의</span>';
+
+                html += `
+                    <div class="report-log-item" data-index="${idx}">
+                        <input type="checkbox" class="chk-log-include" id="chk-log-${idx}">
+                        <div class="report-log-info">
+                            <div class="report-log-header">
+                                <span class="report-log-date">${dateStr}</span>
+                                ${specialBadge}
+                            </div>
+                            <div class="report-log-book">도서: ${bookTitle}</div>
+                            <div class="report-log-content">${lessonContent}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            container.querySelectorAll('.chk-log-include').forEach(chk => {
+                chk.addEventListener('change', () => generateMonthlyReportText());
+            });
+            container.querySelectorAll('.report-log-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'INPUT') {
+                        const chk = item.querySelector('.chk-log-include');
+                        if (chk) {
+                            chk.checked = !chk.checked;
+                            generateMonthlyReportText();
+                        }
+                    }
+                });
+            });
+
+            generateMonthlyReportText();
+
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">학습 기록 로딩 실패: ${err.message}</div>`;
+        }
+    }
+
+    async function loadMonthlyReportStudentOptions(selectedStudentId) {
+        const select = document.getElementById('monthly-report-student-select');
+        if (!select) return;
+        try {
+            const data = await apiFetch('/api/user/students-options');
+            const students = data.students || [];
+            if (students.length === 0) {
+                select.innerHTML = '<option value="">등록된 학생이 없습니다</option>';
+                return;
+            }
+            let html = '<option value="">-- 학생을 선택하세요 --</option>';
+            students.forEach(s => {
+                const sId = s.row_id || s.Id;
+                const name = escapeHtml(s.Name || '이름 없음');
+                const sex = formatSex(s.Sex);
+                const birthday = formatBirthday(s.Birthday);
+                html += `<option value="${sId}">${name} (${sex}) - 生 ${birthday} [#${sId}]</option>`;
+            });
+            select.innerHTML = html;
+            if (selectedStudentId) {
+                select.value = selectedStudentId;
+            }
+        } catch (err) {
+            select.innerHTML = `<option value="">학생 로딩 실패: ${err.message}</option>`;
+        }
+    }
+
+    async function initMonthlyReportView(preselectStudentId) {
+        const periodLabelInput = document.getElementById('monthly-report-period-label');
+        const monthLabelInput = document.getElementById('monthly-report-month-label');
+        const startLectureInput = document.getElementById('monthly-report-start-lecture');
+
+        if (periodLabelInput) {
+            periodLabelInput.value = '';
+        }
+
+        if (monthLabelInput && !monthLabelInput.value) {
+            const now = new Date();
+            const m = now.getMonth() + 1;
+            monthLabelInput.value = `${m}월`;
+        }
+
+        if (startLectureInput && !startLectureInput.value) {
+            startLectureInput.value = '1';
+        }
+
+        await loadMonthlyReportStudentOptions(preselectStudentId);
+
+        if (preselectStudentId) {
+            await loadMonthlyReportLogs();
+        }
+    }
+
+    // Attach Monthly Report Control Listeners
+    const btnFetchMonthlyLogs = document.getElementById('btn-fetch-monthly-logs');
+    if (btnFetchMonthlyLogs) {
+        btnFetchMonthlyLogs.addEventListener('click', () => loadMonthlyReportLogs());
+    }
+
+    const studentSelectEl = document.getElementById('monthly-report-student-select');
+    if (studentSelectEl) {
+        studentSelectEl.addEventListener('change', () => {
+            if (studentSelectEl.value) {
+                loadMonthlyReportLogs();
+            } else {
+                generateMonthlyReportText();
+            }
+        });
+    }
+
+    const ymInputEl = document.getElementById('monthly-report-year-month');
+    const monthLabelEl = document.getElementById('monthly-report-month-label');
+    if (ymInputEl) {
+        ymInputEl.addEventListener('change', () => {
+            if (ymInputEl.value) {
+                const parts = ymInputEl.value.split('-');
+                if (parts.length >= 2 && monthLabelEl) {
+                    monthLabelEl.value = `${parseInt(parts[1], 10)}월`;
+                }
+                if (studentSelectEl && studentSelectEl.value) {
+                    loadMonthlyReportLogs();
+                } else {
+                    generateMonthlyReportText();
+                }
+            }
+        });
+    }
+
+    ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-start-lecture', 'monthly-report-special-teacher'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => generateMonthlyReportText());
+        }
+    });
+
+    const btnMonthlySelectAll = document.getElementById('btn-monthly-select-all');
+    if (btnMonthlySelectAll) {
+        btnMonthlySelectAll.addEventListener('click', () => {
+            const container = document.getElementById('monthly-report-logs-container');
+            if (container) {
+                container.querySelectorAll('.chk-log-include').forEach(chk => chk.checked = true);
+                generateMonthlyReportText();
+            }
+        });
+    }
+
+    const btnMonthlyDeselectAll = document.getElementById('btn-monthly-deselect-all');
+    if (btnMonthlyDeselectAll) {
+        btnMonthlyDeselectAll.addEventListener('click', () => {
+            const container = document.getElementById('monthly-report-logs-container');
+            if (container) {
+                container.querySelectorAll('.chk-log-include').forEach(chk => chk.checked = false);
+                generateMonthlyReportText();
+            }
+        });
+    }
+
+    const btnCopyMonthlyReport = document.getElementById('btn-copy-monthly-report');
+    if (btnCopyMonthlyReport) {
+        btnCopyMonthlyReport.addEventListener('click', () => {
+            const textarea = document.getElementById('monthly-report-result-text');
+            if (!textarea || !textarea.value.trim()) {
+                showToast('복사할 문자 내용이 없습니다.', 'warning');
+                return;
+            }
+            navigator.clipboard.writeText(textarea.value).then(() => {
+                showToast('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
+            }).catch(err => {
+                textarea.select();
+                document.execCommand('copy');
+                showToast('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
+            });
+        });
     }
 });

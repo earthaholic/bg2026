@@ -93,16 +93,30 @@ def init_system_tables():
             "Id" INTEGER PRIMARY KEY,
             "ClassId" INTEGER NOT NULL,
             "StudentId" INTEGER NOT NULL,
+            "IsSpecial" INTEGER DEFAULT 0,
             UNIQUE("ClassId", "StudentId")
         )
     """)
+    # ClassStudents에 특강 여부(IsSpecial) 컬럼 보완 (기존 DB 대응)
+    try:
+        cursor.execute('PRAGMA table_info("ClassStudents")')
+        cs_cols = [r["name"] for r in cursor.fetchall()]
+        if "IsSpecial" not in cs_cols:
+            cursor.execute('ALTER TABLE "ClassStudents" ADD COLUMN "IsSpecial" INTEGER DEFAULT 0')
+    except Exception:
+        pass
 
-    # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description) 컬럼 추가
+    # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description)·특강 여부(IsSpecial) 컬럼 추가
     # (StudyLogs는 oracle_sync.py가 만들므로, 재생성 후에도 시작 시점에 보완한다)
+    # IsSpecial: 특강 여부 플래그. 기본값 0(FALSE), 일괄 등록 시 학생별로 기록된다.
     try:
         cursor.execute('PRAGMA table_info("StudyLogs")')
         studylog_cols = [r["name"] for r in cursor.fetchall()]
-        for _col, _ddl in [("Description", "TEXT DEFAULT ''"), ("LessonContent", "TEXT DEFAULT ''")]:
+        for _col, _ddl in [
+            ("Description", "TEXT DEFAULT ''"),
+            ("LessonContent", "TEXT DEFAULT ''"),
+            ("IsSpecial", "INTEGER DEFAULT 0"),
+        ]:
             if _col not in studylog_cols:
                 cursor.execute(f'ALTER TABLE "StudyLogs" ADD COLUMN "{_col}" {_ddl}')
     except Exception:
@@ -489,25 +503,35 @@ def search_classes(
 
     return [dict(r) for r in rows], total_count
 
-def set_class_students(class_id: int, student_ids: List[int]) -> None:
-    """수업의 학생 배정을 전체 교체한다 (기존 관계 삭제 후 재삽입)."""
+def set_class_students(class_id: int, student_items: List) -> None:
+    """수업의 학생 배정을 전체 교체한다 (기존 관계 삭제 후 재삽입).
+
+    student_items: student_id(int) 또는 {"StudentId": int, "IsSpecial": 0|1} 딕셔너리 목록.
+    IsSpecial은 해당 학생의 이 수업이 특강인지 여부 (기본 0=일반 수업).
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('DELETE FROM "ClassStudents" WHERE "ClassId" = ?', (class_id,))
-    for sid in student_ids:
+    for item in student_items:
+        if isinstance(item, dict):
+            sid = item["StudentId"]
+            is_special = 1 if item.get("IsSpecial") else 0
+        else:
+            sid = item
+            is_special = 0
         cursor.execute(
-            'INSERT OR IGNORE INTO "ClassStudents" ("ClassId", "StudentId") VALUES (?, ?)',
-            (class_id, sid)
+            'INSERT OR IGNORE INTO "ClassStudents" ("ClassId", "StudentId", "IsSpecial") VALUES (?, ?, ?)',
+            (class_id, sid, is_special)
         )
     conn.commit()
     conn.close()
 
 def get_class_students(class_id: int) -> List[Dict[str, Any]]:
-    """수업에 배정된 학생 목록을 이름 순으로 반환한다."""
+    """수업에 배정된 학생 목록을 이름 순으로 반환한다. (IsSpecial: 해당 학생의 이 수업 특강 여부)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT s.rowid AS row_id, s.*
+        SELECT s.rowid AS row_id, s.*, cs."IsSpecial" AS IsSpecial
         FROM "ClassStudents" cs
         JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
         WHERE cs."ClassId" = ?

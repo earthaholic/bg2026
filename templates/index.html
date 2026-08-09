@@ -73,6 +73,10 @@
                         <i class="fa-solid fa-users-viewfinder nav-icon"></i>
                         <span>학습 이력 일괄 등록</span>
                     </div>
+                    <div class="menu-nav-item" data-view="monthly-report">
+                        <i class="fa-solid fa-comment-sms nav-icon"></i>
+                        <span>월말보고 문자 양식 생성</span>
+                    </div>
 
                     <div class="menu-section-label">학습 기록 관리</div>
                     <div class="menu-nav-item active" data-view="studylog-search">
@@ -658,17 +662,29 @@
                                     </div>
                                 </div>
 
-                                <!-- Section 4: 수업 내용 -->
+                                <!-- Section 4: 특강 여부 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 4. 수업 내용 (선택)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-star"></i> 4. 특강 여부</h4>
+                                    <div class="form-group">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="studylog-special" name="IsSpecial" style="width: 18px; height: 18px; accent-color: var(--warning); cursor: pointer;">
+                                            <span>특강 수업입니다 (기본값: 일반 수업)</span>
+                                        </label>
+                                        <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.35rem;">특강 수업에 해당하는 경우에만 체크해 주세요.</div>
+                                    </div>
+                                </div>
+
+                                <!-- Section 5: 수업 내용 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 5. 수업 내용 (선택)</h4>
                                     <div class="form-group">
                                         <textarea id="studylog-content" name="LessonContent" class="form-control" rows="3" placeholder="이번 수업에서 다룬 주요 내용, 진도, 다룬 문제 등을 입력하세요. (선택사항)"></textarea>
                                     </div>
                                 </div>
 
-                                <!-- Section 5: 수업 내용 메모 -->
+                                <!-- Section 6: 수업 내용 메모 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 5. 수업 내용 메모 (선택)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 6. 수업 내용 메모 (선택)</h4>
                                     <div class="form-group">
                                         <textarea id="studylog-desc" name="Description" class="form-control" rows="3" placeholder="수업과 관련한 보충 메모, 학생의 특이사항 등을 간략히 적어두세요. (선택사항)"></textarea>
                                     </div>
@@ -749,6 +765,120 @@
                                 <button id="btn-studylog-search-next" class="btn btn-sm btn-outline" disabled>
                                     다음 <i class="fa-solid fa-chevron-right"></i>
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View: Monthly Report Text Generator -->
+                <section id="view-monthly-report" class="workspace-view">
+                    <div class="page-title-box">
+                        <h2><i class="fa-solid fa-comment-sms"></i> 월말보고 문자 양식 자동 생성</h2>
+                        <p class="subtitle">선생님을 위한 월말 수업 보고 문자 양식을 자동으로 작성하고 편리하게 복사할 수 있습니다.</p>
+                    </div>
+
+                    <div class="monthly-report-layout">
+                        <!-- Left Panel: Settings & Log Selection -->
+                        <div class="report-settings-panel">
+                            <div class="card">
+                                <div class="card-header-styled">
+                                    <h3><i class="fa-solid fa-sliders"></i> 1. 대상 학생 & 기본 설정</h3>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Student Selection -->
+                                    <div class="form-group">
+                                        <label for="monthly-report-student-select" class="form-label required">
+                                            <i class="fa-solid fa-user-graduate"></i> 학생 선택
+                                        </label>
+                                        <div class="input-group">
+                                            <select id="monthly-report-student-select" class="form-control">
+                                                <option value="">-- 학생을 선택하세요 --</option>
+                                            </select>
+                                            <button type="button" id="btn-open-picker-monthly-student" class="btn btn-outline">
+                                                <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                            </button>
+                                            <button type="button" id="btn-fetch-monthly-logs" class="btn btn-primary">
+                                                <i class="fa-solid fa-download"></i> 전체 기록 불러오기
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <hr style="border-top: 1px dashed var(--border-color); margin: 1rem 0;">
+
+                                    <h4 class="sub-title" style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--primary);">
+                                        <i class="fa-solid fa-pen-to-square"></i> 2. 문구 세부 설정
+                                    </h4>
+
+                                    <!-- Period / Semester Label -->
+                                    <div class="form-group">
+                                        <label for="monthly-report-period-label" class="form-label">
+                                            <i class="fa-solid fa-bookmark"></i> 학기/기간 문구
+                                        </label>
+                                        <input type="text" id="monthly-report-period-label" class="form-control" placeholder="예: 2학기(5, 6, 7월)">
+                                    </div>
+
+                                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                        <!-- Report Month Label -->
+                                        <div class="form-group">
+                                            <label for="monthly-report-month-label" class="form-label">
+                                                <i class="fa-solid fa-calendar-day"></i> 보고 월
+                                            </label>
+                                            <input type="text" id="monthly-report-month-label" class="form-control" placeholder="예: 8월">
+                                        </div>
+                                        <!-- Start Lecture Number -->
+                                        <div class="form-group">
+                                            <label for="monthly-report-start-lecture" class="form-label">
+                                                <i class="fa-solid fa-list-ol"></i> 시작 강의 번호
+                                            </label>
+                                            <input type="number" id="monthly-report-start-lecture" class="form-control" min="1" value="1">
+                                        </div>
+                                    </div>
+
+                                    <!-- Special Class Teacher Name -->
+                                    <div class="form-group">
+                                        <label for="monthly-report-special-teacher" class="form-label">
+                                            <i class="fa-solid fa-user-chalkboard"></i> 특강 담당 선생님 이름
+                                        </label>
+                                        <input type="text" id="monthly-report-special-teacher" class="form-control" placeholder="예: 지윤주">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Log Selector Checklist Card -->
+                            <div class="card" style="margin-top: 1rem;">
+                                <div class="card-header-styled" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3><i class="fa-solid fa-list-check"></i> 3. 포함할 학습 기록 선택</h3>
+                                    <div>
+                                        <button type="button" id="btn-monthly-select-all" class="btn btn-xs btn-outline">전체 선택</button>
+                                        <button type="button" id="btn-monthly-deselect-all" class="btn btn-xs btn-outline">전체 해제</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="monthly-report-logs-container" class="report-logs-list">
+                                        <div class="empty-state-sm">
+                                            <i class="fa-solid fa-arrow-up"></i>
+                                            <p>학생과 보고 연월을 선택한 후 [기록 불러오기]를 눌러주세요.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Real-time Text Preview & Copy -->
+                        <div class="report-preview-panel">
+                            <div class="card preview-card">
+                                <div class="card-header-styled" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3><i class="fa-solid fa-file-lines"></i> 문자 양식 미리보기</h3>
+                                    <button type="button" id="btn-copy-monthly-report" class="btn btn-success btn-lg">
+                                        <i class="fa-solid fa-copy"></i> 클립보드에 복사
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
+                                        <i class="fa-solid fa-lightbulb"></i> 아래의 미리보기 텍스트를 직접 수정하거나 필요시 문구를 조정할 수 있습니다.
+                                    </div>
+                                    <textarea id="monthly-report-result-text" class="monthly-report-textarea" rows="22" placeholder="기록을 선택하면 월말 보고 문자 양식이 이곳에 자동으로 작성됩니다..."></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1025,8 +1155,8 @@
                             <div class="recent-books-container" style="padding: 1rem;">
                                 <p class="text-muted" style="font-size: 0.85rem; line-height: 1.8;">
                                     <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i> 수업은 담당 선생님 계정, 요일·시간, 수강 학생들로 구성됩니다.<br><br>
-                                    <i class="fa-solid fa-users" style="color: var(--primary);"></i> 수강 학생은 여러 명을 동시에 배정할 수 있습니다.<br><br>
-                                    <i class="fa-solid fa-calendar-days" style="color: var(--primary);"></i> 학습 이력 등록은 <strong>[학습 이력 일괄 등록]</strong> 메뉴에서 수업 단위로 한 번에 진행할 수 있습니다.
+                                    <i class="fa-solid fa-users" style="color: var(--primary);"></i> 수강 학생은 여러 명을 동시에 배정할 수 있으며, 학생별로 이 수업이 <strong>특강</strong>인지 지정할 수 있습니다.<br><br>
+                                    <i class="fa-solid fa-calendar-days" style="color: var(--primary);"></i> 학습 이력 등록은 <strong>[학습 이력 일괄 등록]</strong> 메뉴에서 수업 단위로 한 번에 진행할 수 있습니다. 특강 여부는 수업 등록 시 설정한 값이 기본으로 체크됩니다.
                                 </p>
                             </div>
                         </div>
@@ -1078,7 +1208,7 @@
                         <div id="class-batch-reg-card" class="card hidden">
                             <div class="card-header-styled">
                                 <h3><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</h3>
-                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 체크를 해제하세요.</p>
+                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 참석 체크를 해제하세요. 특강은 수업 등록 시 설정한 값이 미리 체크되어 있습니다.</p>
                             </div>
 
                             <form id="form-class-batch-studylog" class="book-form">
@@ -1124,18 +1254,20 @@
                                 </div>
 
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 5. 학생별 참석 여부</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-users"></i> 5. 학생별 참석 여부 / 특강 여부</h4>
                                     <div id="class-batch-students" class="table-responsive">
                                         <table class="modern-table">
                                             <thead>
                                                 <tr>
                                                     <th style="width: 70px;">참석</th>
+                                                    <th style="width: 70px;">특강</th>
                                                     <th>학생 이름</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="class-batch-students-body"></tbody>
                                         </table>
                                     </div>
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.4rem;">결석 학생은 <strong>참석</strong> 체크를 해제하세요. 특강은 수업 등록 시 설정한 학생에게 미리 체크되어 있으며, 필요 시 변경할 수 있습니다 (기본값: 일반 수업).</div>
                                 </div>
 
                                 <div id="class-batch-result" class="alert hidden"></div>

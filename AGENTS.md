@@ -14,13 +14,22 @@ No tests, no lint/typecheck, no CI, no README. Frontend is a single Jinja2 SPA (
 - No automated tests — verify manually in the web UI after starting the server.
 - `python oracle_sync.py` runs the Oracle→SQLite migration standalone and prints the result.
 
+### 에이전트 검증 및 백그라운드 서버 기동 루틴 (필수)
+코드 변경 후 사용자가 UI/백엔드 동작을 즉시 확인할 수 있도록, 에이전트는 항상 다음 루틴을 준수하여 백그라운드 데몬 서버를 재기동하고 정상 기동 여부를 검증한다:
+
+1. **기존 서버 확인 및 정지**: `manage_task(Action='list')`로 실행 중인 태스크를 확인하고, 이전 uvicorn 태스크가 존재하면 `manage_task(Action='kill', TaskId=...)`로 안전하게 취소/정지한다.
+2. **백그라운드 데몬 서버 기동**: `run_command` 도구를 사용하여 프로젝트 내 `.venv` 가상환경의 Python으로 uvicorn 데몬 서버를 실행한다.
+   - Command: `.venv\Scripts\python.exe -m uvicorn main:app --port 8000`
+   - 파라미터: `IsDaemon=true`, `WaitMsBeforeAsync=3000`
+3. **기동 로그 검증**: 실행 후 반환된 태스크의 로그 파일 경로(`.../tasks/task-XXXX.log`)를 `view_file`로 확인하여 `Uvicorn running on http://127.0.0.1:8000` 문구가 정상 출력되었는지 및 런타임/구문 에러가 없는지 반드시 검증한다.
+
 ## Architecture
 - `main.py` = all routes (user + admin APIs). `database.py` = SQLite helpers, raw SQL. `auth.py` = JWT (python-jose HS256, roles `admin`/`manager`/`teacher`); `get_current_admin` gates admin APIs (테이블 CRUD, raw SQL runner, CSV export), `get_current_staff`(admin/manager) gates 도메인 등록·수정·삭제. `config.py` = settings from `.env`.
 - Backing store is SQLite `data.db` (gitignored). Oracle ADB (`.env`) is the upstream source.
 - Domain tables `Books`, `Students`, `StudyLogs` are NOT created by app code — they must pre-exist in `data.db` (created by `oracle_sync.py` or manually). If `data.db` is deleted, re-run `python oracle_sync.py`.
-- 시작 시점 동작(`init_system_tables()`): (a) `_app_users` 인증 테이블 생성, (b) 수업용 `Classes`/`ClassStudents` 테이블 생성, (c) `StudyLogs`에 앱 전용 컬럼(`LessonContent`, `Description`)이 없으면 `ALTER TABLE ... ADD COLUMN`으로 보완.
-- 수업 기능: `Classes`(Id/ClassName/TeacherUsername/DayOfWeek/StartTime)와 `ClassStudents`(ClassId↔StudentId, UNIQUE)로 구성. 수업-학생 관계는 `set_class_students()`로 전체 교체 방식. `StudyLogs`에는 시간 컬럼이 없다(시간 미저장).
-- `StudyLogs` 스키마(실사용): `Id`, `StudentId`, `BookId`, `StudiedDay`, `LessonContent`(수업 내용), `Description`(수업 내용 메모). 개별 등록 `POST /api/user/studylogs`와 일괄 등록 `POST /api/user/classes/{id}/studylogs` 모두 `LessonContent`/`Description`을 수용. 일괄 등록은 **단일 `StudiedDay` + `LessonContent` + `Description` + `logs:[{StudentId, include}]`** 구조(학생별 날짜 없음, 결석은 include=false). UI상 입력 순서는 수업 내용 → 수업 내용 메모.
+- 시작 시점 동작(`init_system_tables()`): (a) `_app_users` 인증 테이블 생성, (b) 수업용 `Classes`/`ClassStudents` 테이블 생성(기존 DB면 `ClassStudents.IsSpecial` 컬럼을 ALTER로 보완), (c) `StudyLogs`에 앱 전용 컬럼(`LessonContent`, `Description`, `IsSpecial`)이 없으면 `ALTER TABLE ... ADD COLUMN`으로 보완.
+- 수업 기능: `Classes`(Id/ClassName/TeacherUsername/DayOfWeek/StartTime)와 `ClassStudents`(ClassId↔StudentId, UNIQUE, `IsSpecial`=특강 여부 기본 0)로 구성. 수업-학생 관계는 `set_class_students()`로 전체 교체 방식이며, 수업 등록/수정 시 학생별로 이 수업이 특강인지(`StudentIsSpecial` 맵, `POST/PUT /api/user/classes`에 `StudentIds`와 함께 전송) 저장한다. `get_class_students()`는 학생마다 `IsSpecial`을 포함해 반환하므로, 일괄 학습 이력 등록 폼의 특강 체크박스가 이 값으로 미리 체크된다. `StudyLogs`에는 시간 컬럼이 없다(시간 미저장).
+- `StudyLogs` 스키마(실사용): `Id`, `StudentId`, `BookId`, `StudiedDay`, `LessonContent`(수업 내용), `Description`(수업 내용 메모), `IsSpecial`(특강 여부, INTEGER 0/1, 기본 0=FALSE). 개별 등록 `POST /api/user/studylogs`는 `IsSpecial`(bool, 기본 false)/`LessonContent`/`Description`을 수용. 일괄 등록 `POST /api/user/classes/{id}/studylogs`는 **단일 `StudiedDay` + `LessonContent` + `Description` + `logs:[{StudentId, include, is_special}]`** 구조(학생별 날짜 없음, 결석은 include=false, 특강은 is_special=true). UI상 개별 등록 입력 순서는 학습 일자 → 특강 여부 → 수업 내용 → 수업 내용 메모, 일괄 등록은 수업 내용 → 수업 내용 메모 → 학생별 참석/특강 체크박스.
 
 ## 권한 체계 (Roles)
 JWT `role` 클레임 / `_app_users.role` 기준 3단계:
