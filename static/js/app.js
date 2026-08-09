@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `<div class="title-similar-list">`;
             matches.forEach(m => {
                 const name = escapeHtml(m.Name || '');
-                const meta = escapeHtml([formatSex(m.Sex), formatBirthday(m.Birthday)].filter(Boolean).join(' · '));
+                const meta = [formatSex(m.Sex), formatGrade(m.Grade), m.Referrer ? '추천 ' + formatReferrer(m.Referrer) : ''].filter(Boolean).join(' · ');
                 html += `<div class="title-similar-item"><span class="tsi-title">${name}</span>${meta ? `<span class="tsi-meta">${meta}</span>` : ''}</div>`;
             });
             html += `</div>`;
@@ -3469,6 +3469,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return '미입력';
         }
         return escapeHtml(b.trim());
+    }
+
+    function formatReferrer(r) {
+        if (!r || r.trim() === '') return '';
+        return escapeHtml(r.trim());
+    }
+
+    function formatGrade(g) {
+        if (!g || g.trim() === '') return '미입력';
+        return escapeHtml(g.trim());
     }
 
     function formatSex(s) {
