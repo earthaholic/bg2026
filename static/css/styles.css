@@ -1185,6 +1185,48 @@ body {
     justify-content: space-between;
 }
 
+/* 뷰 레이아웃·간격 표준화 (인라인 스타일 승격) */
+.results-bar .text-muted {
+    font-size: 0.8rem;
+}
+
+.filter-group-actions {
+    justify-content: flex-end;
+    align-items: flex-end;
+}
+
+#view-student-search .filter-options-grid {
+    grid-template-columns: 200px 1fr;
+}
+
+#view-studylog-search .filter-options-grid {
+    grid-template-columns: 250px 1fr;
+}
+
+#view-class-list .filter-options-grid {
+    grid-template-columns: 1fr;
+}
+
+#view-audit-log .table-responsive {
+    max-height: calc(100vh - 420px);
+}
+
+#view-user-manage .results-bar {
+    margin-bottom: 0.75rem;
+}
+
+#view-user-manage .table-responsive {
+    max-height: calc(100vh - 280px);
+}
+
+#view-sql-console #sql-result-alert {
+    margin-top: 1rem;
+}
+
+#view-sql-console .style-sql-result {
+    margin-top: 1rem;
+}
+
 /* Detail Modal View & Admin Inline Edit */
 .detail-card {
     max-width: 680px;
@@ -2459,7 +2501,115 @@ body {
     padding: 1.25rem;
 }
 
+/* --- 감사 로그(변경 이력) 조회 화면 --- */
+.filter-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.55rem 0;
+}
 
+.checkbox-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.audit-action-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+}
+
+.audit-action-insert {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.audit-action-update {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.audit-action-delete {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.audit-log-row:hover {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.text-nowrap {
+    white-space: nowrap;
+}
+
+.audit-detail-card {
+    width: 620px;
+    max-width: 94vw;
+}
+
+.audit-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+    background: rgba(59, 130, 246, 0.07);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+}
+
+.audit-section {
+    margin-bottom: 1.25rem;
+}
+
+.audit-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    margin-bottom: 0.5rem;
+}
+
+.audit-json-table {
+    width: 100%;
+    font-size: 0.8rem;
+}
+
+.audit-json-table td {
+    padding: 0.4rem 0.6rem;
+    vertical-align: top;
+    word-break: break-word;
+}
+
+.audit-key-cell {
+    width: 35%;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.audit-changed-row {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.audit-changed-row .audit-key-cell {
+    color: var(--warning);
+}
 
 /* 제목/이름 중복 경고 박스 (도서·학생 등록 폼 공용) */
 .title-similar-box {

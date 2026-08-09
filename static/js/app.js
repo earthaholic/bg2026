@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
     const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg'];
-    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage'];
+    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
         return !!(currentUser && currentUser.role === 'admin');
@@ -508,6 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStudyLogSearchResults();
         } else if (targetView === 'user-manage') {
             loadUserAccounts();
+        } else if (targetView === 'audit-log') {
+            applyAuditFilterFromUrl();
+            loadAuditLogs();
+            loadAuditUserOptions();
         } else if (targetView === 'class-list') {
             loadClassSearchResults();
         } else if (targetView === 'class-reg') {
@@ -4658,6 +4662,235 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.execCommand('copy');
                 showToast('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
             });
+        });
+    }
+
+    // --- 감사 로그(변경 이력) 조회 (Admin Only) ---
+    let auditLogPage = 1;
+    let auditLogLimit = 20;
+    let auditLogTotalPages = 1;
+    let auditUserOptionsLoaded = false;
+
+    const auditFilterUsername = document.getElementById('audit-filter-username');
+    const auditFilterDateFrom = document.getElementById('audit-filter-date-from');
+    const auditFilterDateTo = document.getElementById('audit-filter-date-to');
+    const auditFilterTable = document.getElementById('audit-filter-table');
+    const auditLogBody = document.getElementById('audit-log-body');
+    const auditLogTotalCount = document.getElementById('audit-log-total-count');
+    const auditLogPaginationInfo = document.getElementById('audit-log-pagination-info');
+    const auditLogCurrentPage = document.getElementById('audit-log-current-page');
+    const btnAuditLogPrev = document.getElementById('btn-audit-log-prev');
+    const btnAuditLogNext = document.getElementById('btn-audit-log-next');
+    const btnDoAuditSearch = document.getElementById('btn-do-audit-search');
+    const btnResetAuditFilter = document.getElementById('btn-reset-audit-filter');
+    const modalAuditDetail = document.getElementById('modal-audit-detail');
+    const modalAuditDetailBody = document.getElementById('modal-audit-detail-body');
+    const btnCloseAuditDetail = document.getElementById('btn-close-audit-detail');
+
+    const AUDIT_TABLE_LABELS = {
+        Books: '도서', Students: '학생', StudyLogs: '학습 기록', Classes: '수업', _app_users: '계정'
+    };
+    const AUDIT_ACTION_LABELS = { INSERT: '등록', UPDATE: '수정', DELETE: '삭제' };
+    const AUDIT_ACTION_CLASSES = {
+        INSERT: 'audit-action-insert', UPDATE: 'audit-action-update', DELETE: 'audit-action-delete'
+    };
+    const AUDIT_META_FIELDS = ['row_id', 'CreatedBy', 'UpdatedBy', 'UpdatedAt', 'password_hash'];
+
+    function applyAuditFilterFromUrl() {
+        const params = new URLSearchParams(location.search);
+        auditFilterUsername.value = params.get('username') || '';
+        auditFilterDateFrom.value = params.get('date_from') || '';
+        auditFilterDateTo.value = params.get('date_to') || '';
+        auditFilterTable.value = params.get('table_name') || '';
+        const actionParam = params.get('action');
+        document.querySelectorAll('.audit-filter-action').forEach(cb => {
+            cb.checked = !actionParam || actionParam.split(',').includes(cb.value);
+        });
+        const page = parseInt(params.get('page'), 10);
+        auditLogPage = page > 0 ? page : 1;
+    }
+
+    async function loadAuditUserOptions() {
+        if (auditUserOptionsLoaded) return;
+        try {
+            const data = await apiFetch('/api/admin/audit-logs/users');
+            const users = data.users || [];
+            const current = auditFilterUsername.value;
+            let opts = '<option value="">전체 계정</option>';
+            users.forEach(u => {
+                opts += `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)}</option>`;
+            });
+            auditFilterUsername.innerHTML = opts;
+            if (current) auditFilterUsername.value = current;
+            auditUserOptionsLoaded = true;
+        } catch (err) {
+            /* 계정 목록 로드 실패는 치명적이지 않음 */
+        }
+    }
+
+    async function loadAuditLogs() {
+        const params = new URLSearchParams();
+        params.set('page', auditLogPage);
+        params.set('limit', auditLogLimit);
+        if (auditFilterUsername.value) params.set('username', auditFilterUsername.value);
+        if (auditFilterDateFrom.value) params.set('date_from', auditFilterDateFrom.value);
+        if (auditFilterDateTo.value) params.set('date_to', auditFilterDateTo.value);
+        if (auditFilterTable.value) params.set('table_name', auditFilterTable.value);
+        const actions = [...document.querySelectorAll('.audit-filter-action:checked')].map(cb => cb.value);
+        if (actions.length) params.set('action', actions.join(','));
+
+        const urlParams = new URLSearchParams(params.toString());
+        history.replaceState(null, '', `${location.pathname}?${urlParams.toString()}`);
+
+        try {
+            auditLogBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>변경 이력 로딩 중...</p></td></tr>';
+            const data = await apiFetch(`/api/admin/audit-logs?${params.toString()}`);
+            renderAuditLogs(data);
+        } catch (err) {
+            auditLogBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
+        }
+    }
+
+    function renderAuditLogs(data) {
+        auditLogTotalPages = data.total_pages || 1;
+        auditLogTotalCount.textContent = `총 ${data.total_count} 건의 변경 이력`;
+        auditLogPaginationInfo.textContent = `${data.page} / ${auditLogTotalPages} 페이지`;
+        auditLogCurrentPage.textContent = data.page;
+        btnAuditLogPrev.disabled = data.page <= 1;
+        btnAuditLogNext.disabled = data.page >= auditLogTotalPages;
+
+        const logs = data.logs || [];
+        if (logs.length === 0) {
+            auditLogBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-magnifying-glass fa-2x"></i><p>조건에 해당하는 변경 이력이 없습니다.</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        logs.forEach((log, idx) => {
+            const tableLabel = AUDIT_TABLE_LABELS[log.table_name] || log.table_name;
+            const actionLabel = AUDIT_ACTION_LABELS[log.action] || log.action;
+            const actionClass = AUDIT_ACTION_CLASSES[log.action] || '';
+            let summary = '';
+            if (log.action === 'INSERT') {
+                summary = '신규 등록';
+            } else if (log.action === 'DELETE') {
+                summary = '행 삭제';
+            } else {
+                const changed = (log.changed_fields || []).filter(f => !AUDIT_META_FIELDS.includes(f));
+                summary = changed.length
+                    ? changed.map(escapeHtml).join(', ') + ' 변경'
+                    : '내용 변경';
+            }
+            html += `
+                <tr class="audit-log-row" data-audit-index="${idx}" style="cursor: pointer;">
+                    <td class="text-nowrap">${escapeHtml(log.created_at || '-')}</td>
+                    <td><strong>${escapeHtml(log.username)}</strong></td>
+                    <td>${escapeHtml(tableLabel)}</td>
+                    <td>#${escapeHtml(log.record_id || '-')}</td>
+                    <td><span class="audit-action-badge ${actionClass}">${actionLabel}</span></td>
+                    <td>${summary}</td>
+                </tr>`;
+        });
+        auditLogBody.innerHTML = html;
+
+        auditLogBody.querySelectorAll('.audit-log-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const log = logs[parseInt(row.getAttribute('data-audit-index'), 10)];
+                openAuditDetailModal(log);
+            });
+        });
+    }
+
+    function renderAuditJsonTable(data, changedSet) {
+        if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+            return '<div class="text-muted" style="padding: 0.5rem 0;">기록된 데이터가 없습니다.</div>';
+        }
+        const rows = Object.entries(data)
+            .filter(([k]) => !['row_id', 'password_hash'].includes(k))
+            .map(([k, v]) => {
+                let val = v;
+                if (v === null || v === undefined) val = '';
+                else if (typeof v === 'object') val = JSON.stringify(v);
+                const cls = changedSet && changedSet.has(k) ? ' class="audit-changed-row"' : '';
+                return `<tr${cls}><td class="audit-key-cell">${escapeHtml(k)}</td><td>${escapeHtml(String(val))}</td></tr>`;
+            }).join('');
+        return `<table class="modern-table audit-json-table"><tbody>${rows}</tbody></table>`;
+    }
+
+    function openAuditDetailModal(log) {
+        const tableLabel = AUDIT_TABLE_LABELS[log.table_name] || log.table_name;
+        const actionLabel = AUDIT_ACTION_LABELS[log.action] || log.action;
+        const actionClass = AUDIT_ACTION_CLASSES[log.action] || '';
+        const changedSet = new Set(
+            (log.changed_fields || []).filter(f => !AUDIT_META_FIELDS.includes(f))
+        );
+
+        let sections = '';
+        if (log.action === 'DELETE') {
+            sections += `<div class="audit-section">
+                <h4><i class="fa-solid fa-trash-can"></i> 삭제 전 데이터</h4>
+                ${renderAuditJsonTable(log.old_data, null)}
+            </div>`;
+        } else if (log.action === 'INSERT') {
+            sections += `<div class="audit-section">
+                <h4><i class="fa-solid fa-plus"></i> 등록된 데이터</h4>
+                ${renderAuditJsonTable(log.new_data, null)}
+            </div>`;
+        } else {
+            sections += `<div class="audit-section">
+                <h4><i class="fa-solid fa-arrow-right-arrow-left"></i> 변경 전</h4>
+                ${renderAuditJsonTable(log.old_data, changedSet)}
+            </div>
+            <div class="audit-section">
+                <h4><i class="fa-solid fa-arrow-right-arrow-left"></i> 변경 후</h4>
+                ${renderAuditJsonTable(log.new_data, changedSet)}
+            </div>`;
+        }
+
+        modalAuditDetailBody.innerHTML = `
+            <div class="audit-detail-meta">
+                <div><span class="text-muted">일시:</span> ${escapeHtml(log.created_at || '-')}</div>
+                <div><span class="text-muted">계정:</span> <strong>${escapeHtml(log.username)}</strong> <span class="role-pill ${escapeHtml(log.user_role || '')}">${escapeHtml(log.user_role || '')}</span></div>
+                <div><span class="text-muted">대상:</span> ${escapeHtml(tableLabel)} (레코드 #${escapeHtml(log.record_id || '-')})</div>
+                <div><span class="text-muted">액션:</span> <span class="audit-action-badge ${actionClass}">${actionLabel}</span></div>
+            </div>
+            ${sections}`;
+        modalAuditDetail.classList.remove('hidden');
+    }
+
+    if (btnDoAuditSearch) {
+        btnDoAuditSearch.addEventListener('click', () => {
+            auditLogPage = 1;
+            loadAuditLogs();
+        });
+    }
+    if (btnResetAuditFilter) {
+        btnResetAuditFilter.addEventListener('click', () => {
+            auditFilterUsername.value = '';
+            auditFilterDateFrom.value = '';
+            auditFilterDateTo.value = '';
+            auditFilterTable.value = '';
+            document.querySelectorAll('.audit-filter-action').forEach(cb => { cb.checked = true; });
+            auditLogPage = 1;
+            loadAuditLogs();
+        });
+    }
+    if (btnAuditLogPrev) {
+        btnAuditLogPrev.addEventListener('click', () => {
+            if (auditLogPage > 1) { auditLogPage--; loadAuditLogs(); }
+        });
+    }
+    if (btnAuditLogNext) {
+        btnAuditLogNext.addEventListener('click', () => {
+            if (auditLogPage < auditLogTotalPages) { auditLogPage++; loadAuditLogs(); }
+        });
+    }
+    if (btnCloseAuditDetail) {
+        btnCloseAuditDetail.addEventListener('click', () => modalAuditDetail.classList.add('hidden'));
+    }
+    if (modalAuditDetail) {
+        modalAuditDetail.addEventListener('click', (e) => {
+            if (e.target === modalAuditDetail) modalAuditDetail.classList.add('hidden');
         });
     }
 });

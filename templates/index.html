@@ -123,6 +123,10 @@
                         <i class="fa-solid fa-user-gear nav-icon"></i>
                         <span>선생님 계정 관리</span>
                     </div>
+                    <div class="menu-nav-item admin-only hidden" data-view="audit-log">
+                        <i class="fa-solid fa-clock-rotate-left nav-icon"></i>
+                        <span>변경 이력 조회</span>
+                    </div>
                 </nav>
 
                 <div class="sidebar-footer">
@@ -440,7 +444,7 @@
                         <!-- Book Results Summary Bar -->
                         <div class="results-bar">
                             <span id="search-total-count" class="badge badge-info">총 0 건의 도서</span>
-                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 상세 정보를 확인하실 수 있습니다.</span>
+                            <span class="text-muted">카드를 클릭하면 상세 정보를 확인하실 수 있습니다.</span>
                         </div>
 
                         <!-- Book Cards Grid -->
@@ -551,7 +555,7 @@
                                 </div>
                             </div>
 
-                            <div class="filter-options-grid" style="grid-template-columns: 200px 1fr;">
+                            <div class="filter-options-grid">
                                 <div class="filter-group">
                                     <label><i class="fa-solid fa-venus-mars"></i> 성별 필터</label>
                                     <select id="student-filter-sex" class="form-control">
@@ -561,7 +565,7 @@
                                     </select>
                                 </div>
 
-                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                                <div class="filter-group filter-group-actions">
                                     <button id="btn-reset-student-filters" class="btn btn-sm btn-outline">
                                         <i class="fa-solid fa-rotate-left"></i> 검색 조건 초기화
                                     </button>
@@ -572,7 +576,7 @@
                         <!-- Student Results Summary Bar -->
                         <div class="results-bar">
                             <span id="student-search-total-count" class="badge badge-info">총 0 명의 학생</span>
-                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 학생 상세 인적사항을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">카드를 클릭하면 학생 상세 인적사항을 확인하실 수 있습니다.</span>
                         </div>
 
                         <!-- Student Cards Grid -->
@@ -728,13 +732,13 @@
                                 </div>
                             </div>
 
-                            <div class="filter-options-grid" style="grid-template-columns: 250px 1fr;">
+                            <div class="filter-options-grid">
                                 <div class="filter-group">
                                     <label><i class="fa-solid fa-calendar-day"></i> 학습 일자 필터</label>
                                     <input type="text" id="studylog-filter-date" class="form-control" placeholder="예: 2026-08 또는 2026-08-02">
                                 </div>
 
-                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                                <div class="filter-group filter-group-actions">
                                     <button id="btn-reset-studylog-filter" class="btn btn-outline">
                                         <i class="fa-solid fa-rotate-left"></i> 필터 초기화
                                     </button>
@@ -745,7 +749,7 @@
                         <!-- StudyLog Results Summary Bar -->
                         <div class="results-bar">
                             <span id="studylog-search-total-count" class="badge badge-info">총 0 건의 학습 기록</span>
-                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 학습 기록 상세 정보 및 도서 특성을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">카드를 클릭하면 학습 기록 상세 정보 및 도서 특성을 확인하실 수 있습니다.</span>
                         </div>
 
                         <!-- StudyLog Cards Grid -->
@@ -960,9 +964,9 @@
                             </div>
                         </div>
 
-                        <div id="sql-result-alert" class="alert alert-info hidden" style="margin-top: 1rem;"></div>
+                        <div id="sql-result-alert" class="alert alert-info hidden"></div>
 
-                        <div class="table-card style-sql-result" style="margin-top: 1rem; flex: 1;">
+                        <div class="table-card style-sql-result">
                             <div class="table-card-header">
                                 <h2><i class="fa-solid fa-list-check"></i> 쿼리 실행 결과</h2>
                                 <span id="sql-result-stats" class="badge badge-info">0 건</span>
@@ -994,11 +998,11 @@
                             </button>
                         </div>
 
-                        <div class="results-bar" style="margin-bottom: 0.75rem;">
+                        <div class="results-bar">
                             <span id="user-manage-stats" class="badge badge-info">총 0 명의 계정</span>
                         </div>
 
-                        <div class="table-responsive" style="max-height: calc(100vh - 280px);">
+                        <div class="table-responsive">
                             <table class="modern-table">
                                 <thead>
                                     <tr id="user-manage-head">
@@ -1021,6 +1025,107 @@
                     </div>
                 </section>
 
+                <!-- View: 계정별 변경 이력 조회 (Admin Only) -->
+                <section id="view-audit-log" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="card-header-styled">
+                                <div>
+                                    <h2><i class="fa-solid fa-clock-rotate-left"></i> 변경 이력 조회</h2>
+                                    <p class="subtitle">특정 계정이 지정 기간 동안 수행한 등록·수정·삭제 이력을 확인할 수 있습니다.</p>
+                                </div>
+                            </div>
+
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label class="filter-label" for="audit-filter-username">계정</label>
+                                    <select id="audit-filter-username" class="form-control">
+                                        <option value="">전체 계정</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label class="filter-label" for="audit-filter-date-from">시작일</label>
+                                    <input type="date" id="audit-filter-date-from" class="form-control">
+                                </div>
+                                <div class="filter-group">
+                                    <label class="filter-label" for="audit-filter-date-to">종료일</label>
+                                    <input type="date" id="audit-filter-date-to" class="form-control">
+                                </div>
+                                <div class="filter-group">
+                                    <label class="filter-label" for="audit-filter-table">대상 테이블</label>
+                                    <select id="audit-filter-table" class="form-control">
+                                        <option value="">전체 테이블</option>
+                                        <option value="Books">도서 (Books)</option>
+                                        <option value="Students">학생 (Students)</option>
+                                        <option value="StudyLogs">학습 기록 (StudyLogs)</option>
+                                        <option value="Classes">수업 (Classes)</option>
+                                        <option value="_app_users">계정 (_app_users)</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label class="filter-label">액션 유형</label>
+                                    <div class="filter-checkbox-group">
+                                        <label class="checkbox-inline"><input type="checkbox" class="audit-filter-action" value="INSERT" checked> 등록</label>
+                                        <label class="checkbox-inline"><input type="checkbox" class="audit-filter-action" value="UPDATE" checked> 수정</label>
+                                        <label class="checkbox-inline"><input type="checkbox" class="audit-filter-action" value="DELETE" checked> 삭제</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="filter-row filter-group-actions">
+                                <button id="btn-reset-audit-filter" class="btn btn-outline">
+                                    <i class="fa-solid fa-rotate-left"></i> 필터 초기화
+                                </button>
+                                <button id="btn-do-audit-search" class="btn btn-primary">
+                                    <i class="fa-solid fa-magnifying-glass"></i> 조회
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="results-bar">
+                            <span id="audit-log-total-count" class="badge badge-info">총 0 건의 변경 이력</span>
+                            <span class="text-muted">행을 클릭하면 변경 전/후 상세 데이터를 확인하실 수 있습니다.</span>
+                        </div>
+
+                        <div class="table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>일시</th>
+                                            <th>계정</th>
+                                            <th>대상 테이블</th>
+                                            <th>레코드</th>
+                                            <th>액션</th>
+                                            <th>변경 요약</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="audit-log-body">
+                                        <tr>
+                                            <td colspan="6" class="empty-state">
+                                                <i class="fa-solid fa-clock-rotate-left fa-2x"></i>
+                                                <p>조회 버튼을 눌러 변경 이력을 확인해 주세요.</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="search-pagination-bar">
+                            <div id="audit-log-pagination-info" class="page-info">1 / 1 페이지</div>
+                            <div class="pagination-controls">
+                                <button id="btn-audit-log-prev" class="btn btn-sm btn-outline" disabled>
+                                    <i class="fa-solid fa-chevron-left"></i> 이전
+                                </button>
+                                <span id="audit-log-current-page" class="page-num">1</span>
+                                <button id="btn-audit-log-next" class="btn btn-sm btn-outline" disabled>
+                                    다음 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- View 8: 수업 목록 & 상세 조회 -->
                 <section id="view-class-list" class="workspace-view">
                     <div class="book-search-layout">
@@ -1035,8 +1140,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="filter-options-grid" style="grid-template-columns: 1fr;">
-                                <div class="filter-group" style="justify-content: flex-end; align-items: flex-end;">
+                            <div class="filter-options-grid">
+                                <div class="filter-group filter-group-actions">
                                     <button id="btn-reset-class-filter" class="btn btn-outline">
                                         <i class="fa-solid fa-rotate-left"></i> 필터 초기화
                                     </button>
@@ -1047,7 +1152,7 @@
                         <!-- Class Results Summary Bar -->
                         <div class="results-bar">
                             <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
-                            <span class="text-muted" style="font-size: 0.8rem;">카드를 클릭하면 수업 상세 정보와 학생 명단을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">카드를 클릭하면 수업 상세 정보와 학생 명단을 확인하실 수 있습니다.</span>
                         </div>
 
                         <!-- Class Cards Grid -->
@@ -1595,6 +1700,19 @@
                         <i class="fa-solid fa-trash-can"></i> 계정 삭제
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 변경 이력 상세 모달 (Admin Only) -->
+    <div id="modal-audit-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-card audit-detail-card">
+            <div class="modal-header">
+                <h3 id="modal-audit-detail-title"><i class="fa-solid fa-clock-rotate-left"></i> 변경 이력 상세</h3>
+                <button id="btn-close-audit-detail" class="btn-close">&times;</button>
+            </div>
+            <div id="modal-audit-detail-body" class="modal-body detail-modal-body">
+                <!-- Dynamic Audit Detail -->
             </div>
         </div>
     </div>
