@@ -2665,8 +2665,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>생년월일 (Birthday)</label>
-                            <input type="date" name="Birthday" class="form-control" value="${escapeHtml((s.Birthday && s.Birthday !== '1970-01-01') ? s.Birthday : '')}">
+                            <label>학년 (Grade)</label>
+                            <input type="text" name="Grade" class="form-control" value="${escapeHtml(s.Grade || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>추천인 (Referrer)</label>
+                            <input type="text" name="Referrer" class="form-control" value="${escapeHtml(s.Referrer || '')}">
                         </div>
                     </div>
                 </div>
@@ -2708,7 +2712,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = {
             Name: (formData.get('Name') || '').trim(),
             Sex: (formData.get('Sex') || '').trim(),
-            Birthday: (formData.get('Birthday') || '').trim() || '1970-01-01',
+            Grade: (formData.get('Grade') || '').trim(),
+            Referrer: (formData.get('Referrer') || '').trim(),
             Description: (formData.get('Description') || '').trim()
         };
 
