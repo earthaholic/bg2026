@@ -135,6 +135,7 @@ class UserStudyLogRegisterRequest(BaseModel):
     StudentId: int
     BookId: int
     StudiedDay: str
+    LessonContent: Optional[str] = ""
     Description: Optional[str] = ""
 
 class ClassRequest(BaseModel):
@@ -151,6 +152,7 @@ class ClassStudyLogItem(BaseModel):
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: int
     StudiedDay: str
+    LessonContent: Optional[str] = ""
     Description: Optional[str] = ""
     logs: List[ClassStudyLogItem]
 
@@ -568,6 +570,7 @@ def user_register_studylog(
         "StudentId": payload.StudentId,
         "BookId": payload.BookId,
         "StudiedDay": payload.StudiedDay.strip(),
+        "LessonContent": (payload.LessonContent or "").strip(),
         "Description": (payload.Description or "").strip()
     }
 
@@ -830,6 +833,7 @@ def user_batch_register_class_studylogs(
     day = (payload.StudiedDay or "").strip()
     if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+    lesson_content = (payload.LessonContent or "").strip()
     description = (payload.Description or "").strip()
 
     book_row = _resolve_domain_pk("Books", payload.BookId)
@@ -885,7 +889,8 @@ def user_batch_register_class_studylogs(
                 continue
 
             insert_table_row("StudyLogs", {
-                "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day, "Description": description
+                "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
+                "LessonContent": lesson_content, "Description": description
             })
             created_count += 1
             results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})
