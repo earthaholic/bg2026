@@ -138,6 +138,7 @@ class UserStudentRegisterRequest(BaseModel):
     Birthday: Optional[str] = "1970-01-01"
     Grade: Optional[str] = ""
     Referrer: Optional[str] = ""
+    IsClassEnded: Optional[int] = 0
     Description: Optional[str] = ""
 
 class UserStudyLogRegisterRequest(BaseModel):
@@ -434,6 +435,7 @@ def user_register_student(
         
     student_data["Grade"] = (student_data.get("Grade") or "").strip()
     student_data["Referrer"] = (student_data.get("Referrer") or "").strip()
+    student_data["IsClassEnded"] = 1 if student_data.get("IsClassEnded") else 0
     student_data["Sex"] = (student_data["Sex"] or "").strip()
     student_data["Description"] = (student_data["Description"] or "").strip()
     student_data["CreatedBy"] = current_user["username"]
