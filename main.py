@@ -543,7 +543,7 @@ def user_get_similar_students(
         "summary": {"exact": len(results), "contains": 0, "similar": 0},
         "matches": [
             {"row_id": r["row_id"], "Id": r["Id"], "Name": r["Name"],
-             "Sex": r["Sex"], "Birthday": r["Birthday"], "match_type": "exact"}
+             "Sex": r["Sex"], "Birthday": r["Birthday"], "Grade": r["Grade"], "Referrer": r["Referrer"], "match_type": "exact"}
             for r in results[:10]
         ],
     }
