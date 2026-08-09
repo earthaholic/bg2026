@@ -1563,6 +1563,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const day = escapeHtml(l.StudiedDay || '일자 미상');
             const logId = l.row_id || l.Id;
 
+            // 수업 내용 / 수업 내용 메모 미리보기 (있을 때만, 각각 최대 2줄)
+            let previewHtml = '';
+            const lc = (l.LessonContent || '').trim();
+            const dc = (l.Description || '').trim();
+            if (lc) {
+                previewHtml += `
+                    <div class="studylog-card-preview">
+                        <i class="fa-solid fa-book-open" style="color: var(--primary);"></i>
+                        <span>${escapeHtml(lc)}</span>
+                    </div>
+                `;
+            }
+            if (dc) {
+                previewHtml += `
+                    <div class="studylog-card-preview muted">
+                        <i class="fa-solid fa-note-sticky" style="color: var(--warning);"></i>
+                        <span>${escapeHtml(dc)}</span>
+                    </div>
+                `;
+            }
+
             html += `
                 <div class="book-item-card studylog-item-card" data-log-id="${logId}">
                     <div class="book-card-top">
@@ -1576,6 +1597,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="text-muted" style="font-size: 0.78rem;">
                             저자: ${bAuthor} | 출판사: ${bPublisher}
                         </div>
+                        ${previewHtml}
                     </div>
                     <div class="book-card-bottom">
                         <span><i class="fa-solid fa-id-card"></i> Log ID: #${logId}</span>
