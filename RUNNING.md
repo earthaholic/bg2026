@@ -9,7 +9,7 @@ FastAPI + SQLite 기반의 읽기·토론 수업 관리 앱입니다.
 
 | 항목 | 요구사항 |
 |---|---|
-| Python | 3.11 (프로젝트는 `.venv` 가상환경 사용) |
+| Python | 3.9 ~ 3.11 (가비아 3.9 환경 호환, 로컬 `.venv` 가상환경 사용) |
 | 의존성 | `requirements.txt` |
 | 인터넷 | 필요 (FontAwesome, Chart.js, Google Fonts 를 CDN 에서 로드) |
 

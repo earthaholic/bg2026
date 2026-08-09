@@ -31,7 +31,7 @@ FastAPI와 SQLite 기반의 **꿈꾸는봄결 학원 관리 웹 애플리케이�
 
 ## 🛠 기술 스택
 
-* **Backend**: Python 3.11, FastAPI, Uvicorn, Python-Jose (JWT Auth), SQLite3
+* **Backend**: Python 3.9+ (가비아 파이썬 3.9 호스팅 완전 호환), FastAPI, Uvicorn, Phusion Passenger (`passenger_wsgi.py`), Python-Jose (JWT Auth), SQLite3
 * **Frontend**: HTML5 (Jinja2 Template), Vanilla JavaScript, Custom Vanilla CSS, Chart.js, FontAwesome
 * **External Integration**: Oracle ADB (원천 DB 동기화 지원), Google Drive API
 

@@ -10,7 +10,7 @@ No tests, no lint/typecheck, no CI, no README. Frontend is a single Jinja2 SPA (
 
 ## Run / Verify
 - Dev server: `python main.py` (uvicorn reload at `http://127.0.0.1:8000`) or `uvicorn main:app --reload`.
-- Use the `.venv` virtualenv (Python 3.11); deps in `requirements.txt` (`pip install -r requirements.txt`).
+- Use the `.venv` virtualenv (Python 3.9 ~ 3.11 호환, 가비아 파이썬 3.9 환경 지원); deps in `requirements.txt` (`pip install -r requirements.txt`).
 - No automated tests — verify manually in the web UI after starting the server.
 - `python oracle_sync.py` runs the Oracle→SQLite migration standalone and prints the result.
 
