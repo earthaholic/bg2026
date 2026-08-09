@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentSearchQ = document.getElementById('student-search-q');
     const btnDoStudentSearch = document.getElementById('btn-do-student-search');
     const studentFilterSex = document.getElementById('student-filter-sex');
+    const studentFilterIncludeEnded = document.getElementById('student-filter-include-ended');
     const btnResetStudentFilters = document.getElementById('btn-reset-student-filters');
 
     const studentSearchTotalCount = document.getElementById('student-search-total-count');
@@ -746,9 +747,15 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStudentSearchResults();
         });
 
+        studentFilterIncludeEnded.addEventListener('change', () => {
+            studentSearchPage = 1;
+            loadStudentSearchResults();
+        });
+
         btnResetStudentFilters.addEventListener('click', () => {
             studentSearchQ.value = '';
             studentFilterSex.value = '';
+            studentFilterIncludeEnded.checked = false;
             studentSearchPage = 1;
             loadStudentSearchResults();
         });
@@ -2000,6 +2007,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (q) queryParams.append('q', q);
             if (sex) queryParams.append('sex', sex);
+            if (studentFilterIncludeEnded && studentFilterIncludeEnded.checked) queryParams.append('include_ended', 'true');
 
             const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`);
             studentSearchTotalPages = data.total_pages;
@@ -2028,6 +2036,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sex = formatSex(s.Sex);
             const desc = escapeHtml(s.Description || '등록된 메모가 없습니다.');
             const studentId = s.row_id || s.Id;
+            const endedBadge = s.IsClassEnded ? '<span class="badge badge-warning"><i class="fa-solid fa-graduation-cap"></i> 수업 종료</span>' : '';
 
             let avatarClass = 'neutral';
             let avatarIcon = 'fa-user-graduate';
@@ -2045,7 +2054,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="student-avatar ${avatarClass}">
                             <i class="fa-solid ${avatarIcon}"></i>
                         </div>
-                        <div class="book-card-title">${name}${s.Referrer ? `<span class="tag-badge" style="margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : ''}</div>
+                        <div class="book-card-title">${name}${endedBadge}${s.Referrer ? `<span class="tag-badge" style="margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : ''}</div>
                         <div class="book-card-author" style="margin-bottom: 0.5rem;">
                             <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${sex}</strong></span>
                             <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
