@@ -1019,7 +1019,8 @@ document.addEventListener('DOMContentLoaded', () => {
             Sex: (formData.get('Sex') || '').trim(),
             Grade: (formData.get('Grade') || '').trim(),
             Referrer: (formData.get('Referrer') || '').trim(),
-            Description: (formData.get('Description') || '').trim()
+            Description: (formData.get('Description') || '').trim(),
+            IsClassEnded: formData.get('IsClassEnded') ? 1 : 0
         };
 
         if (!payload.Name) {
