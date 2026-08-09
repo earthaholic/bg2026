@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --bg-dark: #090d16;
     --bg-card: rgba(21, 28, 44, 0.75);
     --bg-card-hover: rgba(30, 41, 59, 0.85);
@@ -416,6 +416,8 @@ body {
     cursor: pointer;
     transition: all 0.2s ease;
     outline: none;
+    /* flex 컨테이너 안에서 버튼이 수축하며 한글 텍스트가 세로로 줄바꿈되는 문제 방지 */
+    white-space: nowrap;
 }
 
 .btn-primary {
@@ -886,6 +888,14 @@ body {
     overflow: hidden;
 }
 
+/* 학습 기록 등록 뷰의 최근 수록 내역 카드 (기존에 패딩이 없어 콘텐츠가 테두리에 붙던 문제 수정) */
+.recent-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .recent-books-container {
     flex: 1;
     overflow-y: auto;
@@ -993,6 +1003,11 @@ body {
 .search-input-wrapper .input-lg {
     padding-left: 2.75rem;
     border-radius: var(--radius-md);
+}
+
+/* 검색바에서 input이 우선 수축하도록 하여 버튼이 눌려 텍스트가 줄바꿈되지 않게 함 */
+.search-input-wrapper .form-control {
+    min-width: 0;
 }
 
 /* Difficulty Checkbox & Radio Group Styles */
@@ -2153,6 +2168,12 @@ body {
     font-size: 0.78rem;
     font-weight: 600;
 }
+/* 특강으로 지정된 학생 이름 배지 강조 (수업 등록 폼의 선택된 학생 표시) */
+.selected-student-tag.special {
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: var(--warning);
+}
 /* 학습 이력 일괄 등록 뷰: 수업 선택/정보/등록 카드가 세로로 쌓여 화면보다 길어지므로 뷰 전체 스크롤 허용 */
 #view-class-studylog-reg {
     overflow-y: auto;
@@ -2188,4 +2209,252 @@ body {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* 월말보고 문자 양식 자동 생성 뷰 스타일 */
+#view-monthly-report {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 카드 내부 여백 및 타이틀 간격 보완 (.card 자체에 패딩이 없어 콘텐츠가 테두리에 붙던 문제 수정) */
+#view-monthly-report .card {
+    padding: 1.5rem;
+}
+
+#view-monthly-report .page-title-box {
+    margin-bottom: 1rem;
+}
+
+/* 학생 선택 행(select + 버튼)을 가로 배치 (.input-group은 원래 미정의 상태여서 세로로 쌓였음) */
+.input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.input-group .form-control {
+    flex: 1;
+    min-width: 0;
+}
+
+.monthly-report-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .monthly-report-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.report-logs-list {
+    max-height: 380px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-right: 0.25rem;
+}
+
+.report-log-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-section);
+    border: 1px solid var(--border-color);
+    transition: background 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
+}
+
+.report-log-item:hover {
+    background: var(--bg-card);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.report-log-item input[type="checkbox"] {
+    margin-top: 0.25rem;
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.report-log-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.report-log-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.report-log-date {
+    color: var(--primary);
+}
+
+.report-log-book {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.report-log-content {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    word-break: break-all;
+}
+
+.monthly-report-textarea {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    padding: 1rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    resize: vertical;
+    white-space: pre-wrap;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.monthly-report-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), inset 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.empty-state-sm {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.empty-state-sm i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+/* ============================================================
+   스타일 누락 보완 (전수 점검으로 발견된 미정의 클래스)
+   ============================================================ */
+
+/* 흐린 보조 텍스트 */
+.text-muted {
+    color: var(--text-muted);
+}
+
+/* 로딩 표시 (가운데 정렬 + 아이콘 간격) */
+.loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* 초소형 버튼 (btn-sm보다 작음) */
+.btn-xs {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.72rem;
+}
+
+/* 컬러 배지 누락 보완 */
+.badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-feature {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--primary);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* 도서 특성 배지 행 (줄바꿈 허용 flex) */
+.badge-feature-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* 학습 도서 정보 spec 3열 그리드 + 카드 */
+.book-spec-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+.spec-box {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    text-align: center;
+}
+
+.spec-label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+}
+
+.spec-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* 학습 기록 상세 모달: 다른 상세 모달(.detail-card)과 동일한 폭 */
+.detail-modal-card {
+    max-width: 680px;
+}
+
+/* 상세 모달 헤더 우측 버튼 영역 */
+.modal-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-admin-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Studio 스키마 인스펙터 본문 패딩 */
+.schema-body {
+    flex: 1;
+    overflow: auto;
+    padding: 1.25rem;
 }
