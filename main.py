@@ -497,6 +497,39 @@ def user_search_students(
         "students": [dict(r) for r in rows]
     }
 
+@app.get("/api/user/students/similar")
+def user_get_similar_students(
+    q: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    new_name = (q or "").strip()
+    new_key = normalize_key(new_name)
+    if not new_key:
+        return {"total": 0, "summary": {"exact": 0, "contains": 0, "similar": 0}, "matches": []}
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT rowid as row_id, * FROM "Students"')
+    rows = cursor.fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        if normalize_key(r["Name"] or "") == new_key:
+            results.append(r)
+
+    results.sort(key=lambda r: r["row_id"])
+
+    return {
+        "total": len(results),
+        "summary": {"exact": len(results), "contains": 0, "similar": 0},
+        "matches": [
+            {"row_id": r["row_id"], "Id": r["Id"], "Name": r["Name"],
+             "Sex": r["Sex"], "Birthday": r["Birthday"], "match_type": "exact"}
+            for r in results[:10]
+        ],
+    }
+
 @app.get("/api/user/students/{student_id}")
 def user_get_student_detail(
     student_id: int,
