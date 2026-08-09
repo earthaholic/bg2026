@@ -4012,7 +4012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 studentRows = '<tr><td colspan="3" class="empty-state"><p>배정된 학생이 없습니다.</p></td></tr>';
             } else {
                 students.forEach(s => {
-            const name = escapeHtml(s.Name || '이름 없음');
+                    const name = escapeHtml(s.Name || '이름 없음');
                     const sex = formatSex(s.Sex);
                     const referrerText = s.Referrer ? `<span class="text-muted" style="font-size: 0.75rem; margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : '';
                     const specialBadge = s.IsSpecial ? '<span class="badge" style="margin-left: 0.4rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : '';
