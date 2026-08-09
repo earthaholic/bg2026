@@ -3753,6 +3753,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sId = s.row_id || s.Id;
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
+            const endedTag = s.IsClassEnded ? ' <span class="badge badge-warning" style="font-size:0.65rem;">수업 종료</span>' : '';
             if (filterText && !name.toLowerCase().includes(filterText)) return;
             const checked = checkedIds.has(sId) ? 'checked' : '';
             const specialChecked = specialIds.has(sId) ? 'checked' : '';
@@ -3761,7 +3762,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="class-student-checkbox-item">
                     <label class="cs-select" style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; flex: 1; min-width: 0;">
                         <input type="checkbox" class="cs-chk" value="${sId}" ${checked}>
-                        <span style="white-space: nowrap;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}</span>
+                        <span style="white-space: nowrap;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${endedTag}</span>
                     </label>
                     <label class="cs-special" title="이 학생의 이 수업을 특강으로 지정 (배정된 학생만 설정 가능)" style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; flex-shrink: 0; opacity: ${checked ? 1 : 0.45};">
                         <input type="checkbox" class="cs-special-chk" value="${sId}" ${specialChecked} ${specialDisabled} style="accent-color: var(--warning);">
@@ -3860,7 +3861,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tData, sData] = await Promise.all([
                 apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/students-options')
+                apiFetch('/api/user/students-options?include_ended=true')
             ]);
             const teacherSelect = document.getElementById('class-teacher');
             let thtml = '<option value="">-- 담당 선생님 선택 --</option>';
@@ -4011,7 +4012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 studentRows = '<tr><td colspan="3" class="empty-state"><p>배정된 학생이 없습니다.</p></td></tr>';
             } else {
                 students.forEach(s => {
-                    const name = escapeHtml(s.Name || '이름 없음');
+            const name = escapeHtml(s.Name || '이름 없음');
                     const sex = formatSex(s.Sex);
                     const referrerText = s.Referrer ? `<span class="text-muted" style="font-size: 0.75rem; margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : '';
                     const specialBadge = s.IsSpecial ? '<span class="badge" style="margin-left: 0.4rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : '';
@@ -4061,7 +4062,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tData, sData] = await Promise.all([
                 apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/students-options')
+                apiFetch('/api/user/students-options?include_ended=true')
             ]);
             classAllStudentsCache = sData.students || [];
             const checkedIds = new Set(students.map(s => s.row_id || s.Id));
