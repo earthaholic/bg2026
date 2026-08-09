@@ -310,6 +310,64 @@ document.addEventListener('DOMContentLoaded', () => {
         return data;
     }
 
+    // 입력 디바운스 헬퍼 (중복 경고 조회용)
+    function debounce(fn, wait) {
+        let timer = null;
+        return function (...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
+
+    // Book Title Similarity Warning (등록 폼 중복 경고)
+    const bookTitleInput = document.getElementById('book-title');
+    const bookTitleSimilarBox = document.getElementById('book-title-similar-box');
+    let bookSimilarSeq = 0;
+
+    function renderBookSimilar(data) {
+        const { total, summary, matches } = data;
+        if (!total) { bookTitleSimilarBox.classList.add('hidden'); return; }
+        let html = '';
+        if (summary.exact > 0) {
+            html += `<span class="badge badge-danger"><i class="fa-solid fa-circle-exclamation"></i> 같은 제목의 도서 ${summary.exact}건이 이미 등록되어 있습니다.</span>`;
+        } else {
+            html += `<span class="badge badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> 유사한 제목의 도서 ${summary.contains + summary.similar}건이 등록되어 있습니다.</span>`;
+        }
+        if (matches.length > 0) {
+            html += `<div class="title-similar-list">`;
+            matches.forEach(m => {
+                const title = escapeHtml(m.Title || '');
+                const meta = escapeHtml([m.Author, m.Publisher].filter(Boolean).join(' · '));
+                html += `<div class="title-similar-item"><span class="tsi-title">${title}</span>${meta ? `<span class="tsi-meta">${meta}</span>` : ''}</div>`;
+            });
+            html += `</div>`;
+            if (total > matches.length) { html += `<div class="text-muted">... 외 ${total - matches.length}건</div>`; }
+        }
+        bookTitleSimilarBox.innerHTML = html;
+        bookTitleSimilarBox.classList.remove('hidden');
+    }
+
+    async function fetchBookSimilar(title) {
+        const seq = ++bookSimilarSeq;
+        try {
+            const data = await apiFetch(`/api/user/books/similar?q=${encodeURIComponent(title)}`);
+            if (seq !== bookSimilarSeq) return;
+            renderBookSimilar(data);
+        } catch (err) {
+            if (seq !== bookSimilarSeq) return;
+            bookTitleSimilarBox.classList.add('hidden');
+            console.warn('[도서 중복 경고] 조회 실패:', err.message);
+        }
+    }
+
+    const debouncedBookSimilar = debounce((e) => {
+        const title = (e.target.value || '').trim();
+        if (!title) { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); return; }
+        fetchBookSimilar(title);
+    }, 300);
+
+    function clearBookSimilar() { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); }
+
     // Init App
     init();
 
@@ -493,9 +551,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // User Book Registration Form Submit
         formUserBookReg.addEventListener('submit', handleUserBookSubmit);
+        bookTitleInput.addEventListener('input', debouncedBookSimilar);
         btnResetBookForm.addEventListener('click', () => {
             formUserBookReg.reset();
             userBookMsg.classList.add('hidden');
+            clearBookSimilar();
         });
         btnRefreshRecent.addEventListener('click', loadRecentBooks);
 
@@ -877,6 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userBookMsg.classList.remove('hidden');
 
             formUserBookReg.reset();
+            clearBookSimilar();
             await loadRecentBooks();
             if (isAdmin() && currentTable === 'Books') {
                 await loadTableData();
