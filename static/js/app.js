@@ -1636,10 +1636,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sName = escapeHtml(l.StudentName || '학생 미상');
                 const bTitle = escapeHtml(l.BookTitle || '도서 미상');
                 const day = escapeHtml(l.StudiedDay || '일자 미상');
+                const sRef = l.StudentReferrer ? ' · 추천: ' + formatReferrer(l.StudentReferrer) : '';
                 html += `
                     <div class="recent-book-item">
                         <div class="recent-book-title" title="${sName} - ${bTitle}">
-                            <i class="fa-solid fa-book-bookmark" style="color: var(--warning); margin-right: 0.3rem;"></i> <strong>${sName}</strong>: ${bTitle}
+                            <i class="fa-solid fa-book-bookmark" style="color: var(--warning); margin-right: 0.3rem;"></i> <strong>${sName}</strong>${sRef}: ${bTitle}
                         </div>
                         <div class="recent-book-meta">
                             <span><i class="fa-solid fa-calendar-check"></i> ${day}</span>
@@ -1695,6 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         studylogs.forEach(l => {
             const sName = escapeHtml(l.StudentName || '학생 미상');
             const sSex = formatSex(l.StudentSex);
+            const sRef = l.StudentReferrer ? ' · 추천: ' + formatReferrer(l.StudentReferrer) : '';
             const bTitle = escapeHtml(l.BookTitle || '도서 미상');
             const bAuthor = escapeHtml(l.BookAuthor || '저자 미상');
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
@@ -1729,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i class="fa-solid fa-calendar-check"></i> ${day}
                         </div>
                         ${l.IsSpecial ? '<span class="badge" style="align-self: flex-start; margin-bottom: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}
-                        <div class="book-card-title" style="font-size: 1.05rem;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})</div>
+                        <div class="book-card-title" style="font-size: 1.05rem;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})${sRef}</div>
                         <div class="book-card-author" style="margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--text-main);">
                             <i class="fa-solid fa-book" style="color: var(--success);"></i> ${bTitle}
                         </div>
@@ -1780,7 +1782,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const sName = escapeHtml(l.StudentName || '학생 미상');
             const sSex = formatSex(l.StudentSex);
-            const sBirthday = formatBirthday(l.StudentBirthday);
+            const sRef = l.StudentReferrer ? ' · 추천: ' + formatReferrer(l.StudentReferrer) : '';
             const bTitle = escapeHtml(l.BookTitle || '도서 미상');
             const bAuthor = escapeHtml(l.BookAuthor || '저자 미상');
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
@@ -1808,10 +1810,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let html = `
                 <div class="detail-header-block">
-                    <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex}) 학생의 학습 기록 ${l.IsSpecial ? '<span class="badge" style="margin-left: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}</div>
+                    <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})${sRef} 학생의 학습 기록 ${l.IsSpecial ? '<span class="badge" style="margin-left: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}</div>
                     <div class="detail-meta-row">
                         <span><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자: <strong>${escapeHtml(l.StudiedDay || '미상')}</strong></span>
-                        <span><i class="fa-solid fa-cake-candles"></i> 학생 생년월일: <strong>${sBirthday}</strong></span>
                         <span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${l.row_id || l.Id}</strong></span>
                     </div>
                 </div>
