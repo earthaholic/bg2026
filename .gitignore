@@ -15,11 +15,15 @@ data.db
 *.db
 *.sqlite3
 
+# Runtime Logs (server_daemon.py)
+logs/
+
 # Oracle Wallet Sensitive Files (Keys & SSOS)
-wallet/*.sso
-wallet/*.p12
-wallet/*.pem
-wallet/*.jks
+wallet/
+
+# SQLite DB 백업 (민감 - 커밋 금지)
+*.bak*
+*.bak-*
 
 # IDE & System Files
 .vscode/
