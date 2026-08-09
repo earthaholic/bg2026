@@ -19,7 +19,7 @@ No tests, no lint/typecheck, no CI, no README. Frontend is a single Jinja2 SPA (
 - Backing store is SQLite `data.db` (gitignored). Oracle ADB (`.env`) is the upstream source.
 - Domain tables `Books`, `Students`, `StudyLogs` are NOT created by app code — they must pre-exist in `data.db` (created by `oracle_sync.py` or manually). Startup only creates the `_app_users` auth table. If `data.db` is deleted, re-run `python oracle_sync.py`.
 - 수업 기능: `init_system_tables()`가 시작 시 `Classes`(Id/ClassName/TeacherUsername/DayOfWeek/StartTime)와 `ClassStudents`(ClassId↔StudentId, UNIQUE)를 생성한다. 수업-학생 관계는 `set_class_students()`로 전체 교체 방식. `StudyLogs`에는 시간 컬럼이 없다(시간 미저장).
-- `StudyLogs`의 `Description`(수업 내용 메모) 컬럼: oracle_sync가 만든 테이블에는 없으므로 `init_system_tables()`가 시작 시 `PRAGMA table_info`로 확인 후 `ALTER TABLE ... ADD COLUMN`으로 보완한다. 일괄 등록 `POST /api/user/classes/{id}/studylogs`는 **단일 `StudiedDay` + `Description` + `logs:[{StudentId, include}]`** 구조(학생별 날짜 없음, 결석은 include=false).
+- `StudyLogs`의 `LessonContent`(수업 내용)·`Description`(수업 내용 메모) 컬럼: oracle_sync가 만든 테이블에는 없으므로 `init_system_tables()`가 시작 시 `PRAGMA table_info`로 확인 후 `ALTER TABLE ... ADD COLUMN`으로 보완한다. 일괄 등록 `POST /api/user/classes/{id}/studylogs`는 **단일 `StudiedDay` + `LessonContent` + `Description` + `logs:[{StudentId, include}]`** 구조(학생별 날짜 없음, 결석은 include=false). UI상 입력 순서는 수업 내용 → 수업 내용 메모.
 
 ## 권한 체계 (Roles)
 JWT `role` 클레임 / `_app_users.role` 기준 3단계:
