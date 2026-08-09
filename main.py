@@ -2,6 +2,8 @@ import os
 import io
 import csv
 import re
+import json
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +40,11 @@ from database import (
     set_class_students,
     get_class_students,
     get_class_student_ids,
-    get_teacher_options
+    get_teacher_options,
+    write_audit_log,
+    get_record_snapshot,
+    get_audit_logs,
+    get_audit_username_options
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from similarity import normalize_key, classify_match
@@ -206,9 +212,13 @@ def user_register_book(
 
     book_data = payload.dict()
     book_data["Title"] = book_data["Title"].strip()
+    book_data["CreatedBy"] = current_user["username"]
 
     try:
         res = insert_table_row("Books", book_data)
+        new_snapshot = get_record_snapshot("Books", res.get("id"))
+        _audit_insert("Books", res.get("id"), new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": f"'{payload.Title}' 도서가 성공적으로 등록되었습니다.",
@@ -422,9 +432,13 @@ def user_register_student(
         
     student_data["Sex"] = (student_data["Sex"] or "").strip()
     student_data["Description"] = (student_data["Description"] or "").strip()
+    student_data["CreatedBy"] = current_user["username"]
 
     try:
         res = insert_table_row("Students", student_data)
+        new_snapshot = get_record_snapshot("Students", res.get("id"))
+        _audit_insert("Students", res.get("id"), new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": f"'{payload.Name}' 학생이 성공적으로 등록되었습니다.",
@@ -647,11 +661,15 @@ def user_register_studylog(
         "StudiedDay": payload.StudiedDay.strip(),
         "IsSpecial": 1 if payload.IsSpecial else 0,
         "LessonContent": (payload.LessonContent or "").strip(),
-        "Description": (payload.Description or "").strip()
+        "Description": (payload.Description or "").strip(),
+        "CreatedBy": current_user["username"]
     }
 
     try:
         res = insert_table_row("StudyLogs", log_data)
+        new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
+        _audit_insert("StudyLogs", res.get("id"), new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "학습 기록이 성공적으로 수록되었습니다.",
@@ -996,9 +1014,14 @@ def user_register_class(
 ):
     _validate_class_payload(payload)
     try:
-        res = create_class(payload.dict())
+        payload_data = payload.dict()
+        payload_data["CreatedBy"] = current_user["username"]
+        res = create_class(payload_data)
         class_id = res.get("id")
         set_class_students(class_id, _class_student_items(payload))
+        new_snapshot = get_record_snapshot("Classes", class_id)
+        _audit_insert("Classes", class_id, new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": f"'{payload.ClassName.strip()}' 수업이 성공적으로 등록되었습니다.",
@@ -1017,8 +1040,15 @@ def user_update_class(
         raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
     _validate_class_payload(payload)
     try:
-        update_class(class_id, payload.dict())
+        old_snapshot = get_record_snapshot("Classes", class_id)
+        payload_data = payload.dict()
+        payload_data["UpdatedBy"] = current_user["username"]
+        payload_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        update_class(class_id, payload_data)
         set_class_students(class_id, _class_student_items(payload))
+        new_snapshot = get_record_snapshot("Classes", class_id)
+        _audit_update("Classes", class_id, old_snapshot, new_snapshot,
+                      current_user["username"], current_user["role"])
         return {"status": "success", "message": "수업 정보가 성공적으로 수정되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"수업 수정 중 오류가 발생했습니다: {str(e)}")
@@ -1031,7 +1061,10 @@ def user_delete_class(
     if not get_class_by_id(class_id):
         raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
     try:
+        old_snapshot = get_record_snapshot("Classes", class_id)
         delete_class(class_id)
+        _audit_delete("Classes", class_id, old_snapshot,
+                      current_user["username"], current_user["role"])
         return {"status": "success", "message": "수업이 성공적으로 삭제되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"수업 삭제 중 오류가 발생했습니다: {str(e)}")
@@ -1120,11 +1153,15 @@ def user_batch_register_class_studylogs(
                 results.append({"StudentId": sid, "Name": name, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
                 continue
 
-            insert_table_row("StudyLogs", {
+            res = insert_table_row("StudyLogs", {
                 "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
                 "LessonContent": lesson_content, "Description": description,
-                "IsSpecial": 1 if item.is_special else 0
+                "IsSpecial": 1 if item.is_special else 0,
+                "CreatedBy": current_user["username"]
             })
+            new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
+            _audit_insert("StudyLogs", res.get("id"), new_snapshot,
+                          current_user["username"], current_user["role"])
             created_count += 1
             results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})
         except Exception as e:
@@ -1152,6 +1189,41 @@ def _resolve_domain_pk(table_name: str, id_val: Any) -> Optional[int]:
     finally:
         conn.close()
 
+# --- 감사 로그(Audit Trail) 헬퍼 ---
+
+def _audit_insert(table_name: str, record_id: Any, new_data: Optional[Dict[str, Any]],
+                  username: str, role: str) -> None:
+    """등록(INSERT) 감사 로그를 기록한다."""
+    write_audit_log(table_name, record_id, "INSERT", None, new_data, None, username, role)
+
+def _audit_update(table_name: str, record_id: Any, old_data: Optional[Dict[str, Any]],
+                  new_data: Optional[Dict[str, Any]], username: str, role: str) -> None:
+    """수정(UPDATE) 감사 로그를 기록한다. 변경된 필드 목록을 자동 추출한다."""
+    changed = [k for k in (new_data or {}) if (old_data or {}).get(k) != (new_data or {}).get(k)]
+    write_audit_log(table_name, record_id, "UPDATE", old_data, new_data, changed, username, role)
+
+def _audit_delete(table_name: str, record_id: Any, old_data: Optional[Dict[str, Any]],
+                  username: str, role: str) -> None:
+    """삭제(DELETE) 감사 로그를 기록한다."""
+    write_audit_log(table_name, record_id, "DELETE", old_data, None, None, username, role)
+
+def _strip_user_password(user_dict: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """계정 정보에서 비밀번호 해시 등 민감정보를 제외한 데이터를 반환한다."""
+    if not user_dict:
+        return None
+    return {k: v for k, v in user_dict.items() if k != "password_hash"}
+
+def _parse_json_field(value: Any) -> Any:
+    """감사 로그의 JSON 문자열 필드를 파싱한다. 파싱 불가 시 원본을 반환한다."""
+    if not value:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
 @app.put("/api/user/books/{book_id}")
 def user_update_book(
     book_id: int,
@@ -1162,7 +1234,14 @@ def user_update_book(
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
     try:
-        res = update_table_row("Books", "rowid", row_id, payload.data)
+        old_snapshot = get_record_snapshot("Books", row_id)
+        update_data = dict(payload.data)
+        update_data["UpdatedBy"] = current_user["username"]
+        update_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        res = update_table_row("Books", "rowid", row_id, update_data)
+        new_snapshot = get_record_snapshot("Books", row_id)
+        _audit_update("Books", row_id, old_snapshot, new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "도서 정보가 성공적으로 수정되었습니다.",
@@ -1180,7 +1259,10 @@ def user_delete_book(
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
     try:
+        old_snapshot = get_record_snapshot("Books", row_id)
         res = delete_table_row("Books", "rowid", row_id)
+        _audit_delete("Books", row_id, old_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "도서가 성공적으로 삭제되었습니다.",
@@ -1199,7 +1281,14 @@ def user_update_student(
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
     try:
-        res = update_table_row("Students", "rowid", row_id, payload.data)
+        old_snapshot = get_record_snapshot("Students", row_id)
+        update_data = dict(payload.data)
+        update_data["UpdatedBy"] = current_user["username"]
+        update_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        res = update_table_row("Students", "rowid", row_id, update_data)
+        new_snapshot = get_record_snapshot("Students", row_id)
+        _audit_update("Students", row_id, old_snapshot, new_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "학생 정보가 성공적으로 수정되었습니다.",
@@ -1217,7 +1306,10 @@ def user_delete_student(
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
     try:
+        old_snapshot = get_record_snapshot("Students", row_id)
         res = delete_table_row("Students", "rowid", row_id)
+        _audit_delete("Students", row_id, old_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "학생이 성공적으로 삭제되었습니다.",
@@ -1235,7 +1327,10 @@ def user_delete_studylog(
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
     try:
+        old_snapshot = get_record_snapshot("StudyLogs", row_id)
         res = delete_table_row("StudyLogs", "rowid", row_id)
+        _audit_delete("StudyLogs", row_id, old_snapshot,
+                      current_user["username"], current_user["role"])
         return {
             "status": "success",
             "message": "학습 기록이 성공적으로 삭제되었습니다.",
@@ -1435,6 +1530,9 @@ def admin_create_user(
 
     try:
         res = create_user(username, payload.password, payload.role)
+        user_row = _strip_user_password(get_user_by_id(res.get("id")))
+        _audit_insert("_app_users", res.get("id"), user_row,
+                      current_admin["username"], current_admin["role"])
         return {
             "status": "success",
             "message": f"'{username}' 계정이 성공적으로 발급되었습니다.",
@@ -1458,6 +1556,8 @@ def admin_reset_user_password(
         raise HTTPException(status_code=400, detail="관리자(admin) 계정은 비밀번호를 변경할 수 없습니다.")
 
     update_user_password(user_id, payload.password)
+    write_audit_log("_app_users", user_id, "UPDATE", None, None, ["password_hash"],
+                    current_admin["username"], current_admin["role"])
     return {"status": "success", "message": "비밀번호가 성공적으로 초기화되었습니다."}
 
 
@@ -1478,6 +1578,10 @@ def admin_update_user_role(
         raise HTTPException(status_code=400, detail="관리자(admin) 계정의 역할은 변경할 수 없습니다.")
 
     update_user_role(user_id, payload.role)
+    _audit_update("_app_users", user_id,
+                  _strip_user_password(user),
+                  _strip_user_password(get_user_by_id(user_id)),
+                  current_admin["username"], current_admin["role"])
     return {"status": "success", "message": "계정 역할이 성공적으로 변경되었습니다."}
 
 
@@ -1493,7 +1597,55 @@ def admin_delete_user(
         raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다.")
 
     delete_user(user_id)
+    _audit_delete("_app_users", user_id, _strip_user_password(user),
+                  current_admin["username"], current_admin["role"])
     return {"status": "success", "message": "계정이 성공적으로 삭제되었습니다."}
+
+
+# --- 감사 로그(Audit Trail) 조회 APIs (Admin Only) ---
+
+@app.get("/api/admin/audit-logs/users")
+def admin_audit_username_options(current_admin: Dict[str, Any] = Depends(get_current_admin)):
+    """감사 로그 필터용 계정 목록을 반환한다."""
+    return {"users": get_audit_username_options()}
+
+
+@app.get("/api/admin/audit-logs")
+def admin_list_audit_logs(
+    username: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    table_name: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    record_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """계정별 변경 이력을 필터링해 조회한다. (계정·기간 필수 조합 지원)"""
+    rows, total_count = get_audit_logs(
+        table_name=table_name,
+        record_id=record_id,
+        username=username,
+        action=action,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        limit=limit
+    )
+    for r in rows:
+        r["old_data"] = _parse_json_field(r.get("old_data"))
+        r["new_data"] = _parse_json_field(r.get("new_data"))
+        r["changed_fields"] = _parse_json_field(r.get("changed_fields"))
+
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+    return {
+        "logs": rows,
+        "page": page,
+        "limit": limit,
+        "total_count": total_count,
+        "total_pages": total_pages
+    }
 
 
 if __name__ == "__main__":

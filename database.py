@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import json
 from typing import List, Dict, Any, Optional, Tuple
 from config import settings
 
@@ -72,7 +73,10 @@ def init_system_tables():
             "TeacherUsername" TEXT NOT NULL,
             "DayOfWeek" TEXT NOT NULL,
             "StartTime" TEXT DEFAULT '',
-            "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT ''
         )
     """)
     cursor.execute("""
@@ -93,7 +97,17 @@ def init_system_tables():
     except Exception:
         pass
 
-    # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description)·특강 여부(IsSpecial) 컬럼 추가
+    # Classes에 감사 추적 컬럼 보완 (기존 DB 대응)
+    try:
+        cursor.execute('PRAGMA table_info("Classes")')
+        classes_cols = [r["name"] for r in cursor.fetchall()]
+        for _col in ["CreatedBy", "UpdatedBy", "UpdatedAt"]:
+            if _col not in classes_cols:
+                cursor.execute(f'ALTER TABLE "Classes" ADD COLUMN "{_col}" TEXT DEFAULT \'\'')
+    except Exception:
+        pass
+
+    # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description)·특강 여부(IsSpecial)·감사 추적 컬럼 추가
     # (StudyLogs는 oracle_sync.py가 만들므로, 재생성 후에도 시작 시점에 보완한다)
     # IsSpecial: 특강 여부 플래그. 기본값 0(FALSE), 일괄 등록 시 학생별로 기록된다.
     try:
@@ -103,11 +117,62 @@ def init_system_tables():
             ("Description", "TEXT DEFAULT ''"),
             ("LessonContent", "TEXT DEFAULT ''"),
             ("IsSpecial", "INTEGER DEFAULT 0"),
+            ("CreatedBy", "TEXT DEFAULT ''"),
+            ("UpdatedBy", "TEXT DEFAULT ''"),
+            ("UpdatedAt", "TEXT DEFAULT ''"),
         ]:
             if _col not in studylog_cols:
                 cursor.execute(f'ALTER TABLE "StudyLogs" ADD COLUMN "{_col}" {_ddl}')
     except Exception:
         pass  # StudyLogs 테이블이 아직 없으면 스킵 (oracle_sync 후 생성됨)
+
+    # Books에 감사 추적 컬럼 보완 (기존 DB 대응)
+    try:
+        cursor.execute('PRAGMA table_info("Books")')
+        books_cols = [r["name"] for r in cursor.fetchall()]
+        for _col in ["CreatedBy", "UpdatedBy", "UpdatedAt"]:
+            if _col not in books_cols:
+                cursor.execute(f'ALTER TABLE "Books" ADD COLUMN "{_col}" TEXT DEFAULT \'\'')
+    except Exception:
+        pass  # Books 테이블이 아직 없으면 스킵
+
+    # Students에 감사 추적 컬럼 보완 (기존 DB 대응)
+    try:
+        cursor.execute('PRAGMA table_info("Students")')
+        students_cols = [r["name"] for r in cursor.fetchall()]
+        for _col in ["CreatedBy", "UpdatedBy", "UpdatedAt"]:
+            if _col not in students_cols:
+                cursor.execute(f'ALTER TABLE "Students" ADD COLUMN "{_col}" TEXT DEFAULT \'\'')
+    except Exception:
+        pass  # Students 테이블이 아직 없으면 스킵
+
+    # 감사 로그 테이블 생성
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS _app_audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            action TEXT NOT NULL CHECK(action IN ('INSERT','UPDATE','DELETE')),
+            old_data TEXT,
+            new_data TEXT,
+            changed_fields TEXT,
+            username TEXT NOT NULL,
+            user_role TEXT NOT NULL,
+            ip_address TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    """)
+
+    # 감사 로그 인덱스 생성
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_table_record ON _app_audit_logs(table_name, record_id)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_username ON _app_audit_logs(username)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_created_at ON _app_audit_logs(created_at)
+    """)
 
     conn.commit()
     conn.close()
@@ -403,9 +468,10 @@ def create_class(class_data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO "Classes" ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime") VALUES (?, ?, ?, ?)',
+        'INSERT INTO "Classes" ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "CreatedBy") VALUES (?, ?, ?, ?, ?)',
         (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
-         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "")
+         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "",
+         class_data.get("CreatedBy", ""))
     )
     conn.commit()
     inserted_id = cursor.lastrowid
@@ -416,9 +482,10 @@ def update_class(class_id: int, class_data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'UPDATE "Classes" SET "ClassName" = ?, "TeacherUsername" = ?, "DayOfWeek" = ?, "StartTime" = ? WHERE "Id" = ?',
+        'UPDATE "Classes" SET "ClassName" = ?, "TeacherUsername" = ?, "DayOfWeek" = ?, "StartTime" = ?, "UpdatedBy" = ?, "UpdatedAt" = ? WHERE "Id" = ?',
         (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
-         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "", class_id)
+         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "",
+         class_data.get("UpdatedBy", ""), class_data.get("UpdatedAt", ""), class_id)
     )
     conn.commit()
     rowcount = cursor.rowcount
@@ -543,6 +610,177 @@ def get_teacher_options() -> List[Dict[str, Any]]:
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager') ORDER BY username ASC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# --- 감사 추적(Audit Trail) 함수 ---
+
+def write_audit_log(
+    table_name: str,
+    record_id: Any,
+    action: str,
+    old_data: Optional[Dict[str, Any]],
+    new_data: Optional[Dict[str, Any]],
+    changed_fields: Optional[List[str]],
+    username: str,
+    user_role: str,
+    ip_address: str = ""
+) -> None:
+    """감사 로그를 기록한다.
+    
+    Args:
+        table_name: 테이블 이름
+        record_id: 레코드 ID (rowid 또는 Id)
+        action: 작업 유형 ('INSERT', 'UPDATE', 'DELETE')
+        old_data: 변경 전 데이터 (딕셔너리 또는 None)
+        new_data: 변경 후 데이터 (딕셔너리 또는 None)
+        changed_fields: 변경된 필드 목록 (리스트 또는 None)
+        username: 작업 수행자 사용자명
+        user_role: 작업 수행자 역할
+        ip_address: 요청 IP 주소 (기본값: '')
+    """
+    if action not in ('INSERT', 'UPDATE', 'DELETE'):
+        raise ValueError(f"유효하지 않은 작업: {action}")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    old_data_json = json.dumps(old_data, ensure_ascii=False) if old_data else None
+    new_data_json = json.dumps(new_data, ensure_ascii=False) if new_data else None
+    changed_fields_json = json.dumps(changed_fields, ensure_ascii=False) if changed_fields else None
+    
+    cursor.execute("""
+        INSERT INTO _app_audit_logs (table_name, record_id, action, old_data, new_data, changed_fields, username, user_role, ip_address)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (table_name, str(record_id), action, old_data_json, new_data_json, changed_fields_json, username, user_role, ip_address))
+    
+    conn.commit()
+    conn.close()
+
+
+def get_record_snapshot(table_name: str, record_id: Any) -> Optional[Dict[str, Any]]:
+    """테이블에서 레코드의 현재 스냅샷을 조회한다.
+    
+    Args:
+        table_name: 테이블 이름
+        record_id: 레코드 ID (rowid 또는 Id)
+    
+    Returns:
+        레코드 데이터 딕셔너리 또는 None
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute(
+            f'SELECT * FROM "{table_name}" WHERE rowid = ? OR "Id" = ?',
+            (record_id, record_id)
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+        return None
+    finally:
+        conn.close()
+
+
+def get_audit_logs(
+    table_name: Optional[str] = None,
+    record_id: Optional[str] = None,
+    username: Optional[str] = None,
+    action: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20
+) -> Tuple[List[Dict[str, Any]], int]:
+    """감사 로그를 조회한다.
+    
+    Args:
+        table_name: 테이블 이름 필터 (선택사항)
+        record_id: 레코드 ID 필터 (선택사항)
+        username: 사용자명 필터 (선택사항)
+        action: 작업 유형 필터 (선택사항, 쉼표 구분 문자열 또는 단일 값)
+        date_from: 시작 날짜 필터 (YYYY-MM-DD 형식)
+        date_to: 종료 날짜 필터 (YYYY-MM-DD 형식)
+        page: 페이지 번호 (1부터 시작)
+        limit: 페이지당 행 수 (최대 100)
+    
+    Returns:
+        (로그 행 리스트, 전체 행 수) 튜플
+    """
+    limit = min(limit, 100)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    conditions = []
+    params = []
+    
+    if table_name:
+        conditions.append("table_name = ?")
+        params.append(table_name)
+    
+    if record_id:
+        conditions.append("record_id = ?")
+        params.append(record_id)
+    
+    if username:
+        conditions.append("username = ?")
+        params.append(username)
+    
+    if action:
+        if isinstance(action, str):
+            action_list = [a.strip() for a in action.split(",")]
+        else:
+            action_list = [action]
+        
+        placeholders = ", ".join(["?"] * len(action_list))
+        conditions.append(f"action IN ({placeholders})")
+        params.extend(action_list)
+    
+    if date_from:
+        conditions.append("created_at >= ?")
+        params.append(date_from)
+    
+    if date_to:
+        conditions.append("created_at <= ?")
+        params.append(date_to + " 23:59:59")
+    
+    where_clause = ""
+    if conditions:
+        where_clause = " WHERE " + " AND ".join(conditions)
+    
+    # 전체 행 수 조회
+    count_query = f"SELECT COUNT(*) as total FROM _app_audit_logs{where_clause}"
+    cursor.execute(count_query, params)
+    total_count = cursor.fetchone()['total']
+    
+    # 페이지네이션 조회
+    offset = (page - 1) * limit
+    data_query = f"""
+        SELECT * FROM _app_audit_logs{where_clause}
+        ORDER BY id DESC
+        LIMIT {limit} OFFSET {offset}
+    """
+    cursor.execute(data_query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(r) for r in rows], total_count
+
+
+def get_audit_username_options() -> List[Dict[str, str]]:
+    """감사 로그 필터용 계정 목록을 반환한다.
+    감사 로그에 기록된 계정과 현재 존재하는 계정을 합쳐 중복 없이 정렬한다.
+    (삭제된 계정도 과거 이력 조회를 위해 포함된다.)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT username FROM _app_audit_logs UNION SELECT username FROM _app_users ORDER BY username"
     )
     rows = cursor.fetchall()
     conn.close()
