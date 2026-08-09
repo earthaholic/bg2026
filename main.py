@@ -689,6 +689,7 @@ def user_get_recent_studylogs(current_user: Dict[str, Any] = Depends(get_current
     query = '''
         SELECT sl.rowid as row_id, sl.*, 
                s.Name as StudentName, s.Sex as StudentSex, s.Birthday as StudentBirthday,
+               s.Grade as StudentGrade, s.Referrer as StudentReferrer,
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher
         FROM "StudyLogs" sl
         LEFT JOIN "Students" s ON sl.StudentId = s.rowid OR sl.StudentId = s.Id
@@ -716,8 +717,8 @@ def user_search_studylogs(
 
     if q and q.strip():
         search_pattern = f"%{q.strip()}%"
-        conditions.append('(s.Name LIKE ? OR b.Title LIKE ? OR b.Author LIKE ? OR b.Publisher LIKE ?)')
-        params.extend([search_pattern] * 4)
+        conditions.append('(s.Name LIKE ? OR b.Title LIKE ? OR b.Author LIKE ? OR b.Publisher LIKE ? OR s.Referrer LIKE ?)')
+        params.extend([search_pattern] * 5)
 
     if studied_day and studied_day.strip():
         conditions.append('sl.StudiedDay LIKE ?')
@@ -741,6 +742,7 @@ def user_search_studylogs(
     data_query = f'''
         SELECT sl.rowid as row_id, sl.*, 
                s.Name as StudentName, s.Sex as StudentSex, s.Birthday as StudentBirthday,
+               s.Grade as StudentGrade, s.Referrer as StudentReferrer,
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher, b.Subject as BookSubject
         FROM "StudyLogs" sl
         LEFT JOIN "Students" s ON sl.StudentId = s.rowid OR sl.StudentId = s.Id
@@ -772,6 +774,7 @@ def user_get_studylog_detail(
     query = '''
         SELECT sl.rowid as row_id, sl.*, 
                s.Name as StudentName, s.Sex as StudentSex, s.Birthday as StudentBirthday, s.Description as StudentDescription,
+               s.Grade as StudentGrade, s.Referrer as StudentReferrer,
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher, b.Subject as BookSubject, b.Target as BookTarget,
                b.BookLength, b.Voca, b.Metaphor, b.HasQuiz, b.HasReadingQuestion, b.HasReadingAnswer, b.HasWritingQuestion, b.HasWritingAnswer,
                b.HasAdvancedMaterial, b.HasDebateMaterial, b.IsPaperbookExist, b.IsPdfExist, b.IsYes24Exist, b.IsMillieExist, b.Desc as BookDesc
