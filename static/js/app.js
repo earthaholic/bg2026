@@ -4590,8 +4590,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sId = s.row_id || s.Id;
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
-                const birthday = formatBirthday(s.Birthday);
-                html += `<option value="${sId}">${name} (${sex}) - 生 ${birthday} [#${sId}]</option>`;
+                html += `<option value="${sId}">${name} (${sex}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} [#${sId}]</option>`;
             });
             select.innerHTML = html;
             if (selectedStudentId) {
