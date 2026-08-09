@@ -1451,7 +1451,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const descEl = document.getElementById('studylog-desc');
         const desc = descEl ? descEl.value.trim() : '';
-        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, Description: desc };
+        const contentEl = document.getElementById('studylog-content');
+        const content = contentEl ? contentEl.value.trim() : '';
+        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, LessonContent: content, Description: desc };
 
         try {
             const result = await apiFetch('/api/user/studylogs', {
@@ -1623,7 +1625,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const bSubject = escapeHtml(l.BookSubject || '분야 미상');
 
-            // 수업 내용 메모 (있을 때만 표시)
+            // 수업 내용 + 수업 내용 메모 (있을 때만 표시, 수업 내용이 앞)
+            const contentHtml = (l.LessonContent && l.LessonContent.trim()) ? `
+                <div style="margin-top: 1rem;">
+                    <div class="detail-section-title"><i class="fa-solid fa-book-open"></i> 수업 내용</div>
+                    <div class="detail-desc-box" style="white-space: pre-wrap; background: var(--bg-surface); padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        ${escapeHtml(l.LessonContent)}
+                    </div>
+                </div>
+            ` : '';
             const descHtml = (l.Description && l.Description.trim()) ? `
                 <div style="margin-top: 1rem;">
                     <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 수업 내용 메모</div>
@@ -1665,6 +1675,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 </div>
+
+                ${contentHtml}
 
                 ${descHtml}
             `;
@@ -4016,6 +4028,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const descEl = document.getElementById('batch-description');
         const desc = descEl ? descEl.value.trim() : '';
+        const contentEl = document.getElementById('batch-lesson-content');
+        const content = contentEl ? contentEl.value.trim() : '';
 
         const logs = [];
         document.querySelectorAll('.batch-attend').forEach(chk => {
@@ -4030,7 +4044,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, Description: desc, logs: logs })
+                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, Description: desc, logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {
