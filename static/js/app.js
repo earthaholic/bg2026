@@ -1647,23 +1647,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const bSubject = escapeHtml(l.BookSubject || '분야 미상');
 
-            // 수업 내용 + 수업 내용 메모 (있을 때만 표시, 수업 내용이 앞)
-            const contentHtml = (l.LessonContent && l.LessonContent.trim()) ? `
+            // 수업 내용 + 수업 내용 메모 (항상 표시, 수업 내용이 앞. 값이 없으면 안내 문구)
+            const lc = (l.LessonContent || '').trim();
+            const dc = (l.Description || '').trim();
+            const contentHtml = `
                 <div style="margin-top: 1rem;">
                     <div class="detail-section-title"><i class="fa-solid fa-book-open"></i> 수업 내용</div>
                     <div class="detail-desc-box" style="white-space: pre-wrap; background: var(--bg-surface); padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                        ${escapeHtml(l.LessonContent)}
+                        ${lc ? escapeHtml(lc) : '<span class="text-muted" style="font-size: 0.8rem;">작성된 수업 내용이 없습니다.</span>'}
                     </div>
                 </div>
-            ` : '';
-            const descHtml = (l.Description && l.Description.trim()) ? `
+            `;
+            const descHtml = `
                 <div style="margin-top: 1rem;">
                     <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 수업 내용 메모</div>
                     <div class="detail-desc-box" style="white-space: pre-wrap; background: var(--bg-surface); padding: 0.9rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                        ${escapeHtml(l.Description)}
+                        ${dc ? escapeHtml(dc) : '<span class="text-muted" style="font-size: 0.8rem;">작성된 메모가 없습니다.</span>'}
                     </div>
                 </div>
-            ` : '';
+            `;
 
             let html = `
                 <div class="detail-header-block">
