@@ -41,6 +41,7 @@ from database import (
     get_teacher_options
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
+from similarity import normalize_key, classify_match
 
 app = FastAPI(
     title="bg2026 - 꿈꾸는봄결 데이터 관리 시스템",
@@ -348,6 +349,44 @@ def get_gdrive_files_for_book(title: str) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[Google Drive Service Error] {e}")
         return []
+
+@app.get("/api/user/books/similar")
+def user_get_similar_books(
+    q: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    new_title = (q or "").strip()
+    new_key = normalize_key(new_title)
+    if not new_key:
+        return {"total": 0, "summary": {"exact": 0, "contains": 0, "similar": 0}, "matches": []}
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT rowid as row_id, * FROM "Books"')
+    rows = cursor.fetchall()
+    conn.close()
+
+    rank = {"exact": 0, "contains": 1, "similar": 2}
+    results = []
+    for r in rows:
+        key = normalize_key(r["Title"] or "")
+        mt = classify_match(new_key, key)
+        if mt:
+            results.append({"match_type": mt, "norm_len": len(key), "row": r})
+
+    results.sort(key=lambda item: (rank[item["match_type"]], abs(len(new_key) - item["norm_len"]), item["row"]["row_id"]))
+
+    summary = {"exact": 0, "contains": 0, "similar": 0}
+    for item in results:
+        summary[item["match_type"]] += 1
+
+    matches = [
+        {"row_id": item["row"]["row_id"], "Id": item["row"]["Id"], "Title": item["row"]["Title"],
+         "Author": item["row"]["Author"], "Publisher": item["row"]["Publisher"],
+         "match_type": item["match_type"]}
+        for item in results[:10]
+    ]
+    return {"total": len(results), "summary": summary, "matches": matches}
 
 @app.get("/api/user/books/{book_id}")
 def user_get_book_detail(
