@@ -476,8 +476,8 @@ def user_search_students(
 
     if q and q.strip():
         search_pattern = f"%{q.strip()}%"
-        conditions.append('("Name" LIKE ? OR "Birthday" LIKE ? OR "Description" LIKE ?)')
-        params.extend([search_pattern] * 3)
+        conditions.append('("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)')
+        params.extend([search_pattern] * 4)
 
     if sex and sex.strip():
         s_val = sex.strip().upper()
@@ -619,8 +619,8 @@ def picker_search_students(
     params = []
     if q and q.strip():
         pattern = f"%{q.strip()}%"
-        where_str = ' WHERE ("Name" LIKE ? OR "Birthday" LIKE ? OR "Description" LIKE ?)'
-        params = [pattern] * 3
+        where_str = ' WHERE ("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)'
+        params = [pattern] * 4
 
     cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT 25', params)
     rows = cursor.fetchall()
