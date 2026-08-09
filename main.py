@@ -466,6 +466,7 @@ def user_get_recent_students(current_user: Dict[str, Any] = Depends(get_current_
 def user_search_students(
     q: Optional[str] = Query(None),
     sex: Optional[str] = Query(None),
+    include_ended: bool = Query(False),
     page: int = Query(1, ge=1),
     limit: int = Query(12, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -490,6 +491,9 @@ def user_search_students(
         else:
             conditions.append('"Sex" LIKE ?')
             params.append(f"%{sex.strip()}%")
+
+    if not include_ended:
+        conditions.append('(COALESCE("IsClassEnded", 0) = 0)')
 
     where_str = ""
     if conditions:
