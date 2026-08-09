@@ -33,6 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
     let classRegSelectedStudentIds = new Set(); // 수업 등록 폼에서 선택된 학생 ID (필터 재렌더 시에도 유지)
     let classRegStudentSpecialIds = new Set(); // 수업 등록 폼에서 특강으로 지정된 학생 ID (배정된 학생만 유효)
+    let classEditSelectedStudentIds = new Set(); // 수업 편집 폼에서 선택된 학생 ID (필터 재렌더 시에도 유지)
+    let classEditStudentSpecialIds = new Set(); // 수업 편집 폼에서 특강으로 지정된 학생 ID (배정된 학생만 유효)
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
@@ -900,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         if (classStudentFilter) {
-            classStudentFilter.addEventListener('input', renderClassStudentCheckboxList);
+            classStudentFilter.addEventListener('input', () => renderStudentCheckboxList(classStudentList, classStudentFilter, classRegSelectedStudentIds, classRegStudentSpecialIds, classSelectedCount, document.getElementById('class-selected-names')));
         }
 
         // Class Detail Modal Close
@@ -3734,24 +3736,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return html || '<div class="empty-state" style="padding: 1rem;"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
     }
 
-    function updateClassSelectedCount() {
-        if (classSelectedCount) {
-            classSelectedCount.textContent = classRegSelectedStudentIds.size;
+    // 선택된 학생 카운트/이름 태그 렌더 (등록/편집 폼 공용, classAllStudentsCache는 전역 참조)
+    function updateSelectedCount(selectedSet, specialSet, countEl, namesEl) {
+        if (countEl) {
+            countEl.textContent = selectedSet.size;
         }
         // 선택된 학생 이름 태그 렌더링 (선택 개수와 함께 이름을 보여준다)
-        const namesEl = document.getElementById('class-selected-names');
         if (!namesEl) return;
-        if (classRegSelectedStudentIds.size === 0) {
+        if (selectedSet.size === 0) {
             namesEl.innerHTML = '';
             return;
         }
         const names = [];
         classAllStudentsCache.forEach(s => {
             const sId = s.row_id || s.Id;
-            if (classRegSelectedStudentIds.has(sId)) {
+            if (selectedSet.has(sId)) {
                 names.push({
                     name: escapeHtml(s.Name || `학생 #${sId}`),
-                    special: classRegStudentSpecialIds.has(sId)
+                    special: specialSet.has(sId)
                 });
             }
         });
@@ -3761,24 +3763,24 @@ document.addEventListener('DOMContentLoaded', () => {
         ).join('');
     }
 
-    // 수업 등록 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
-    // 선택 상태는 DOM이 아닌 classRegSelectedStudentIds(Set)에 보관하므로,
+    // 수업 등록/편집 폼의 학생 체크박스 목록 렌더 (검색 필터 반영)
+    // 선택 상태는 DOM이 아닌 Set(selectedSet/specialSet)에 보관하므로,
     // 필터로 학생을 검색해도 기존에 선택한 학생의 선택이 유지된다.
-    function renderClassStudentCheckboxList() {
-        if (!classStudentList) return;
-        const filterText = classStudentFilter ? classStudentFilter.value : '';
-        classStudentList.innerHTML = buildStudentCheckboxListHtml(filterText, classRegSelectedStudentIds, classRegStudentSpecialIds);
-        updateClassSelectedCount();
-        classStudentList.querySelectorAll('input.cs-chk').forEach(cb => {
+    function renderStudentCheckboxList(listEl, filterEl, selectedSet, specialSet, countEl, namesEl) {
+        if (!listEl) return;
+        const filterText = filterEl ? filterEl.value : '';
+        listEl.innerHTML = buildStudentCheckboxListHtml(filterText, selectedSet, specialSet);
+        updateSelectedCount(selectedSet, specialSet, countEl, namesEl);
+        listEl.querySelectorAll('input.cs-chk').forEach(cb => {
             cb.addEventListener('change', () => {
                 const sid = parseInt(cb.value);
                 if (cb.checked) {
-                    classRegSelectedStudentIds.add(sid);
+                    selectedSet.add(sid);
                 } else {
-                    classRegSelectedStudentIds.delete(sid);
-                    classRegStudentSpecialIds.delete(sid); // 배정 해제 시 특강 지정도 해제
+                    selectedSet.delete(sid);
+                    specialSet.delete(sid); // 배정 해제 시 특강 지정도 해제
                 }
-                updateClassSelectedCount();
+                updateSelectedCount(selectedSet, specialSet, countEl, namesEl);
                 // 동일 행의 특강 체크박스 활성/비활성 동기화
                 const row = cb.closest('.class-student-checkbox-item');
                 const sp = row ? row.querySelector('input.cs-special-chk') : null;
@@ -3790,15 +3792,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
-        classStudentList.querySelectorAll('input.cs-special-chk').forEach(cb => {
+        listEl.querySelectorAll('input.cs-special-chk').forEach(cb => {
             cb.addEventListener('change', () => {
                 const sid = parseInt(cb.value);
                 if (cb.checked) {
-                    classRegStudentSpecialIds.add(sid);
+                    specialSet.add(sid);
                 } else {
-                    classRegStudentSpecialIds.delete(sid);
+                    specialSet.delete(sid);
                 }
-                updateClassSelectedCount();
+                updateSelectedCount(selectedSet, specialSet, countEl, namesEl);
             });
         });
     }
@@ -3829,7 +3831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             teacherSelect.innerHTML = thtml;
             classAllStudentsCache = sData.students || [];
-            renderClassStudentCheckboxList();
+            renderStudentCheckboxList(classStudentList, classStudentFilter, classRegSelectedStudentIds, classRegStudentSpecialIds, classSelectedCount, document.getElementById('class-selected-names'));
         } catch (err) {
             classStudentList.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
@@ -4025,6 +4027,9 @@ document.addEventListener('DOMContentLoaded', () => {
             classAllStudentsCache = sData.students || [];
             const checkedIds = new Set(students.map(s => s.row_id || s.Id));
             const specialIds = new Set(students.filter(s => s.IsSpecial).map(s => s.row_id || s.Id));
+            // 다른 수업에서 남은 stale 선택 상태 방지를 위해 진입 시 현재 수업 기준으로 초기화
+            classEditSelectedStudentIds = new Set(checkedIds);
+            classEditStudentSpecialIds = new Set(specialIds);
 
             let teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>';
             (tData.teachers || []).forEach(t => {
@@ -4035,7 +4040,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
                 `<option value="${d}" ${cls.DayOfWeek === d ? 'selected' : ''}>${DAY_LABELS[d]}</option>`
             ).join('');
-            const studentCheckboxes = buildStudentCheckboxListHtml('', checkedIds, specialIds);
 
             modalClassDetailBody.innerHTML = `
                 <form id="form-modal-edit-class" class="modal-edit-form">
@@ -4064,7 +4068,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-section">
                         <h4 class="section-title"><i class="fa-solid fa-users"></i> 수강 학생 배정</h4>
                         <div class="form-group">
-                            <div class="class-student-checkbox-list">${studentCheckboxes}</div>
+                            <div class="picker-input-group">
+                                <input type="text" id="modal-class-edit-student-filter" class="form-control" placeholder="학생 이름으로 검색하여 목록을 필터링...">
+                            </div>
+                            <div id="modal-class-edit-student-list" class="class-student-checkbox-list"></div>
+                            <div class="class-selected-info">
+                                <i class="fa-solid fa-user-check"></i> 선택된 학생: <strong id="modal-class-edit-selected-count">0</strong>명
+                                <div id="modal-class-edit-selected-names" class="class-selected-names"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-actions">
@@ -4075,6 +4086,22 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             document.getElementById('btn-cancel-modal-edit-class').addEventListener('click', () => openClassDetailModal(classId));
             document.getElementById('form-modal-edit-class').addEventListener('submit', (e) => handleAdminSaveDetailClass(e, cls, classId));
+            document.getElementById('modal-class-edit-student-filter').addEventListener('input', () => renderStudentCheckboxList(
+                document.getElementById('modal-class-edit-student-list'),
+                document.getElementById('modal-class-edit-student-filter'),
+                classEditSelectedStudentIds,
+                classEditStudentSpecialIds,
+                document.getElementById('modal-class-edit-selected-count'),
+                document.getElementById('modal-class-edit-selected-names')
+            ));
+            renderStudentCheckboxList(
+                document.getElementById('modal-class-edit-student-list'),
+                document.getElementById('modal-class-edit-student-filter'),
+                classEditSelectedStudentIds,
+                classEditStudentSpecialIds,
+                document.getElementById('modal-class-edit-selected-count'),
+                document.getElementById('modal-class-edit-selected-names')
+            );
         } catch (err) {
             modalClassDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
@@ -4090,10 +4117,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const teacher = f.querySelector('[name="TeacherUsername"]').value;
         const day = f.querySelector('[name="DayOfWeek"]').value;
         const time = f.querySelector('[name="StartTime"]').value || '';
-        const studentIds = Array.from(f.querySelectorAll('input.cs-chk:checked')).map(cb => parseInt(cb.value));
+        const studentIds = Array.from(classEditSelectedStudentIds);
         const specialMap = {};
-        f.querySelectorAll('input.cs-special-chk:checked').forEach(cb => {
-            const sid = parseInt(cb.value);
+        classEditStudentSpecialIds.forEach(sid => {
             if (studentIds.includes(sid)) specialMap[sid] = true;
         });
         if (!name) { alertEl.className = 'alert alert-danger'; alertEl.textContent = '수업명은 필수 입력 항목입니다.'; alertEl.classList.remove('hidden'); return; }
