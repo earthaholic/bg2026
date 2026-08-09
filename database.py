@@ -146,6 +146,19 @@ def init_system_tables():
     except Exception:
         pass  # Students 테이블이 아직 없으면 스킵
 
+    # Students에 등록 학년(Grade)·추천인(Referrer) 컬럼 보완 (기존 DB 대응)
+    try:
+        cursor.execute('PRAGMA table_info("Students")')
+        students_cols = [r["name"] for r in cursor.fetchall()]
+        for _col, _ddl in [
+            ("Grade", "TEXT DEFAULT ''"),
+            ("Referrer", "TEXT DEFAULT ''"),
+        ]:
+            if _col not in students_cols:
+                cursor.execute(f'ALTER TABLE "Students" ADD COLUMN "{_col}" {_ddl}')
+    except Exception:
+        pass  # Students 테이블이 아직 없으면 스킵
+
     # 감사 로그 테이블 생성
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS _app_audit_logs (
