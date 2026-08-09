@@ -1351,15 +1351,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sId = s.row_id || s.Id;
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
-                const birthday = formatBirthday(s.Birthday);
                 html += `
                     <div class="picker-item-row">
                         <div class="item-main">
                             <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex})</div>
-                            <div class="item-sub">생년월일: ${birthday} | ID: #${sId}</div>
+                            <div class="item-sub">학년: ${formatGrade(s.Grade)}${s.Referrer ? ' · 추천: ' + formatReferrer(s.Referrer) : ''} | ID: #${sId}</div>
                         </div>
                         <button type="button" class="btn btn-sm btn-primary btn-select-student-picker"
-                                data-id="${sId}" data-name="${name}" data-sex="${sex}" data-birthday="${birthday}">
+                                data-id="${sId}" data-name="${name}" data-sex="${sex}" data-grade="${formatGrade(s.Grade)}" data-referrer="${formatReferrer(s.Referrer)}">
                             <i class="fa-solid fa-check"></i> 선택
                         </button>
                     </div>
@@ -1372,7 +1371,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const id = btn.getAttribute('data-id');
                     const name = btn.getAttribute('data-name');
                     const sex = btn.getAttribute('data-sex');
-                    const birthday = btn.getAttribute('data-birthday');
+                    const grade = btn.getAttribute('data-grade');
+                    const referrer = btn.getAttribute('data-referrer');
 
                     if (activeStudentPickerTarget === 'monthly') {
                         const monthlySelect = document.getElementById('monthly-report-student-select');
@@ -1392,13 +1392,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const elModal = document.getElementById('modal-student-picker');
 
                     if (elId) elId.value = id;
-                    if (elDisp) elDisp.value = `${name} (${sex}) - 生 ${birthday}`;
+                    if (elDisp) elDisp.value = `${name} (${sex}) - 학년 ${grade}${referrer ? ' · 추천: ' + referrer : ''}`;
                     
                     if (elPrev) {
                         elPrev.innerHTML = `
                             <div class="preview-info">
                                 <div class="preview-title"><i class="fa-solid fa-circle-check"></i> 선택된 학생: ${name}</div>
-                                <div class="preview-meta">성별: ${sex} | 생년월일: ${birthday} | ID: #${id}</div>
+                                <div class="preview-meta">성별: ${sex} | 학년: ${grade}${referrer ? ' · 추천: ' + referrer : ''} | ID: #${id}</div>
                             </div>
                         `;
                         elPrev.classList.remove('hidden');
