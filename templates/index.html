@@ -444,14 +444,40 @@
                         <!-- Book Results Summary Bar -->
                         <div class="results-bar">
                             <span id="search-total-count" class="badge badge-info">총 0 건의 도서</span>
-                            <span class="text-muted">카드를 클릭하면 상세 정보를 확인하실 수 있습니다.</span>
+                            <span class="text-muted">목록에서 항목을 선택하면 상세 정보를 확인하거나 보유 자료 여부를 즉시 수정할 수 있습니다.</span>
                         </div>
 
-                        <!-- Book Cards Grid -->
-                        <div id="book-cards-grid" class="book-cards-grid">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-book-open fa-3x"></i>
-                                <p>도서를 검색해 주세요.</p>
+                        <!-- Book List Table Card -->
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>도서명</th>
+                                            <th>저자</th>
+                                            <th>출판사</th>
+                                            <th>대상/난이도</th>
+                                            <th>어휘 단계</th>
+                                            <th>분량 단계</th>
+                                            <th title="클릭하여 즉시 변경 가능">어휘퀴즈</th>
+                                            <th title="클릭하여 즉시 변경 가능">독서문제</th>
+                                            <th title="클릭하여 즉시 변경 가능">글쓰기</th>
+                                            <th title="클릭하여 즉시 변경 가능">PDF</th>
+                                            <th>관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="book-cards-grid">
+                                        <tr>
+                                            <td colspan="12" class="text-center p-4">
+                                                <div class="empty-state">
+                                                    <i class="fa-solid fa-book-open fa-3x"></i>
+                                                    <p>도서를 검색해 주세요.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -598,14 +624,36 @@
                         <!-- Student Results Summary Bar -->
                         <div class="results-bar">
                             <span id="student-search-total-count" class="badge badge-info">총 0 명의 학생</span>
-                            <span class="text-muted">카드를 클릭하면 학생 상세 인적사항을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">목록에서 학생을 선택하면 상세 정보를 확인하거나 수업 종료 상태를 즉시 토글할 수 있습니다.</span>
                         </div>
 
-                        <!-- Student Cards Grid -->
-                        <div id="student-cards-grid" class="book-cards-grid">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-users fa-3x"></i>
-                                <p>학생을 검색해 주세요.</p>
+                        <!-- Student List Table Card -->
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>학생 이름</th>
+                                            <th>성별</th>
+                                            <th>등록 학년</th>
+                                            <th>추천인</th>
+                                            <th>메모 / 특이사항</th>
+                                            <th title="클릭하여 즉시 변경 가능">수업 종료 여부</th>
+                                            <th>관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="student-cards-grid">
+                                        <tr>
+                                            <td colspan="8" class="text-center p-4">
+                                                <div class="empty-state">
+                                                    <i class="fa-solid fa-users fa-3x"></i>
+                                                    <p>학생을 검색해 주세요.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -771,14 +819,36 @@
                         <!-- StudyLog Results Summary Bar -->
                         <div class="results-bar">
                             <span id="studylog-search-total-count" class="badge badge-info">총 0 건의 학습 기록</span>
-                            <span class="text-muted">카드를 클릭하면 학습 기록 상세 정보 및 도서 특성을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">목록에서 항목을 클릭하여 상세 정보를 확인하거나 특강 여부를 즉시 토글할 수 있습니다.</span>
                         </div>
 
-                        <!-- StudyLog Cards Grid -->
-                        <div id="studylog-cards-grid" class="book-cards-grid">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-book-bookmark fa-3x"></i>
-                                <p>학습 기록을 검색해 주세요.</p>
+                        <!-- StudyLog List Table Card -->
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>학습 일자</th>
+                                            <th>학생 이름</th>
+                                            <th>도서 제목</th>
+                                            <th title="클릭하여 즉시 변경 가능">특강 여부</th>
+                                            <th>수업 내용</th>
+                                            <th>수업 메모</th>
+                                            <th>관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="studylog-cards-grid">
+                                        <tr>
+                                            <td colspan="8" class="text-center p-4">
+                                                <div class="empty-state">
+                                                    <i class="fa-solid fa-book-bookmark fa-3x"></i>
+                                                    <p>학습 기록을 검색해 주세요.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -1174,14 +1244,36 @@
                         <!-- Class Results Summary Bar -->
                         <div class="results-bar">
                             <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
-                            <span class="text-muted">카드를 클릭하면 수업 상세 정보와 학생 명단을 확인하실 수 있습니다.</span>
+                            <span class="text-muted">목록에서 수업을 선택하여 명단을 확인하거나 수업 종료 여부를 즉시 토글할 수 있습니다.</span>
                         </div>
 
-                        <!-- Class Cards Grid -->
-                        <div id="class-cards-grid" class="book-cards-grid">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-chalkboard-user fa-3x"></i>
-                                <p>수업을 검색해 주세요.</p>
+                        <!-- Class List Table Card -->
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>수업명</th>
+                                            <th>수업 요일</th>
+                                            <th>시작 시간</th>
+                                            <th>담당 선생님</th>
+                                            <th>소속 학생 수</th>
+                                            <th title="클릭하여 즉시 변경 가능">수업 종료 여부</th>
+                                            <th>관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="class-cards-grid">
+                                        <tr>
+                                            <td colspan="8" class="text-center p-4">
+                                                <div class="empty-state">
+                                                    <i class="fa-solid fa-chalkboard-user fa-3x"></i>
+                                                    <p>수업을 검색해 주세요.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 

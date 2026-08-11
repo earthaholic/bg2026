@@ -1339,6 +1339,32 @@ def user_delete_student(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"학생 삭제 중 오류가 발생했습니다: {str(e)}")
 
+@app.put("/api/user/studylogs/{log_id}")
+def user_update_studylog(
+    log_id: int,
+    payload: RowDataRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("StudyLogs", log_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
+    try:
+        old_snapshot = get_record_snapshot("StudyLogs", row_id)
+        update_data = dict(payload.data)
+        update_data["UpdatedBy"] = current_user["username"]
+        update_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        res = update_table_row("StudyLogs", "rowid", row_id, update_data)
+        new_snapshot = get_record_snapshot("StudyLogs", row_id)
+        _audit_update("StudyLogs", row_id, old_snapshot, new_snapshot,
+                      current_user["username"], current_user["role"])
+        return {
+            "status": "success",
+            "message": "학습 기록이 성공적으로 수정되었습니다.",
+            "updated_rows": res.get("updated_rows")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"학습 기록 수정 중 오류가 발생했습니다: {str(e)}")
+
 @app.delete("/api/user/studylogs/{log_id}")
 def user_delete_studylog(
     log_id: int,

@@ -73,6 +73,7 @@ def init_system_tables():
             "TeacherUsername" TEXT NOT NULL,
             "DayOfWeek" TEXT NOT NULL,
             "StartTime" TEXT DEFAULT '',
+            "IsEnded" INTEGER DEFAULT 0,
             "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
             "CreatedBy" TEXT DEFAULT '',
             "UpdatedBy" TEXT DEFAULT '',
@@ -97,13 +98,15 @@ def init_system_tables():
     except Exception:
         pass
 
-    # Classes에 감사 추적 컬럼 보완 (기존 DB 대응)
+    # Classes에 감사 추적 컬럼 및 IsEnded 컬럼 보완 (기존 DB 대응)
     try:
         cursor.execute('PRAGMA table_info("Classes")')
         classes_cols = [r["name"] for r in cursor.fetchall()]
         for _col in ["CreatedBy", "UpdatedBy", "UpdatedAt"]:
             if _col not in classes_cols:
                 cursor.execute(f'ALTER TABLE "Classes" ADD COLUMN "{_col}" TEXT DEFAULT \'\'')
+        if "IsEnded" not in classes_cols:
+            cursor.execute('ALTER TABLE "Classes" ADD COLUMN "IsEnded" INTEGER DEFAULT 0')
     except Exception:
         pass
 
@@ -506,12 +509,18 @@ def create_class(class_data: Dict[str, Any]) -> Dict[str, Any]:
 def update_class(class_id: int, class_data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        'UPDATE "Classes" SET "ClassName" = ?, "TeacherUsername" = ?, "DayOfWeek" = ?, "StartTime" = ?, "UpdatedBy" = ?, "UpdatedAt" = ? WHERE "Id" = ?',
-        (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
-         class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "",
-         class_data.get("UpdatedBy", ""), class_data.get("UpdatedAt", ""), class_id)
-    )
+    fields = []
+    values = []
+    for k, v in class_data.items():
+        if k in ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "IsEnded", "UpdatedBy", "UpdatedAt"):
+            fields.append(f'"{k}" = ?')
+            values.append(v)
+    if not fields:
+        conn.close()
+        return {"status": "success", "updated_rows": 0}
+    values.append(class_id)
+    sql = f'UPDATE "Classes" SET {", ".join(fields)} WHERE "Id" = ?'
+    cursor.execute(sql, values)
     conn.commit()
     rowcount = cursor.rowcount
     conn.close()

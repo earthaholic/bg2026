@@ -1694,74 +1694,159 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function showToast(message, type = 'info') {
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none;';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.style.cssText = 'padding:10px 16px; background:#1e293b; color:#fff; border-radius:6px; border-left:4px solid #3b82f6; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:0.875rem; pointer-events:auto; transition:all 0.3s ease;';
+        if (type === 'success') toast.style.borderLeftColor = '#10b981';
+        if (type === 'warning') toast.style.borderLeftColor = '#f59e0b';
+        if (type === 'danger' || type === 'error') toast.style.borderLeftColor = '#ef4444';
+        toast.innerHTML = escapeHtml(message);
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    }
+
+    async function toggleBookField(bookId, field, newVal, chkEl) {
+        try {
+            const payload = { data: {} };
+            payload.data[field] = newVal;
+            await apiFetch(`/api/user/books/${bookId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            showToast('도서 보유 자료 정보가 업데이트되었습니다.', 'success');
+        } catch (err) {
+            chkEl.checked = !chkEl.checked;
+            alert('도서 정보 수정 실패: ' + err.message);
+        }
+    }
+
+    async function toggleStudentEnded(studentId, newVal, btnEl) {
+        try {
+            await apiFetch(`/api/user/students/${studentId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ data: { IsClassEnded: newVal } })
+            });
+            btnEl.setAttribute('data-current', newVal);
+            if (newVal === 1) {
+                btnEl.className = 'btn-toggle-status is-ended btn-toggle-student-ended';
+                btnEl.innerHTML = '<i class="fa-solid fa-graduation-cap"></i> 수업 종료';
+            } else {
+                btnEl.className = 'btn-toggle-status is-active btn-toggle-student-ended';
+                btnEl.innerHTML = '<i class="fa-solid fa-circle-play"></i> 진행 중';
+            }
+            showToast('학생 수업 종료 상태가 변경되었습니다.', 'success');
+        } catch (err) {
+            alert('수업 종료 상태 변경 실패: ' + err.message);
+        }
+    }
+
+    async function toggleClassEnded(classId, newVal, btnEl) {
+        try {
+            await apiFetch(`/api/user/classes/${classId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ data: { IsEnded: newVal } })
+            });
+            btnEl.setAttribute('data-current', newVal);
+            if (newVal === 1) {
+                btnEl.className = 'btn-toggle-status is-ended btn-toggle-class-ended';
+                btnEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> 종강/완료';
+            } else {
+                btnEl.className = 'btn-toggle-status is-active btn-toggle-class-ended';
+                btnEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> 수업 진행 중';
+            }
+            showToast('수업 종료 상태가 변경되었습니다.', 'success');
+        } catch (err) {
+            alert('수업 상태 변경 실패: ' + err.message);
+        }
+    }
+
+    async function toggleStudyLogSpecial(logId, newVal, btnEl) {
+        try {
+            await apiFetch(`/api/user/studylogs/${logId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ data: { IsSpecial: newVal } })
+            });
+            btnEl.setAttribute('data-current', newVal);
+            if (newVal === 1) {
+                btnEl.className = 'btn-toggle-status is-special btn-toggle-studylog-special';
+                btnEl.innerHTML = '<i class="fa-solid fa-star"></i> 특강';
+            } else {
+                btnEl.className = 'btn-toggle-status is-normal btn-toggle-studylog-special';
+                btnEl.innerHTML = '<i class="fa-regular fa-star"></i> 일반';
+            }
+            showToast('학습 기록 특강 여부가 변경되었습니다.', 'success');
+        } catch (err) {
+            alert('특강 여부 변경 실패: ' + err.message);
+        }
+    }
+
     function renderStudyLogCards(studylogs) {
         if (studylogs.length === 0) {
-            studylogCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div>';
+            studylogCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div></td></tr>';
             return;
         }
 
         let html = '';
         studylogs.forEach(l => {
             const sName = escapeHtml(l.StudentName || '학생 미상');
-            const sSex = formatSex(l.StudentSex);
-            const sRef = l.StudentReferrer ? ' · 추천: ' + formatReferrer(l.StudentReferrer) : '';
             const bTitle = escapeHtml(l.BookTitle || '도서 미상');
-            const bAuthor = escapeHtml(l.BookAuthor || '저자 미상');
-            const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const day = escapeHtml(l.StudiedDay || '일자 미상');
+            const lc = escapeHtml((l.LessonContent || '').trim() || '-');
+            const dc = escapeHtml((l.Description || '').trim() || '-');
             const logId = l.row_id || l.Id;
-
-            // 수업 내용 / 수업 내용 메모 미리보기 (있을 때만, 각각 최대 2줄)
-            let previewHtml = '';
-            const lc = (l.LessonContent || '').trim();
-            const dc = (l.Description || '').trim();
-            if (lc) {
-                previewHtml += `
-                    <div class="studylog-card-preview">
-                        <i class="fa-solid fa-book-open" style="color: var(--primary);"></i>
-                        <span>${escapeHtml(lc)}</span>
-                    </div>
-                `;
-            }
-            if (dc) {
-                previewHtml += `
-                    <div class="studylog-card-preview muted">
-                        <i class="fa-solid fa-note-sticky" style="color: var(--warning);"></i>
-                        <span>${escapeHtml(dc)}</span>
-                    </div>
-                `;
-            }
+            const isSpecial = !!(l.IsSpecial == 1);
 
             html += `
-                <div class="book-item-card studylog-item-card" data-log-id="${logId}">
-                    <div class="book-card-top">
-                        <div class="badge badge-warning" style="align-self: flex-start; margin-bottom: 0.5rem;">
-                            <i class="fa-solid fa-calendar-check"></i> ${day}
-                        </div>
-                        ${l.IsSpecial ? '<span class="badge" style="align-self: flex-start; margin-bottom: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}
-                        <div class="book-card-title" style="font-size: 1.05rem;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})${sRef}</div>
-                        <div class="book-card-author" style="margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--text-main);">
-                            <i class="fa-solid fa-book" style="color: var(--success);"></i> ${bTitle}
-                        </div>
-                        <div class="text-muted" style="font-size: 0.78rem;">
-                            저자: ${bAuthor} | 출판사: ${bPublisher}
-                        </div>
-                        ${previewHtml}
-                    </div>
-                    <div class="book-card-bottom">
-                        <span><i class="fa-solid fa-id-card"></i> Log ID: #${logId}</span>
-                        <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
-                    </div>
-                </div>
+                <tr data-log-id="${logId}">
+                    <td><strong>#${logId}</strong></td>
+                    <td><span class="badge badge-warning"><i class="fa-solid fa-calendar-check"></i> ${day}</span></td>
+                    <td class="fw-semibold">${sName}</td>
+                    <td class="text-primary text-truncate-cell" title="${bTitle}">${bTitle}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn-toggle-status ${isSpecial ? 'is-special' : 'is-normal'} btn-toggle-studylog-special" data-log-id="${logId}" data-current="${isSpecial ? 1 : 0}">
+                            ${isSpecial ? '<i class="fa-solid fa-star"></i> 특강' : '<i class="fa-regular fa-star"></i> 일반'}
+                        </button>
+                    </td>
+                    <td class="text-truncate-cell" title="${lc}">${lc}</td>
+                    <td class="text-muted text-truncate-cell" title="${dc}">${dc}</td>
+                    <td>
+                        <button type="button" class="btn btn-xs btn-outline btn-open-studylog-detail" data-log-id="${logId}">
+                            <i class="fa-solid fa-eye"></i> 상세
+                        </button>
+                    </td>
+                </tr>
             `;
         });
 
         studylogCardsGrid.innerHTML = html;
 
-        document.querySelectorAll('.studylog-item-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const logId = card.getAttribute('data-log-id');
+        document.querySelectorAll('.btn-open-studylog-detail').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const logId = btn.getAttribute('data-log-id');
                 openStudyLogDetailModal(logId);
+            });
+        });
+
+        document.querySelectorAll('.btn-toggle-studylog-special').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const logId = btn.getAttribute('data-log-id');
+                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
+                const newVal = currentVal === 1 ? 0 : 1;
+                await toggleStudyLogSpecial(logId, newVal, btn);
             });
         });
     }
@@ -1943,7 +2028,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderBookCards(books) {
         if (books.length === 0) {
-            bookCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div>';
+            bookCardsGrid.innerHTML = '<tr><td colspan="12" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div></td></tr>';
             return;
         }
 
@@ -1953,42 +2038,74 @@ document.addEventListener('DOMContentLoaded', () => {
             const author = escapeHtml(b.Author || '저자 미상');
             const publisher = escapeHtml(b.Publisher || '출판사 미상');
             const target = escapeHtml(b.Target || '선택안함');
+            const voca = (b.Voca !== null && b.Voca !== undefined && b.Voca !== '') ? `${b.Voca}단계` : '-';
+            const length = (b.BookLength !== null && b.BookLength !== undefined && b.BookLength !== '') ? `${b.BookLength}단계` : '-';
             const bookId = b.row_id || b.Id;
 
-            // Badges
-            let badgesHtml = '';
-            if (b.HasQuiz) badgesHtml += '<span class="tag-badge primary"><i class="fa-solid fa-spell-check"></i> 어휘퀴즈</span>';
-            if (b.HasReadingQuestion) badgesHtml += '<span class="tag-badge success"><i class="fa-solid fa-circle-question"></i> 독서문제</span>';
-            if (b.HasWritingQuestion) badgesHtml += '<span class="tag-badge success"><i class="fa-solid fa-pen-nib"></i> 글쓰기</span>';
-            if (b.IsPdfExist) badgesHtml += '<span class="tag-badge"><i class="fa-solid fa-file-pdf"></i> PDF</span>';
-            if (b.IsPaperbookExist) badgesHtml += '<span class="tag-badge"><i class="fa-solid fa-book"></i> 종이책</span>';
+            const hasQuiz = !!(b.HasQuiz == 1 || b.HasVocaQuiz == 1);
+            const hasReading = !!(b.HasReadingQuestion == 1 || b.HasReadingAnswer == 1 || b.HasReadingQuiz == 1);
+            const hasWriting = !!(b.HasWritingQuestion == 1 || b.HasWritingAnswer == 1 || b.HasWritingQuiz == 1);
+            const hasPdf = !!(b.IsPdfExist == 1 || b.HasPdf == 1);
 
             html += `
-                <div class="book-item-card" data-book-id="${bookId}">
-                    <div class="book-card-top">
-                        <div class="book-card-title">${title}</div>
-                        <div class="book-card-author">
-                            <span><i class="fa-solid fa-user"></i> ${author}</span>
-                            <span><i class="fa-solid fa-building"></i> ${publisher}</span>
-                        </div>
-                        <div class="book-card-badges">
-                            ${badgesHtml || '<span class="tag-badge">일반 도서</span>'}
-                        </div>
-                    </div>
-                    <div class="book-card-bottom">
-                        <span><i class="fa-solid fa-layer-group"></i> 난이도: ${target}</span>
-                        <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
-                    </div>
-                </div>
+                <tr data-book-id="${bookId}">
+                    <td><strong>#${bookId}</strong></td>
+                    <td class="fw-semibold text-primary cell-clickable btn-open-book-detail" data-book-id="${bookId}">${title}</td>
+                    <td>${author}</td>
+                    <td>${publisher}</td>
+                    <td><span class="tag-badge primary">${target}</span></td>
+                    <td>${voca}</td>
+                    <td>${length}</td>
+                    <td class="text-center">
+                        <label class="form-switch sm" title="어휘퀴즈 보유 여부 변경">
+                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasQuiz" ${hasQuiz ? 'checked' : ''}>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </td>
+                    <td class="text-center">
+                        <label class="form-switch sm" title="독서문제 보유 여부 변경">
+                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasReadingQuestion" ${hasReading ? 'checked' : ''}>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </td>
+                    <td class="text-center">
+                        <label class="form-switch sm" title="글쓰기문제 보유 여부 변경">
+                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasWritingQuestion" ${hasWriting ? 'checked' : ''}>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </td>
+                    <td class="text-center">
+                        <label class="form-switch sm" title="PDF 보유 여부 변경">
+                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="IsPdfExist" ${hasPdf ? 'checked' : ''}>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-xs btn-outline btn-open-book-detail" data-book-id="${bookId}">
+                            <i class="fa-solid fa-eye"></i> 상세
+                        </button>
+                    </td>
+                </tr>
             `;
         });
 
         bookCardsGrid.innerHTML = html;
 
-        document.querySelectorAll('.book-item-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const bookId = card.getAttribute('data-book-id');
+        document.querySelectorAll('.btn-open-book-detail').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const bookId = btn.getAttribute('data-book-id');
                 openBookDetailModal(bookId);
+            });
+        });
+
+        document.querySelectorAll('.chk-toggle-book-field').forEach(chk => {
+            chk.addEventListener('change', async (e) => {
+                e.stopPropagation();
+                const bookId = chk.getAttribute('data-book-id');
+                const field = chk.getAttribute('data-field');
+                const val = chk.checked ? 1 : 0;
+                await toggleBookField(bookId, field, val, chk);
             });
         });
     }
@@ -1997,7 +2114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadStudentSearchResults() {
         if (!token) return;
         try {
-            studentCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div>';
+            studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div></td></tr>';
 
             const q = studentSearchQ.value.trim();
             const sex = studentFilterSex.value;
@@ -2021,13 +2138,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudentCards(data.students);
         } catch (err) {
-            studentCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
+            studentCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
     }
 
     function renderStudentCards(students) {
         if (students.length === 0) {
-            studentCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-users-slash fa-2x"></i><p>검색 조건에 일치하는 학생이 없습니다.</p></div>';
+            studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-users-slash fa-2x"></i><p>검색 조건에 일치하는 학생이 없습니다.</p></div></td></tr>';
             return;
         }
 
@@ -2035,49 +2152,51 @@ document.addEventListener('DOMContentLoaded', () => {
         students.forEach(s => {
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
-            const desc = escapeHtml(s.Description || '등록된 메모가 없습니다.');
+            const desc = escapeHtml(s.Description || '-');
+            const grade = formatGrade(s.Grade);
+            const referrer = s.Referrer ? formatReferrer(s.Referrer) : '-';
             const studentId = s.row_id || s.Id;
-            const endedBadge = s.IsClassEnded ? '<span class="badge badge-warning"><i class="fa-solid fa-graduation-cap"></i> 수업 종료</span>' : '';
-
-            let avatarClass = 'neutral';
-            let avatarIcon = 'fa-user-graduate';
-            if (sex === '남') {
-                avatarClass = 'male';
-                avatarIcon = 'fa-user-astronaut';
-            } else if (sex === '여') {
-                avatarClass = 'female';
-                avatarIcon = 'fa-user-nurse';
-            }
+            const isEnded = !!s.IsClassEnded;
 
             html += `
-                <div class="book-item-card student-item-card" data-student-id="${studentId}">
-                    <div class="book-card-top">
-                        <div class="student-avatar ${avatarClass}">
-                            <i class="fa-solid ${avatarIcon}"></i>
-                        </div>
-                        <div class="book-card-title">${name}${endedBadge}${s.Referrer ? `<span class="tag-badge" style="margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : ''}</div>
-                        <div class="book-card-author" style="margin-bottom: 0.5rem;">
-                            <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${sex}</strong></span>
-                            <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
-                        </div>
-                        <div class="text-muted" style="font-size: 0.78rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                            ${desc}
-                        </div>
-                    </div>
-                    <div class="book-card-bottom">
-                        <span><i class="fa-solid fa-id-card"></i> ID: #${studentId}</span>
-                        <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
-                    </div>
-                </div>
+                <tr data-student-id="${studentId}">
+                    <td><strong>#${studentId}</strong></td>
+                    <td class="fw-semibold text-primary cell-clickable btn-open-student-detail" data-student-id="${studentId}">${name}</td>
+                    <td><span class="badge ${sex === '남' ? 'badge-info' : sex === '여' ? 'badge-danger' : 'badge-secondary'}">${sex}</span></td>
+                    <td>${grade}</td>
+                    <td>${referrer}</td>
+                    <td class="text-muted text-truncate-cell" title="${desc}">${desc}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn-toggle-status ${isEnded ? 'is-ended' : 'is-active'} btn-toggle-student-ended" data-student-id="${studentId}" data-current="${isEnded ? 1 : 0}">
+                            ${isEnded ? '<i class="fa-solid fa-graduation-cap"></i> 수업 종료' : '<i class="fa-solid fa-circle-play"></i> 진행 중'}
+                        </button>
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-xs btn-outline btn-open-student-detail" data-student-id="${studentId}">
+                            <i class="fa-solid fa-eye"></i> 상세
+                        </button>
+                    </td>
+                </tr>
             `;
         });
 
         studentCardsGrid.innerHTML = html;
 
-        document.querySelectorAll('.student-item-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const studentId = card.getAttribute('data-student-id');
+        document.querySelectorAll('.btn-open-student-detail').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const studentId = btn.getAttribute('data-student-id');
                 openStudentDetailModal(studentId);
+            });
+        });
+
+        document.querySelectorAll('.btn-toggle-student-ended').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const studentId = btn.getAttribute('data-student-id');
+                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
+                const newVal = currentVal === 1 ? 0 : 1;
+                await toggleStudentEnded(studentId, newVal, btn);
             });
         });
     }
@@ -3928,14 +4047,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnClassSearchNext) btnClassSearchNext.disabled = (classSearchPage >= classSearchTotalPages);
             renderClassCards(data.classes);
         } catch (err) {
-            classCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
+            classCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
     }
 
     function renderClassCards(classes) {
         if (!classCardsGrid) return;
         if (classes.length === 0) {
-            classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div>';
+            classCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div></td></tr>';
             return;
         }
         let html = '';
@@ -3946,40 +4065,57 @@ document.addEventListener('DOMContentLoaded', () => {
             const day = formatDayOfWeek(c.DayOfWeek);
             const time = c.StartTime ? escapeHtml(c.StartTime) : '미지정';
             const count = c.StudentCount || 0;
+            const isEnded = !!c.IsEnded;
+
             html += `
-                <div class="book-item-card class-item-card" data-class-id="${cId}">
-                    <div class="book-card-top">
-                        <div class="book-card-title"><i class="fa-solid fa-chalkboard-user" style="color: var(--primary);"></i> ${name}</div>
-                        <div class="book-card-author">
-                            <span><i class="fa-solid fa-user-tie"></i> ${teacher}</span>
-                        </div>
-                        <div class="book-card-badges">
-                            <span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span>
-                            <span class="tag-badge"><i class="fa-solid fa-clock"></i> ${time}</span>
-                            <span class="tag-badge success"><i class="fa-solid fa-users"></i> ${count}명</span>
-                        </div>
-                    </div>
-                    <div class="book-card-bottom">
-                        <span>상세보기 <i class="fa-solid fa-chevron-right"></i></span>
-                        <button type="button" class="btn btn-sm btn-primary btn-class-batch" data-class-id="${cId}">
-                            <i class="fa-solid fa-square-plus"></i> 일괄 등록
+                <tr data-class-id="${cId}">
+                    <td><strong>#${cId}</strong></td>
+                    <td class="fw-semibold text-primary cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</td>
+                    <td><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
+                    <td>${time}</td>
+                    <td><i class="fa-solid fa-user-tie text-muted"></i> ${teacher}</td>
+                    <td><span class="badge badge-info"><i class="fa-solid fa-users"></i> ${count}명</span></td>
+                    <td class="text-center">
+                        <button type="button" class="btn-toggle-status ${isEnded ? 'is-ended' : 'is-active'} btn-toggle-class-ended" data-class-id="${cId}" data-current="${isEnded ? 1 : 0}">
+                            ${isEnded ? '<i class="fa-solid fa-circle-check"></i> 종강/완료' : '<i class="fa-solid fa-chalkboard-user"></i> 수업 진행 중'}
                         </button>
-                    </div>
-                </div>
+                    </td>
+                    <td>
+                        <div class="action-btn-group" style="display: flex; gap: 0.35rem; align-items: center;">
+                            <button type="button" class="btn btn-xs btn-outline btn-open-class-detail" data-class-id="${cId}">
+                                <i class="fa-solid fa-eye"></i> 상세
+                            </button>
+                            <button type="button" class="btn btn-xs btn-primary btn-class-batch" data-class-id="${cId}">
+                                <i class="fa-solid fa-square-plus"></i> 일괄 등록
+                            </button>
+                        </div>
+                    </td>
+                </tr>
             `;
         });
         classCardsGrid.innerHTML = html;
 
-        classCardsGrid.querySelectorAll('.book-item-card[data-class-id]').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.btn-class-batch')) return;
-                openClassDetailModal(card.getAttribute('data-class-id'));
+        classCardsGrid.querySelectorAll('.btn-open-class-detail').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openClassDetailModal(btn.getAttribute('data-class-id'));
             });
         });
+
         classCardsGrid.querySelectorAll('.btn-class-batch').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 goToClassBatchReg(parseInt(btn.getAttribute('data-class-id')));
+            });
+        });
+
+        classCardsGrid.querySelectorAll('.btn-toggle-class-ended').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const classId = btn.getAttribute('data-class-id');
+                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
+                const newVal = currentVal === 1 ? 0 : 1;
+                await toggleClassEnded(classId, newVal, btn);
             });
         });
     }
