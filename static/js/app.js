@@ -1864,6 +1864,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function toggleStudentSex(studentId, newSex, btnEl) {
+        try {
+            await apiFetch(`/api/user/students/${studentId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ data: { Sex: newSex } })
+            });
+            btnEl.setAttribute('data-current-sex', newSex);
+            btnEl.textContent = newSex;
+            btnEl.className = `badge btn-toggle-student-sex ${newSex === '남' ? 'badge-info' : 'badge-danger'}`;
+            showToast(`학생 성별이 ${newSex}(으)로 변경되었습니다.`, 'success');
+        } catch (err) {
+            alert('학생 성별 변경 실패: ' + err.message);
+        }
+    }
+
     async function toggleClassEnded(classId, newVal, btnEl) {
         try {
             await apiFetch(`/api/user/classes/${classId}`, {
@@ -2264,6 +2279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         students.forEach(s => {
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
+            const rawSex = escapeHtml(s.Sex || '');
             const desc = escapeHtml(s.Description || '-');
             const grade = formatGrade(s.Grade);
             const referrer = s.Referrer ? formatReferrer(s.Referrer) : '-';
@@ -2274,7 +2290,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr data-student-id="${studentId}">
                     <td><strong>#${studentId}</strong></td>
                     <td class="fw-semibold text-primary cell-clickable btn-open-student-detail" data-student-id="${studentId}">${name}</td>
-                    <td><span class="badge ${sex === '남' ? 'badge-info' : sex === '여' ? 'badge-danger' : 'badge-secondary'}">${sex}</span></td>
+                    <td>
+                        <button type="button" class="badge btn-toggle-student-sex ${sex === '남' ? 'badge-info' : sex === '여' ? 'badge-danger' : 'badge-secondary'}" data-student-id="${studentId}" data-current-sex="${rawSex}" title="클릭하여 성별 변경: 미지정 → 여 → 남 → 여">${sex}</button>
+                    </td>
                     <td>${grade}</td>
                     <td>${referrer}</td>
                     <td class="text-muted text-truncate-cell" title="${desc}">${desc}</td>
@@ -2309,6 +2327,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
                 const newVal = currentVal === 1 ? 0 : 1;
                 await toggleStudentEnded(studentId, newVal, btn);
+            });
+        });
+
+        document.querySelectorAll('.btn-toggle-student-sex').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const currentSex = formatSex(btn.getAttribute('data-current-sex'));
+                const newSex = currentSex === '여' ? '남' : '여';
+                await toggleStudentSex(btn.getAttribute('data-student-id'), newSex, btn);
             });
         });
     }

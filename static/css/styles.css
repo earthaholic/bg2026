@@ -3028,3 +3028,13 @@ body {
 .cell-clickable:hover {
     text-decoration: underline;
 }
+
+.btn-toggle-student-sex {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.btn-toggle-student-sex:hover {
+    filter: brightness(1.12);
+}
