@@ -253,7 +253,7 @@ def user_search_books(
     has_writing: Optional[int] = Query(None),
     has_pdf: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(12, ge=1, le=50),
+    limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -356,7 +356,7 @@ def get_gdrive_files_for_book(title: str) -> List[Dict[str, Any]]:
         
         results = service.files().list(
             q=query,
-            pageSize=10,
+            pageSize=30,
             fields="files(id, name, mimeType, webViewLink, iconLink)"
         ).execute()
         return results.get('files', [])
@@ -398,7 +398,7 @@ def user_get_similar_books(
         {"row_id": item["row"]["row_id"], "Id": item["row"]["Id"], "Title": item["row"]["Title"],
          "Author": item["row"]["Author"], "Publisher": item["row"]["Publisher"],
          "match_type": item["match_type"]}
-        for item in results[:10]
+        for item in results[:30]
     ]
     return {"total": len(results), "summary": summary, "matches": matches}
 
@@ -469,7 +469,7 @@ def user_search_students(
     sex: Optional[str] = Query(None),
     include_ended: bool = Query(False),
     page: int = Query(1, ge=1),
-    limit: int = Query(12, ge=1, le=50),
+    limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -553,7 +553,7 @@ def user_get_similar_students(
         "matches": [
             {"row_id": r["row_id"], "Id": r["Id"], "Name": r["Name"],
              "Sex": r["Sex"], "Birthday": r["Birthday"], "Grade": r["Grade"], "Referrer": r["Referrer"], "match_type": "exact"}
-            for r in results[:10]
+            for r in results[:30]
         ],
     }
 
@@ -739,7 +739,7 @@ def user_search_studylogs(
     q: Optional[str] = Query(None),
     studied_day: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(12, ge=1, le=50),
+    limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -1024,7 +1024,7 @@ def _class_student_items(payload: ClassRequest) -> List[dict]:
 def user_list_classes(
     q: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(12, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=100),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     teacher_username = current_user["username"] if current_user["role"] == "teacher" else None
@@ -1475,7 +1475,7 @@ def table_schema(table_name: str, current_user: Dict[str, Any] = Depends(get_cur
 def table_data(
     table_name: str,
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=100),
     q: Optional[str] = Query(None),
     current_admin: Dict[str, Any] = Depends(get_current_admin)
 ):
@@ -1734,7 +1734,7 @@ def admin_list_audit_logs(
     action: Optional[str] = Query(None),
     record_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=100),
     current_admin: Dict[str, Any] = Depends(get_current_admin)
 ):
     """계정별 변경 이력을 필터링해 조회한다. (계정·기간 필수 조합 지원)"""

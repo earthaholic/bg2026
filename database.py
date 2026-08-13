@@ -263,9 +263,9 @@ def get_table_schema(table_name: str) -> List[Dict[str, Any]]:
     ]
 
 def fetch_table_data(
-    table_name: str, 
-    page: int = 1, 
-    limit: int = 20, 
+    table_name: str,
+    page: int = 1,
+    limit: int = 30,
     search_query: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Fetch paginated rows from table with optional global search across text columns."""
@@ -550,7 +550,7 @@ def get_class_by_id(class_id: int) -> Optional[Dict[str, Any]]:
 def search_classes(
     q: Optional[str] = None,
     page: int = 1,
-    limit: int = 12,
+    limit: int = 30,
     teacher_username: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], int]:
     """수업 목록을 검색한다. teacher_username이 주어지면 해당 선생님 수업만 필터링."""
@@ -729,7 +729,7 @@ def get_audit_logs(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     page: int = 1,
-    limit: int = 20
+    limit: int = 30
 ) -> Tuple[List[Dict[str, Any]], int]:
     """감사 로그를 조회한다.
     

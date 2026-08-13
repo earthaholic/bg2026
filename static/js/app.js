@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTable = null;
     let tableSchema = [];
     let currentPage = 1;
-    let limit = 15;
+    let limit = 30;
     let totalPages = 1;
     let searchQuery = '';
     let selectedPkValues = new Set();
@@ -13,17 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Book Search State
     let searchPage = 1;
-    let searchLimit = 12;
+    let searchLimit = 30;
     let searchTotalPages = 1;
 
     // Student Search State
     let studentSearchPage = 1;
-    let studentSearchLimit = 12;
+    let studentSearchLimit = 30;
     let studentSearchTotalPages = 1;
 
     // Class Search State
     let classSearchPage = 1;
-    let classSearchLimit = 12;
+    let classSearchLimit = 30;
     let classSearchTotalPages = 1;
 
     // Class State
@@ -1137,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // StudyLog State & Elements
     let studylogSearchPage = 1;
-    let studylogSearchLimit = 12;
+    let studylogSearchLimit = 30;
     let studylogSearchTotalPages = 1;
 
     // StudyLog Registration Elements
@@ -5133,7 +5133,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 감사 로그(변경 이력) 조회 (Admin Only) ---
     let auditLogPage = 1;
-    let auditLogLimit = 20;
+    let auditLogLimit = 30;
     let auditLogTotalPages = 1;
     let auditUserOptionsLoaded = false;
 
