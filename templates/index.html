@@ -1459,6 +1459,22 @@
                                             <input type="date" id="batch-studied-day" class="form-control" required>
                                         </div>
                                     </div>
+                                    <div class="batch-calendar-panel" aria-live="polite">
+                                        <div class="batch-calendar-header">
+                                            <div>
+                                                <strong><i class="fa-solid fa-calendar-days"></i> 기존 학습 이력</strong>
+                                                <p>표시된 날짜에는 이 수업 학생의 학습 기록이 있습니다.</p>
+                                            </div>
+                                            <div class="batch-calendar-controls">
+                                                <button type="button" id="btn-batch-calendar-prev" class="btn btn-outline btn-xs" aria-label="이전 달"><i class="fa-solid fa-chevron-left"></i></button>
+                                                <span id="batch-calendar-month"></span>
+                                                <button type="button" id="btn-batch-calendar-next" class="btn btn-outline btn-xs" aria-label="다음 달"><i class="fa-solid fa-chevron-right"></i></button>
+                                            </div>
+                                        </div>
+                                        <div id="batch-calendar-status" class="batch-calendar-status">수업을 선택하면 기존 학습 이력을 불러옵니다.</div>
+                                        <div id="batch-calendar-grid" class="batch-calendar-grid hidden"></div>
+                                        <div id="batch-existing-records" class="batch-existing-records hidden"></div>
+                                    </div>
                                 </div>
 
                                 <div class="form-section">

@@ -36,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let classEditSelectedStudentIds = new Set(); // 수업 편집 폼에서 선택된 학생 ID (필터 재렌더 시에도 유지)
     let classEditStudentSpecialIds = new Set(); // 수업 편집 폼에서 특강으로 지정된 학생 ID (배정된 학생만 유효)
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
+    let batchCalendarMonth = ''; // YYYY-MM
+    let batchCalendarDays = {};
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
@@ -286,6 +288,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const classBatchRegCard = document.getElementById('class-batch-reg-card');
     const formClassBatchStudyLog = document.getElementById('form-class-batch-studylog');
     const batchStudiedDay = document.getElementById('batch-studied-day');
+    const batchCalendarMonthLabel = document.getElementById('batch-calendar-month');
+    const batchCalendarGrid = document.getElementById('batch-calendar-grid');
+    const batchCalendarStatus = document.getElementById('batch-calendar-status');
+    const batchExistingRecords = document.getElementById('batch-existing-records');
+    const btnBatchCalendarPrev = document.getElementById('btn-batch-calendar-prev');
+    const btnBatchCalendarNext = document.getElementById('btn-batch-calendar-next');
     const classBatchStudentsBody = document.getElementById('class-batch-students-body');
     const classBatchResult = document.getElementById('class-batch-result');
 
@@ -948,6 +956,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
         }
+        if (batchStudiedDay) {
+            batchStudiedDay.addEventListener('change', handleBatchDateChange);
+        }
+        if (btnBatchCalendarPrev) btnBatchCalendarPrev.addEventListener('click', () => changeBatchCalendarMonth(-1));
+        if (btnBatchCalendarNext) btnBatchCalendarNext.addEventListener('click', () => changeBatchCalendarMonth(1));
     }
 
     // User Book Registration Handler
@@ -4525,6 +4538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (classBatchRegCard) classBatchRegCard.classList.remove('hidden');
             if (!batchStudiedDay.value) batchStudiedDay.value = new Date().toISOString().split('T')[0];
             renderBatchStudentsTable(students);
+            loadBatchStudylogCalendar(getBatchMonth(batchStudiedDay.value));
         } catch (err) {
             resetBatchRegView();
             if (classBatchInfo) classBatchInfo.classList.remove('hidden');
@@ -4560,12 +4574,102 @@ document.addEventListener('DOMContentLoaded', () => {
         classBatchStudentsBody.innerHTML = html;
     }
 
+    function getBatchMonth(dateValue) {
+        return (dateValue || new Date().toISOString().slice(0, 10)).slice(0, 7);
+    }
+
+    async function loadBatchStudylogCalendar(month = getBatchMonth(batchStudiedDay?.value)) {
+        if (!activeBatchClassId || !batchCalendarStatus) return;
+        batchCalendarMonth = month;
+        batchCalendarDays = {};
+        batchCalendarStatus.textContent = '기존 학습 이력을 불러오는 중입니다...';
+        batchCalendarStatus.className = 'batch-calendar-status loading';
+        if (batchCalendarGrid) batchCalendarGrid.classList.add('hidden');
+        if (batchExistingRecords) batchExistingRecords.classList.add('hidden');
+        try {
+            const data = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylog-calendar?month=${encodeURIComponent(month)}`);
+            if (activeBatchClassId === null || batchCalendarMonth !== month) return;
+            batchCalendarDays = data.days || {};
+            renderBatchStudylogCalendar();
+            showBatchExistingRecords(batchStudiedDay?.value || '');
+        } catch (err) {
+            batchCalendarStatus.textContent = `기존 학습 이력을 불러오지 못했습니다: ${err.message}`;
+            batchCalendarStatus.className = 'batch-calendar-status error';
+        }
+    }
+
+    function renderBatchStudylogCalendar() {
+        if (!batchCalendarGrid || !batchCalendarStatus || !batchCalendarMonth) return;
+        const [year, month] = batchCalendarMonth.split('-').map(Number);
+        const firstWeekday = new Date(year, month - 1, 1).getDay();
+        const lastDay = new Date(year, month, 0).getDate();
+        const selectedDay = batchStudiedDay?.value || '';
+        const labels = ['일', '월', '화', '수', '목', '금', '토'];
+        let html = labels.map(label => `<div class="batch-calendar-weekday">${label}</div>`).join('');
+        html += '<div class="batch-calendar-blank"></div>'.repeat(firstWeekday);
+        for (let day = 1; day <= lastDay; day++) {
+            const date = `${batchCalendarMonth}-${String(day).padStart(2, '0')}`;
+            const count = (batchCalendarDays[date] || []).length;
+            const classes = ['batch-calendar-day'];
+            if (count) classes.push('has-records');
+            if (date === selectedDay) classes.push('selected');
+            html += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${date}${count ? `, 기존 기록 ${count}건` : ''}"><span>${day}</span>${count ? `<b>${count}</b>` : ''}</button>`;
+        }
+        if (batchCalendarMonthLabel) batchCalendarMonthLabel.textContent = `${year}년 ${month}월`;
+        batchCalendarGrid.innerHTML = html;
+        batchCalendarGrid.classList.remove('hidden');
+        batchCalendarGrid.querySelectorAll('[data-batch-date]').forEach(button => button.addEventListener('click', () => selectBatchCalendarDate(button.dataset.batchDate)));
+        const total = Object.values(batchCalendarDays).reduce((sum, records) => sum + records.length, 0);
+        batchCalendarStatus.textContent = total ? `이번 달 기존 학습 기록 ${total}건을 표시했습니다.` : '이번 달에는 기존 학습 기록이 없습니다.';
+        batchCalendarStatus.className = 'batch-calendar-status';
+    }
+
+    function selectBatchCalendarDate(date) {
+        if (batchStudiedDay) batchStudiedDay.value = date;
+        renderBatchStudylogCalendar();
+        showBatchExistingRecords(date);
+    }
+
+    function showBatchExistingRecords(date) {
+        if (!batchExistingRecords) return;
+        const records = batchCalendarDays[date] || [];
+        if (!date || !records.length) {
+            batchExistingRecords.classList.add('hidden');
+            batchExistingRecords.innerHTML = '';
+            return;
+        }
+        const previews = records.slice(0, 3).map(record => {
+            const detail = record.lesson_content || record.description || '수업 내용 미입력';
+            return `<li><strong>${escapeHtml(record.student_name)}</strong> · ${escapeHtml(record.book_title)}<span>${escapeHtml(detail)}</span></li>`;
+        }).join('');
+        const more = records.length > 3 ? `<p class="batch-records-more">외 ${records.length - 3}건</p>` : '';
+        batchExistingRecords.innerHTML = `<div><strong><i class="fa-solid fa-circle-info"></i> ${date} 기존 학습 기록 ${records.length}건</strong><p>동일 날짜에도 필요하면 추가 등록할 수 있습니다.</p></div><ul>${previews}</ul>${more}`;
+        batchExistingRecords.classList.remove('hidden');
+    }
+
+    function handleBatchDateChange() {
+        const month = getBatchMonth(batchStudiedDay?.value);
+        if (month !== batchCalendarMonth) loadBatchStudylogCalendar(month);
+        else { renderBatchStudylogCalendar(); showBatchExistingRecords(batchStudiedDay?.value || ''); }
+    }
+
+    function changeBatchCalendarMonth(offset) {
+        const [year, month] = (batchCalendarMonth || getBatchMonth()).split('-').map(Number);
+        const date = new Date(year, month - 1 + offset, 1);
+        loadBatchStudylogCalendar(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+    }
+
     function resetBatchRegView() {
         activeBatchClassId = null;
         if (classBatchInfo) classBatchInfo.classList.add('hidden');
         if (classBatchRegCard) classBatchRegCard.classList.add('hidden');
         if (classBatchResult) classBatchResult.classList.add('hidden');
         if (classBatchStudentsBody) classBatchStudentsBody.innerHTML = '';
+        batchCalendarDays = {};
+        batchCalendarMonth = '';
+        if (batchCalendarGrid) { batchCalendarGrid.innerHTML = ''; batchCalendarGrid.classList.add('hidden'); }
+        if (batchExistingRecords) { batchExistingRecords.innerHTML = ''; batchExistingRecords.classList.add('hidden'); }
+        if (batchCalendarStatus) { batchCalendarStatus.textContent = '수업을 선택하면 기존 학습 이력을 불러옵니다.'; batchCalendarStatus.className = 'batch-calendar-status'; }
         const bId = document.getElementById('batch-book-id');
         const bDisp = document.getElementById('batch-book-display');
         const bPrev = document.getElementById('preview-batch-book');
@@ -4632,6 +4736,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bId) bId.value = '';
             if (bDisp) bDisp.value = '';
             if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+            loadBatchStudylogCalendar(getBatchMonth(dateVal));
         } catch (err) {
             classBatchResult.className = 'alert alert-danger';
             classBatchResult.textContent = err.message;

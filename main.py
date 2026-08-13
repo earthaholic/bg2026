@@ -1122,6 +1122,55 @@ def user_get_class_batch_form(
     students = get_class_students(class_id)
     return {"class_": class_row, "students": students}
 
+@app.get("/api/user/classes/{class_id}/studylog-calendar")
+def user_get_class_studylog_calendar(
+    class_id: int,
+    month: str = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """수업 배정 학생의 월별 학습 이력을 일괄 등록 달력에 제공한다."""
+    _get_accessible_class(class_id, current_user)
+    if not re.match(r"^\d{4}-\d{2}$", month):
+        raise HTTPException(status_code=400, detail="조회할 월은 YYYY-MM 형식이어야 합니다.")
+    students = get_class_students(class_id)
+    student_ids = set()
+    for student in students:
+        for key in ("row_id", "Id"):
+            value = student.get(key)
+            if value is not None:
+                student_ids.add(value)
+
+    if not student_ids:
+        return {"month": month, "days": {}}
+
+    conn = get_db_connection()
+    try:
+        placeholders = ", ".join("?" for _ in student_ids)
+        query = f'''
+            SELECT sl."StudiedDay", sl."LessonContent", sl."Description",
+                   s."Name" AS "StudentName", b."Title" AS "BookTitle"
+            FROM "StudyLogs" sl
+            LEFT JOIN "Students" s ON sl."StudentId" = s.rowid OR sl."StudentId" = s."Id"
+            LEFT JOIN "Books" b ON sl."BookId" = b.rowid OR sl."BookId" = b."Id"
+            WHERE sl."StudentId" IN ({placeholders})
+              AND substr(sl."StudiedDay", 1, 7) = ?
+            ORDER BY sl."StudiedDay", sl.rowid DESC
+        '''
+        cursor = conn.cursor()
+        cursor.execute(query, [*student_ids, month])
+        days: Dict[str, List[Dict[str, Any]]] = {}
+        for row in cursor.fetchall():
+            record = dict(row)
+            days.setdefault(record["StudiedDay"], []).append({
+                "student_name": record.get("StudentName") or "학생 정보 없음",
+                "book_title": record.get("BookTitle") or "도서 정보 없음",
+                "lesson_content": record.get("LessonContent") or "",
+                "description": record.get("Description") or ""
+            })
+        return {"month": month, "days": days}
+    finally:
+        conn.close()
+
 @app.post("/api/user/classes/{class_id}/studylogs")
 def user_batch_register_class_studylogs(
     class_id: int,

@@ -2299,6 +2299,55 @@ body {
 #view-class-studylog-reg .book-search-layout {
     overflow-y: auto;
 }
+
+.batch-calendar-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+}
+.batch-calendar-header, .batch-calendar-controls, .batch-existing-records {
+    display: flex;
+    align-items: center;
+}
+.batch-calendar-header {
+    justify-content: space-between;
+    gap: 1rem;
+}
+.batch-calendar-header strong { color: var(--text-main); }
+.batch-calendar-header p, .batch-existing-records p { margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.78rem; }
+.batch-calendar-controls { gap: 0.55rem; white-space: nowrap; font-weight: 700; }
+.batch-calendar-status { margin: 0.8rem 0 0.55rem; color: var(--text-muted); font-size: 0.8rem; }
+.batch-calendar-status.loading { color: var(--primary); }
+.batch-calendar-status.error { color: var(--danger); }
+.batch-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.35rem; }
+.batch-calendar-weekday { text-align: center; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; padding-bottom: 0.2rem; }
+.batch-calendar-day, .batch-calendar-blank { min-height: 2.35rem; }
+.batch-calendar-day {
+    position: relative;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    font: inherit;
+}
+.batch-calendar-day:hover { background: rgba(16, 185, 129, 0.09); border-color: rgba(16, 185, 129, 0.25); }
+.batch-calendar-day.has-records { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.38); color: var(--success); font-weight: 700; }
+.batch-calendar-day.selected { outline: 2px solid var(--primary); outline-offset: 1px; }
+.batch-calendar-day b { position: absolute; top: -0.3rem; right: -0.18rem; min-width: 1.1rem; padding: 0.05rem 0.25rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.64rem; line-height: 1.1rem; }
+.batch-existing-records { align-items: flex-start; gap: 1rem; margin-top: 0.85rem; padding: 0.8rem; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.09); border: 1px solid rgba(16, 185, 129, 0.28); }
+.batch-existing-records > div { flex: 0 0 13rem; }
+.batch-existing-records ul { flex: 1; min-width: 0; margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+.batch-existing-records li + li { margin-top: 0.3rem; }
+.batch-existing-records li span { display: block; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-records-more { white-space: nowrap; }
+@media (max-width: 640px) {
+    .batch-calendar-header, .batch-existing-records { flex-direction: column; align-items: stretch; }
+    .batch-calendar-controls { justify-content: space-between; }
+    .batch-existing-records > div { flex-basis: auto; }
+}
 /* 학습 기록 검색 카드: 수업 내용/메모 미리보기 */
 .studylog-card-preview {
     margin-top: 0.45rem;
