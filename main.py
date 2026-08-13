@@ -142,7 +142,8 @@ class UserStudentRegisterRequest(BaseModel):
     Description: Optional[str] = ""
 
 class UserStudyLogRegisterRequest(BaseModel):
-    StudentId: int
+    StudentId: Optional[int] = None
+    StudentIds: Optional[List[int]] = []
     BookId: int
     StudiedDay: str
     IsSpecial: Optional[bool] = False
@@ -666,32 +667,48 @@ def user_register_studylog(
     payload: UserStudyLogRegisterRequest,
     current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
-    if not payload.StudentId or payload.StudentId <= 0:
-        raise HTTPException(status_code=400, detail="학생을 선택해 주세요.")
+    target_student_ids = []
+    if payload.StudentIds:
+        for sid in payload.StudentIds:
+            if isinstance(sid, int) and sid > 0 and sid not in target_student_ids:
+                target_student_ids.append(sid)
+    if payload.StudentId and payload.StudentId > 0 and payload.StudentId not in target_student_ids:
+        target_student_ids.append(payload.StudentId)
+
+    if not target_student_ids:
+        raise HTTPException(status_code=400, detail="학습할 학생을 1명 이상 선택해 주세요.")
     if not payload.BookId or payload.BookId <= 0:
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.StudiedDay or not payload.StudiedDay.strip():
         raise HTTPException(status_code=400, detail="학습 일자를 입력해 주세요.")
 
-    log_data = {
-        "StudentId": payload.StudentId,
-        "BookId": payload.BookId,
-        "StudiedDay": payload.StudiedDay.strip(),
-        "IsSpecial": 1 if payload.IsSpecial else 0,
-        "LessonContent": (payload.LessonContent or "").strip(),
-        "Description": (payload.Description or "").strip(),
-        "CreatedBy": current_user["username"]
-    }
-
+    created_log_ids = []
     try:
-        res = insert_table_row("StudyLogs", log_data)
-        new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
-        _audit_insert("StudyLogs", res.get("id"), new_snapshot,
-                      current_user["username"], current_user["role"])
+        for s_id in target_student_ids:
+            log_data = {
+                "StudentId": s_id,
+                "BookId": payload.BookId,
+                "StudiedDay": payload.StudiedDay.strip(),
+                "IsSpecial": 1 if payload.IsSpecial else 0,
+                "LessonContent": (payload.LessonContent or "").strip(),
+                "Description": (payload.Description or "").strip(),
+                "CreatedBy": current_user["username"]
+            }
+            res = insert_table_row("StudyLogs", log_data)
+            log_id = res.get("id")
+            if log_id:
+                created_log_ids.append(log_id)
+                new_snapshot = get_record_snapshot("StudyLogs", log_id)
+                _audit_insert("StudyLogs", log_id, new_snapshot,
+                              current_user["username"], current_user["role"])
+
+        count = len(created_log_ids)
         return {
             "status": "success",
-            "message": "학습 기록이 성공적으로 수록되었습니다.",
-            "log_id": res.get("id")
+            "message": f"{count}명의 학습 기록이 성공적으로 수록되었습니다." if count > 1 else "학습 기록이 성공적으로 수록되었습니다.",
+            "log_id": created_log_ids[0] if created_log_ids else None,
+            "log_ids": created_log_ids,
+            "count": count
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"학습 기록 등록 중 오류가 발생했습니다: {str(e)}")

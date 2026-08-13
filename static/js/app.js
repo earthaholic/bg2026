@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
+    let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
 
     // DOM Elements
@@ -1192,7 +1193,16 @@ document.addEventListener('DOMContentLoaded', () => {
             activeStudentPickerTarget = studentPickerOpener.id === 'btn-open-picker-monthly-student' ? 'monthly' : 'studylog';
             const modal = document.getElementById('modal-student-picker');
             const inputQ = document.getElementById('input-picker-student-q');
+            const footer = document.getElementById('picker-student-footer');
             if (inputQ) inputQ.value = '';
+            if (footer) {
+                if (activeStudentPickerTarget === 'monthly') {
+                    footer.classList.add('hidden');
+                } else {
+                    footer.classList.remove('hidden');
+                    updatePickerSelectCountBadge();
+                }
+            }
             if (modal) modal.classList.remove('hidden');
             loadPickerStudents();
             return;
@@ -1202,6 +1212,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.closest('#btn-close-student-picker')) {
             const modal = document.getElementById('modal-student-picker');
             if (modal) modal.classList.add('hidden');
+            return;
+        }
+
+        // Student Picker Footer Buttons (Select All / Deselect All / Confirm)
+        if (e.target.closest('#btn-picker-student-select-all')) {
+            const container = document.getElementById('picker-student-results');
+            if (container) {
+                container.querySelectorAll('.btn-select-student-picker').forEach(btn => {
+                    const idVal = btn.getAttribute('data-id');
+                    const id = parseInt(idVal);
+                    const name = btn.getAttribute('data-name');
+                    const sex = btn.getAttribute('data-sex');
+                    const grade = btn.getAttribute('data-grade');
+                    const referrer = btn.getAttribute('data-referrer');
+                    selectedStudentsMap.set(id, { id, name, sex, grade, referrer });
+                });
+                loadPickerStudents();
+                updatePickerSelectCountBadge();
+            }
+            return;
+        }
+
+        if (e.target.closest('#btn-picker-student-deselect-all')) {
+            selectedStudentsMap.clear();
+            loadPickerStudents();
+            updatePickerSelectCountBadge();
+            return;
+        }
+
+        if (e.target.closest('#btn-picker-student-confirm')) {
+            const modal = document.getElementById('modal-student-picker');
+            if (modal) modal.classList.add('hidden');
+            updateSelectedStudentsUI();
             return;
         }
 
@@ -1226,17 +1269,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Clear StudyLog Form Cache
         if (e.target.closest('#btn-clear-studylog-cache')) {
-            const sId = document.getElementById('selected-student-id');
-            const sDisp = document.getElementById('selected-student-display');
-            const sPrev = document.getElementById('preview-selected-student');
+            selectedStudentsMap.clear();
+            updateSelectedStudentsUI();
+            updatePickerSelectCountBadge();
+
             const bId = document.getElementById('selected-book-id');
             const bDisp = document.getElementById('selected-book-display');
             const bPrev = document.getElementById('preview-selected-book');
             const msg = document.getElementById('user-studylog-msg');
 
-            if (sId) sId.value = '';
-            if (sDisp) sDisp.value = '';
-            if (sPrev) { sPrev.innerHTML = ''; sPrev.classList.add('hidden'); }
             if (bId) bId.value = '';
             if (bDisp) bDisp.value = '';
             if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
@@ -1337,6 +1378,73 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Selected Students UI & Count Update Helpers
+    function updateSelectedStudentsUI() {
+        const elId = document.getElementById('selected-student-id');
+        const elDisp = document.getElementById('selected-student-display');
+        const elPrev = document.getElementById('preview-selected-student');
+
+        const students = Array.from(selectedStudentsMap.values());
+        if (students.length === 0) {
+            if (elId) elId.value = '';
+            if (elDisp) elDisp.value = '';
+            if (elPrev) {
+                elPrev.innerHTML = '';
+                elPrev.classList.add('hidden');
+            }
+            return;
+        }
+
+        const firstStudent = students[0];
+        if (elId) elId.value = firstStudent.id;
+
+        if (students.length === 1) {
+            if (elDisp) elDisp.value = `${firstStudent.name} (${firstStudent.sex}) - 학년 ${firstStudent.grade}`;
+        } else {
+            if (elDisp) elDisp.value = `${firstStudent.name} 외 ${students.length - 1}명 (총 ${students.length}명 선택됨)`;
+        }
+
+        if (elPrev) {
+            let chipsHtml = `
+                <div class="preview-info" style="margin-bottom: 0.5rem;">
+                    <div class="preview-title"><i class="fa-solid fa-circle-check"></i> 선택된 학생: 총 ${students.length}명</div>
+                </div>
+                <div class="selected-students-chips">
+            `;
+            students.forEach(s => {
+                chipsHtml += `
+                    <span class="student-chip">
+                        <i class="fa-solid fa-user-graduate"></i> ${escapeHtml(s.name)} (${s.sex}, ${s.grade})
+                        <span class="btn-remove-chip" data-id="${s.id}" title="선택 삭제">&times;</span>
+                    </span>
+                `;
+            });
+            chipsHtml += `</div>`;
+            elPrev.innerHTML = chipsHtml;
+            elPrev.classList.remove('hidden');
+
+            elPrev.querySelectorAll('.btn-remove-chip').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const sIdStr = btn.getAttribute('data-id');
+                    const sIdNum = parseInt(sIdStr);
+                    selectedStudentsMap.delete(sIdNum);
+                    selectedStudentsMap.delete(sIdStr);
+                    updateSelectedStudentsUI();
+                    updatePickerSelectCountBadge();
+                    loadPickerStudents();
+                });
+            });
+        }
+    }
+
+    function updatePickerSelectCountBadge() {
+        const badge = document.getElementById('picker-student-select-count');
+        if (badge) {
+            badge.textContent = `${selectedStudentsMap.size}명`;
+        }
+    }
+
     // Load Picker Students List
     async function loadPickerStudents() {
         const container = document.getElementById('picker-student-results');
@@ -1356,18 +1464,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let html = '';
             students.forEach(s => {
-                const sId = s.row_id || s.Id;
+                const sId = parseInt(s.row_id || s.Id);
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
+                const grade = formatGrade(s.Grade);
+                const referrer = formatReferrer(s.Referrer);
+                const isSelected = activeStudentPickerTarget === 'studylog' && selectedStudentsMap.has(sId);
+
                 html += `
-                    <div class="picker-item-row">
+                    <div class="picker-item-row ${isSelected ? 'selected' : ''}" data-row-id="${sId}">
                         <div class="item-main">
                             <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex})</div>
-                            <div class="item-sub">학년: ${formatGrade(s.Grade)}${s.Referrer ? ' · 추천: ' + formatReferrer(s.Referrer) : ''} | ID: #${sId}</div>
+                            <div class="item-sub">학년: ${grade}${s.Referrer ? ' · 추천: ' + referrer : ''} | ID: #${sId}</div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-primary btn-select-student-picker"
-                                data-id="${sId}" data-name="${name}" data-sex="${sex}" data-grade="${formatGrade(s.Grade)}" data-referrer="${formatReferrer(s.Referrer)}">
-                            <i class="fa-solid fa-check"></i> 선택
+                        <button type="button" class="btn btn-sm ${isSelected ? 'btn-success' : 'btn-outline-primary'} btn-select-student-picker"
+                                data-id="${sId}" data-name="${name}" data-sex="${sex}" data-grade="${grade}" data-referrer="${referrer}">
+                            <i class="fa-solid fa-${isSelected ? 'check' : 'plus'}"></i> ${isSelected ? '선택됨' : '선택'}
                         </button>
                     </div>
                 `;
@@ -1375,8 +1487,9 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = html;
 
             container.querySelectorAll('.btn-select-student-picker').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const id = btn.getAttribute('data-id');
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(btn.getAttribute('data-id'));
                     const name = btn.getAttribute('data-name');
                     const sex = btn.getAttribute('data-sex');
                     const grade = btn.getAttribute('data-grade');
@@ -1394,24 +1507,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    const elId = document.getElementById('selected-student-id');
-                    const elDisp = document.getElementById('selected-student-display');
-                    const elPrev = document.getElementById('preview-selected-student');
-                    const elModal = document.getElementById('modal-student-picker');
-
-                    if (elId) elId.value = id;
-                    if (elDisp) elDisp.value = `${name} (${sex}) - 학년 ${grade}${referrer ? ' · 추천: ' + referrer : ''}`;
-                    
-                    if (elPrev) {
-                        elPrev.innerHTML = `
-                            <div class="preview-info">
-                                <div class="preview-title"><i class="fa-solid fa-circle-check"></i> 선택된 학생: ${name}</div>
-                                <div class="preview-meta">성별: ${sex} | 학년: ${grade}${referrer ? ' · 추천: ' + referrer : ''} | ID: #${id}</div>
-                            </div>
-                        `;
-                        elPrev.classList.remove('hidden');
+                    // Studylog multi selection toggle
+                    if (selectedStudentsMap.has(id)) {
+                        selectedStudentsMap.delete(id);
+                    } else {
+                        selectedStudentsMap.set(id, { id, name, sex, grade, referrer });
                     }
-                    if (elModal) elModal.classList.add('hidden');
+
+                    loadPickerStudents();
+                    updatePickerSelectCountBadge();
                 });
             });
         } catch (err) {
@@ -1551,24 +1655,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Handle StudyLog Form Submit (With Modal Picker Caching!)
+    // Handle StudyLog Form Submit (With Multiple Students Selection Caching!)
     async function handleUserStudyLogSubmit(e) {
         e.preventDefault();
         const userStudyLogMsg = document.getElementById('user-studylog-msg');
-        const selectedStudentId = document.getElementById('selected-student-id');
         const selectedBookId = document.getElementById('selected-book-id');
         const studylogDate = document.getElementById('studylog-date');
 
         if (userStudyLogMsg) userStudyLogMsg.classList.add('hidden');
 
-        const sId = parseInt(selectedStudentId ? selectedStudentId.value : '0');
+        const studentIds = Array.from(selectedStudentsMap.keys()).map(id => parseInt(id)).filter(id => id > 0);
         const bId = parseInt(selectedBookId ? selectedBookId.value : '0');
         const dateVal = studylogDate ? studylogDate.value : '';
 
-        if (!sId || sId <= 0) {
+        if (studentIds.length === 0) {
             if (userStudyLogMsg) {
                 userStudyLogMsg.className = 'alert alert-danger';
-                userStudyLogMsg.textContent = '학습할 학생을 선택해 주세요.';
+                userStudyLogMsg.textContent = '학습할 학생을 1명 이상 선택해 주세요.';
                 userStudyLogMsg.classList.remove('hidden');
             }
             return;
@@ -1598,7 +1701,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = contentEl ? contentEl.value.trim() : '';
         const specialEl = document.getElementById('studylog-special');
         const isSpecial = specialEl ? specialEl.checked : false;
-        const payload = { StudentId: sId, BookId: bId, StudiedDay: dateVal, IsSpecial: isSpecial, LessonContent: content, Description: desc };
+
+        const payload = {
+            StudentIds: studentIds,
+            StudentId: studentIds[0], // 하위 호환용
+            BookId: bId,
+            StudiedDay: dateVal,
+            IsSpecial: isSpecial,
+            LessonContent: content,
+            Description: desc
+        };
 
         try {
             const result = await apiFetch('/api/user/studylogs', {

@@ -681,7 +681,7 @@
                             <div class="card-header-styled flex-between" style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <h2><i class="fa-solid fa-square-plus"></i> 꿈꾸는봄결 새 학습 기록 등록</h2>
-                                    <p class="subtitle">학생과 도서를 검색하여 선택 후 학습 일자를 입력하면 StudyLogs에 수록됩니다. (연속 입력 시 이전 선택 정보가 유지됩니다)</p>
+                                    <p class="subtitle">학생과 도서를 검색하여 선택 후 학습 일자를 입력하면 StudyLogs에 수록됩니다. (한 번에 여러 명 선택할 수 있습니다)</p>
                                 </div>
                                 <button type="button" id="btn-clear-studylog-cache" class="btn btn-sm btn-outline" title="캐싱된 선택 정보를 초기화합니다">
                                     <i class="fa-solid fa-broom"></i> 선택 초기화
@@ -693,13 +693,13 @@
 
                                 <!-- Section 1: 학생 선택 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 1. 학습 학생 선택</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 1. 학습 학생 선택 (다중 선택 가능)</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
-                                            <label>학생 선택 <span class="required">*</span></label>
+                                            <label>학습 학생 <span class="required">*</span></label>
                                             <div class="picker-input-group">
                                                 <input type="hidden" id="selected-student-id" name="StudentId">
-                                                <input type="text" id="selected-student-display" class="form-control" placeholder="아래 [학생 검색] 버튼을 클릭하여 학생을 선택하세요" readonly>
+                                                <input type="text" id="selected-student-display" class="form-control" placeholder="아래 [학생 검색] 버튼을 클릭하여 학생(들)을 선택하세요" readonly>
                                                 <button type="button" id="btn-open-student-picker" class="btn btn-primary">
                                                     <i class="fa-solid fa-magnifying-glass"></i> 학생 검색
                                                 </button>
@@ -1642,6 +1642,19 @@
                 <div id="picker-student-results" class="picker-results-container">
                     <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>
                 </div>
+            </div>
+            <div id="picker-student-footer" class="modal-footer picker-modal-footer">
+                <div class="picker-footer-controls">
+                    <button type="button" id="btn-picker-student-select-all" class="btn btn-sm btn-outline">
+                        <i class="fa-solid fa-check-double"></i> 현재 목록 전체 선택
+                    </button>
+                    <button type="button" id="btn-picker-student-deselect-all" class="btn btn-sm btn-outline">
+                        <i class="fa-solid fa-rotate-left"></i> 선택 해제
+                    </button>
+                </div>
+                <button type="button" id="btn-picker-student-confirm" class="btn btn-primary">
+                    <i class="fa-solid fa-check"></i> 선택 완료 <span id="picker-student-select-count" class="badge badge-light" style="margin-left: 0.35rem;">0명</span>
+                </button>
             </div>
         </div>
     </div>
