@@ -485,7 +485,9 @@ def user_search_students(
 
     if sex and sex.strip():
         s_val = sex.strip().upper()
-        if s_val in ('남', '남성', 'M', 'MALE'):
+        if sex.strip() == '__unspecified__':
+            conditions.append('(\"Sex\" IS NULL OR TRIM(\"Sex\") = \'\')')
+        elif s_val in ('남', '남성', 'M', 'MALE'):
             conditions.append('("Sex" = \'남\' OR "Sex" = \'남성\' OR "Sex" = \'M\' OR "Sex" = \'MALE\')')
         elif s_val in ('여', '여성', 'F', 'FEMALE'):
             conditions.append('("Sex" = \'여\' OR "Sex" = \'여성\' OR "Sex" = \'F\' OR "Sex" = \'FEMALE\')')
