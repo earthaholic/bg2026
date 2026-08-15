@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let classEditStudentSpecialIds = new Set(); // 수업 편집 폼에서 특강으로 지정된 학생 ID (배정된 학생만 유효)
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let batchCalendarMonth = ''; // YYYY-MM
-    let batchCalendarDays = {};
+    let batchCalendarDays = {}; // 월(YYYY-MM)별 날짜 학습 이력
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
@@ -4578,6 +4578,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return (dateValue || new Date().toISOString().slice(0, 10)).slice(0, 7);
     }
 
+    function getBatchMonthWithOffset(month, offset) {
+        const [year, monthNumber] = month.split('-').map(Number);
+        const date = new Date(year, monthNumber - 1 + offset, 1);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
     async function loadBatchStudylogCalendar(month = getBatchMonth(batchStudiedDay?.value)) {
         if (!activeBatchClassId || !batchCalendarStatus) return;
         batchCalendarMonth = month;
@@ -4587,9 +4593,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (batchCalendarGrid) batchCalendarGrid.classList.add('hidden');
         if (batchExistingRecords) batchExistingRecords.classList.add('hidden');
         try {
-            const data = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylog-calendar?month=${encodeURIComponent(month)}`);
+            const months = [-1, 0, 1].map(offset => getBatchMonthWithOffset(month, offset));
+            const results = await Promise.all(months.map(calendarMonth =>
+                apiFetch(`/api/user/classes/${activeBatchClassId}/studylog-calendar?month=${encodeURIComponent(calendarMonth)}`)
+            ));
             if (activeBatchClassId === null || batchCalendarMonth !== month) return;
-            batchCalendarDays = data.days || {};
+            batchCalendarDays = results.reduce((daysByMonth, data, index) => {
+                daysByMonth[months[index]] = data.days || {};
+                return daysByMonth;
+            }, {});
             renderBatchStudylogCalendar();
             showBatchExistingRecords(batchStudiedDay?.value || '');
         } catch (err) {
@@ -4600,27 +4612,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderBatchStudylogCalendar() {
         if (!batchCalendarGrid || !batchCalendarStatus || !batchCalendarMonth) return;
-        const [year, month] = batchCalendarMonth.split('-').map(Number);
-        const firstWeekday = new Date(year, month - 1, 1).getDay();
-        const lastDay = new Date(year, month, 0).getDate();
         const selectedDay = batchStudiedDay?.value || '';
         const labels = ['일', '월', '화', '수', '목', '금', '토'];
-        let html = labels.map(label => `<div class="batch-calendar-weekday">${label}</div>`).join('');
-        html += '<div class="batch-calendar-blank"></div>'.repeat(firstWeekday);
-        for (let day = 1; day <= lastDay; day++) {
-            const date = `${batchCalendarMonth}-${String(day).padStart(2, '0')}`;
-            const count = (batchCalendarDays[date] || []).length;
-            const classes = ['batch-calendar-day'];
-            if (count) classes.push('has-records');
-            if (date === selectedDay) classes.push('selected');
-            html += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${date}${count ? `, 기존 기록 ${count}건` : ''}"><span>${day}</span>${count ? `<b>${count}</b>` : ''}</button>`;
+        const months = [-1, 0, 1].map(offset => getBatchMonthWithOffset(batchCalendarMonth, offset));
+        const html = months.map(calendarMonth => {
+            const [year, month] = calendarMonth.split('-').map(Number);
+            const firstWeekday = new Date(year, month - 1, 1).getDay();
+            const lastDay = new Date(year, month, 0).getDate();
+            const days = batchCalendarDays[calendarMonth] || {};
+            let calendarHtml = labels.map(label => `<div class="batch-calendar-weekday">${label}</div>`).join('');
+            calendarHtml += '<div class="batch-calendar-blank"></div>'.repeat(firstWeekday);
+            for (let day = 1; day <= lastDay; day++) {
+                const date = `${calendarMonth}-${String(day).padStart(2, '0')}`;
+                const count = (days[date] || []).length;
+                const classes = ['batch-calendar-day'];
+                if (count) classes.push('has-records');
+                if (date === selectedDay) classes.push('selected');
+                calendarHtml += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${date}${count ? `, 기존 기록 ${count}건` : ''}"><span>${day}</span>${count ? `<b>${count}</b>` : ''}</button>`;
+            }
+            return `<section class="batch-calendar-month" aria-label="${year}년 ${month}월"><h5>${year}년 ${month}월</h5><div class="batch-calendar-grid">${calendarHtml}</div></section>`;
+        }).join('');
+        if (batchCalendarMonthLabel) {
+            const [selectedYear, selectedMonth] = batchCalendarMonth.split('-').map(Number);
+            batchCalendarMonthLabel.textContent = `${selectedYear}년 ${selectedMonth}월`;
         }
-        if (batchCalendarMonthLabel) batchCalendarMonthLabel.textContent = `${year}년 ${month}월`;
         batchCalendarGrid.innerHTML = html;
         batchCalendarGrid.classList.remove('hidden');
         batchCalendarGrid.querySelectorAll('[data-batch-date]').forEach(button => button.addEventListener('click', () => selectBatchCalendarDate(button.dataset.batchDate)));
-        const total = Object.values(batchCalendarDays).reduce((sum, records) => sum + records.length, 0);
-        batchCalendarStatus.textContent = total ? `이번 달 기존 학습 기록 ${total}건을 표시했습니다.` : '이번 달에는 기존 학습 기록이 없습니다.';
+        const total = Object.values(batchCalendarDays).reduce((sum, days) => sum + Object.values(days).reduce((daySum, records) => daySum + records.length, 0), 0);
+        batchCalendarStatus.textContent = total ? `이전·선택·다음 달의 기존 학습 기록 ${total}건을 표시했습니다.` : '표시 중인 세 달에는 기존 학습 기록이 없습니다.';
         batchCalendarStatus.className = 'batch-calendar-status';
     }
 
@@ -4632,7 +4652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showBatchExistingRecords(date) {
         if (!batchExistingRecords) return;
-        const records = batchCalendarDays[date] || [];
+        const records = batchCalendarDays[date.slice(0, 7)]?.[date] || [];
         if (!date || !records.length) {
             batchExistingRecords.classList.add('hidden');
             batchExistingRecords.innerHTML = '';
@@ -4654,9 +4674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function changeBatchCalendarMonth(offset) {
-        const [year, month] = (batchCalendarMonth || getBatchMonth()).split('-').map(Number);
-        const date = new Date(year, month - 1 + offset, 1);
-        loadBatchStudylogCalendar(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+        loadBatchStudylogCalendar(getBatchMonthWithOffset(batchCalendarMonth || getBatchMonth(), offset));
     }
 
     function resetBatchRegView() {

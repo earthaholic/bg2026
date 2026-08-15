@@ -2321,6 +2321,9 @@ body {
 .batch-calendar-status { margin: 0.8rem 0 0.55rem; color: var(--text-muted); font-size: 0.8rem; }
 .batch-calendar-status.loading { color: var(--primary); }
 .batch-calendar-status.error { color: var(--danger); }
+.batch-calendar-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.batch-calendar-month { min-width: 0; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-main); }
+.batch-calendar-month h5 { margin: 0 0 0.65rem; text-align: center; color: var(--text-main); font-size: 0.88rem; }
 .batch-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.35rem; }
 .batch-calendar-weekday { text-align: center; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; padding-bottom: 0.2rem; }
 .batch-calendar-day, .batch-calendar-blank { min-height: 2.35rem; }
@@ -2346,6 +2349,7 @@ body {
 @media (max-width: 640px) {
     .batch-calendar-header, .batch-existing-records { flex-direction: column; align-items: stretch; }
     .batch-calendar-controls { justify-content: space-between; }
+    .batch-calendar-months { grid-template-columns: 1fr; }
     .batch-existing-records > div { flex-basis: auto; }
 }
 /* 학습 기록 검색 카드: 수업 내용/메모 미리보기 */
