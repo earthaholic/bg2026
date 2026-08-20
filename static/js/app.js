@@ -5380,6 +5380,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let tuitionPaymentsCache = [];
 
     function formatWon(value) { return `${Number(value || 0).toLocaleString('ko-KR')}원`; }
+    function parseCurrency(value) { return Number(String(value || '').replace(/[^0-9]/g, '')) || 0; }
+    function formatCurrencyInput(input) {
+        const digits = String(input.value || '').replace(/[^0-9]/g, '');
+        input.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    }
 
     async function loadTuitionPaymentView() {
         const studentInput = document.getElementById('tuition-student-search');
@@ -5425,7 +5430,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const classType = document.getElementById('tuition-class-type')?.value;
         const paidLessons = parseInt(document.getElementById('tuition-paid-lessons')?.value || '0');
         const setting = tuitionSettingsCache.find(s => s.ClassType === classType && Number(s.PaidLessons) === paidLessons);
-        if (setting) document.getElementById('tuition-fee-amount').value = setting.DefaultFee;
+        if (setting) {
+            const input = document.getElementById('tuition-fee-amount');
+            input.value = setting.DefaultFee;
+            formatCurrencyInput(input);
+        }
     }
 
     async function showTuitionProgress() {
@@ -5466,7 +5475,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const service = prompt('서비스차시(0~10)를 입력해 주세요.', p.ServiceLessons);
         if (service === null) return;
         try {
-            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: Number(fee), Memo: p.Memo || '' }) });
+            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: parseCurrency(fee), Memo: p.Memo || '' }) });
             await loadTuitionPayments(); showToast('결제 정보가 수정되었습니다.', 'success');
         } catch (err) { alert(err.message); }
     }
@@ -5479,13 +5488,17 @@ document.addEventListener('DOMContentLoaded', () => {
             tuitionSettingsCache = data.settings || [];
             body.innerHTML = TUITION_CLASS_TYPES.flatMap(type => [10, 20, 30].map(lessons => {
                 const setting = tuitionSettingsCache.find(s => s.ClassType === type && Number(s.PaidLessons) === lessons);
-                return `<tr><td>${type}</td><td>${lessons}차시</td><td><input class="form-control tuition-setting-fee" type="number" min="0" value="${setting ? setting.DefaultFee : ''}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"></td></tr>`;
+                const fee = setting ? Number(setting.DefaultFee).toLocaleString('ko-KR') : '';
+                return `<tr><td>${type}</td><td>${lessons}차시</td><td><div class="currency-input-wrap"><input class="form-control tuition-setting-fee currency-input" type="text" inputmode="numeric" value="${fee}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"><span>원</span></div></td></tr>`;
             })).join('');
         } catch (err) { body.innerHTML = `<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     document.getElementById('tuition-class-type')?.addEventListener('change', applyDefaultTuitionFee);
     document.getElementById('tuition-paid-lessons')?.addEventListener('change', applyDefaultTuitionFee);
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('currency-input')) formatCurrencyInput(e.target);
+    });
     let tuitionStudentSearchTimer = null;
     document.getElementById('tuition-student-search')?.addEventListener('input', () => {
         document.getElementById('tuition-student').value = '';
@@ -5496,7 +5509,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-tuition-payment')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('tuition-payment-msg');
-        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: Number(document.getElementById('tuition-fee-amount').value), Memo: document.getElementById('tuition-memo').value.trim() };
+        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: parseCurrency(document.getElementById('tuition-fee-amount').value), Memo: document.getElementById('tuition-memo').value.trim() };
         try { const result = await apiFetch('/api/user/tuition-payments', { method: 'POST', body: JSON.stringify(payload) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadTuitionPayments(); await showTuitionProgress(); } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
     });
 
@@ -5533,7 +5546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const input of inputs) {
             if (input.value === '') continue;
             if (Number(input.value) < 0) { msg.className = 'alert alert-danger'; msg.textContent = '수업료는 0원 이상으로 입력해 주세요.'; msg.classList.remove('hidden'); return; }
-            settings.push({ ClassType: input.dataset.classType, PaidLessons: Number(input.dataset.paidLessons), DefaultFee: Number(input.value) });
+            settings.push({ ClassType: input.dataset.classType, PaidLessons: Number(input.dataset.paidLessons), DefaultFee: parseCurrency(input.value) });
         }
         if (!settings.length) { msg.className = 'alert alert-warning'; msg.textContent = '저장할 수업료를 1개 이상 입력해 주세요.'; msg.classList.remove('hidden'); return; }
         try {
