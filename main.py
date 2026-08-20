@@ -51,7 +51,7 @@ from auth import create_access_token, get_current_user, get_current_admin, get_c
 from similarity import normalize_key, classify_match
 
 app = FastAPI(
-    title="bg2026 - 꿈꾸는봄결 데이터 관리 시스템",
+    title="한국토론교육연구협회 - 꿈꾸는봄결 데이터 관리 시스템",
     version="2.0.0"
 )
 
