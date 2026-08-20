@@ -183,6 +183,7 @@ class TuitionPaymentRequest(BaseModel):
     StartDate: str
     PaidDate: str
     FeeAmount: int
+    Memo: Optional[str] = ""
 
 TUITION_CLASS_TYPES = (
     "초등부 독서반", "초등부 기초글쓰기반", "초등부 토론반",
@@ -754,13 +755,18 @@ def save_tuition_fee_setting(payload: TuitionFeeSettingRequest, current_user: Di
         conn.close()
 
 @app.get("/api/user/tuition-payments")
-def get_tuition_payments(student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff)):
+def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff)):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        where, params = "", []
+        conditions, params = [], []
         if student_id:
-            where, params = ' WHERE p."StudentId" = ?', [student_id]
+            conditions.append('p."StudentId" = ?'); params.append(student_id)
+        if q and q.strip():
+            conditions.append('s."Name" LIKE ?'); params.append(f'%{q.strip()}%')
+        if class_type and class_type.strip():
+            conditions.append('p."ClassType" = ?'); params.append(class_type.strip())
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ''
         cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName"
                            FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                            {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
@@ -782,12 +788,27 @@ def create_tuition_payment(payload: TuitionPaymentRequest, current_user: Dict[st
         cursor.execute('SELECT rowid FROM "Students" WHERE rowid = ? OR "Id" = ?', (payload.StudentId, payload.StudentId))
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="해당 학생을 찾을 수 없습니다.")
-        cursor.execute('''INSERT INTO "TuitionPayments" ("StudentId", "ClassType", "PaidLessons", "ServiceLessons", "StartDate", "PaidDate", "FeeAmount", "CreatedBy")
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, current_user["username"]))
+        cursor.execute('''INSERT INTO "TuitionPayments" ("StudentId", "ClassType", "PaidLessons", "ServiceLessons", "StartDate", "PaidDate", "FeeAmount", "Memo", "CreatedBy")
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"]))
         payment_id = cursor.lastrowid
         conn.commit()
         _audit_insert("TuitionPayments", payment_id, get_record_snapshot("TuitionPayments", payment_id), current_user["username"], current_user["role"])
         return {"status": "success", "id": payment_id, "message": "학생 결제 정보가 등록되었습니다."}
+    finally:
+        conn.close()
+
+@app.get("/api/user/tuition-payments/{payment_id}")
+def get_tuition_payment_detail(payment_id: int, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s."Grade" AS "StudentGrade"
+                          FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
+                          WHERE p.rowid = ? OR p."Id" = ?''', (payment_id, payment_id))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
+        return {"payment": dict(row)}
     finally:
         conn.close()
 
@@ -807,8 +828,8 @@ def update_tuition_payment(payment_id: int, payload: TuitionPaymentRequest, curr
     try:
         cursor = conn.cursor()
         cursor.execute('''UPDATE "TuitionPayments" SET "StudentId"=?, "ClassType"=?, "PaidLessons"=?, "ServiceLessons"=?,
-                          "StartDate"=?, "PaidDate"=?, "FeeAmount"=?, "UpdatedBy"=?, "UpdatedAt"=datetime('now','localtime') WHERE rowid=?''',
-                       (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, current_user["username"], row_id))
+                          "StartDate"=?, "PaidDate"=?, "FeeAmount"=?, "Memo"=?, "UpdatedBy"=?, "UpdatedAt"=datetime('now','localtime') WHERE rowid=?''',
+                       (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"], row_id))
         conn.commit()
     finally:
         conn.close()

@@ -87,6 +87,7 @@ def init_system_tables():
             "StartDate" TEXT NOT NULL,
             "PaidDate" TEXT NOT NULL DEFAULT '',
             "FeeAmount" INTEGER NOT NULL DEFAULT 0 CHECK("FeeAmount" >= 0),
+            "Memo" TEXT DEFAULT '',
             "CreatedBy" TEXT DEFAULT '',
             "UpdatedBy" TEXT DEFAULT '',
             "UpdatedAt" TEXT DEFAULT ''
@@ -96,6 +97,8 @@ def init_system_tables():
     tuition_payment_cols = [r["name"] for r in cursor.fetchall()]
     if "PaidDate" not in tuition_payment_cols:
         cursor.execute('ALTER TABLE "TuitionPayments" ADD COLUMN "PaidDate" TEXT NOT NULL DEFAULT \'\'')
+    if "Memo" not in tuition_payment_cols:
+        cursor.execute('ALTER TABLE "TuitionPayments" ADD COLUMN "Memo" TEXT DEFAULT \'\'')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tuition_payments_student_start ON "TuitionPayments"("StudentId", "StartDate")')
 
     # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블

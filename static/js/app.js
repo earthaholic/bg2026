@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'tuition-payment', 'tuition-fee-settings'];
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
@@ -534,6 +534,8 @@ document.addEventListener('DOMContentLoaded', () => {
             initMonthlyReportView();
         } else if (targetView === 'tuition-payment') {
             loadTuitionPaymentView();
+        } else if (targetView === 'tuition-payment-search') {
+            loadTuitionPaymentSearch();
         } else if (targetView === 'tuition-fee-settings') {
             loadTuitionFeeSettings();
         }
@@ -5464,7 +5466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const service = prompt('서비스차시(0~10)를 입력해 주세요.', p.ServiceLessons);
         if (service === null) return;
         try {
-            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: Number(fee) }) });
+            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: Number(fee), Memo: p.Memo || '' }) });
             await loadTuitionPayments(); showToast('결제 정보가 수정되었습니다.', 'success');
         } catch (err) { alert(err.message); }
     }
@@ -5499,9 +5501,36 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-tuition-payment')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('tuition-payment-msg');
-        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: Number(document.getElementById('tuition-fee-amount').value) };
+        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: Number(document.getElementById('tuition-fee-amount').value), Memo: document.getElementById('tuition-memo').value.trim() };
         try { const result = await apiFetch('/api/user/tuition-payments', { method: 'POST', body: JSON.stringify(payload) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadTuitionPayments(); await showTuitionProgress(); } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
     });
+
+    async function loadTuitionPaymentSearch() {
+        const body = document.getElementById('tuition-search-body');
+        if (!body) return;
+        const q = document.getElementById('tuition-search-q').value.trim();
+        const classType = document.getElementById('tuition-search-class').value;
+        body.innerHTML = '<tr><td colspan="7" class="text-center">결제 이력을 불러오는 중입니다.</td></tr>';
+        try {
+            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}`);
+            const rows = data.payments || [];
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
+        } catch (err) { body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    async function showTuitionPaymentDetail(id) {
+        const panel = document.getElementById('tuition-detail-panel');
+        panel.classList.remove('hidden');
+        panel.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 상세 정보를 불러오는 중입니다.</div>';
+        try {
+            const p = (await apiFetch(`/api/user/tuition-payments/${id}`)).payment;
+            panel.innerHTML = `<div class="card-header-styled"><h3><i class="fa-solid fa-receipt"></i> 결제 상세 정보</h3></div><div class="detail-meta-row"><span>학생: <strong>${escapeHtml(p.StudentName || '-')}</strong>${p.StudentGrade ? ` (${escapeHtml(p.StudentGrade)})` : ''}</span><span>반: <strong>${escapeHtml(p.ClassType)}</strong></span><span>차시 시작일: <strong>${escapeHtml(p.StartDate)}</strong></span><span>납부일: <strong>${escapeHtml(p.PaidDate || '-')}</strong></span><span>결제/서비스: <strong>${p.PaidLessons}회 / ${p.ServiceLessons}회</strong></span><span>수업료: <strong>${formatWon(p.FeeAmount)}</strong></span></div><div class="detail-desc-box"><strong><i class="fa-solid fa-note-sticky"></i> 비고</strong><p>${escapeHtml(p.Memo || '입력된 비고가 없습니다.')}</p></div>`;
+        } catch (err) { panel.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
+    }
+
+    document.getElementById('btn-tuition-search')?.addEventListener('click', loadTuitionPaymentSearch);
+    document.getElementById('tuition-search-q')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); loadTuitionPaymentSearch(); } });
 
     if (btnDoAuditSearch) {
         btnDoAuditSearch.addEventListener('click', () => {
