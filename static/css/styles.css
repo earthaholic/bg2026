@@ -2410,6 +2410,19 @@ body {
     color: var(--text-muted);
     font-weight: 600;
 }
+
+.student-tuition-summary {
+    margin-top: 1rem;
+}
+
+.student-tuition-summary .detail-section-title {
+    margin-bottom: 0.65rem;
+}
+
+.student-tuition-summary p {
+    margin: 0.65rem 0 0;
+    font-size: 0.8rem;
+}
 /* 학습 기록 검색 카드: 수업 내용/메모 미리보기 */
 .studylog-card-preview {
     margin-top: 0.45rem;

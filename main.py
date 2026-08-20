@@ -214,7 +214,8 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None) -> Dict[
                     "next_lesson": None, "remaining_lessons": 0, "payments": []}
         earliest_start = payments[0]["StartDate"]
         cursor.execute('''SELECT COUNT(*) AS count FROM "StudyLogs"
-                          WHERE "StudentId" = ? AND "StudiedDay" >= ? AND "StudiedDay" <= ?''',
+                          WHERE "StudentId" = ? AND "StudiedDay" >= ? AND "StudiedDay" <= ?
+                          AND COALESCE("IsSpecial", 0) = 0''',
                        (student_id, earliest_start, as_of or "9999-12-31"))
         used = cursor.fetchone()["count"]
         total = sum((p.get("PaidLessons") or 0) + (p.get("ServiceLessons") or 0) for p in payments)
@@ -645,11 +646,14 @@ def user_get_student_detail(
 
     studylogs = [dict(r) for r in logs_rows]
 
-    return {
+    result = {
         "student": student,
         "studylogs": studylogs,
         "total_studylogs": len(studylogs)
     }
+    if current_user.get("role") in ("admin", "manager"):
+        result["tuition_progress"] = _get_tuition_progress(s_row_id)
+    return result
 
 # --- Options List APIs for Forms ---
 @app.get("/api/user/students-options")

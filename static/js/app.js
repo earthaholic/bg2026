@@ -2560,6 +2560,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const studylogs = data.studylogs || [];
             const totalLogs = data.total_studylogs || 0;
+            const tuitionProgress = data.tuition_progress;
+            const tuitionHtml = isStaff() ? (tuitionProgress?.has_payment
+                ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><div class="detail-meta-row"><span>누적 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? '<span class="badge badge-warning">차시 소진</span>' : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">특강은 수강 차시에서 차감하지 않습니다.</p></div>`
+                : `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><p class="text-muted">등록된 결제 정보가 없습니다.</p></div>`) : '';
 
             let studylogsHtml = '';
             if (studylogs.length === 0) {
@@ -2610,6 +2614,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span><i class="fa-solid fa-award"></i> 총 수업: <strong>${totalLogs}회</strong></span>
                             </div>
                         </div>
+
+                        ${tuitionHtml}
 
                         <div style="margin-top: 1rem;">
                             <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 특이사항</div>
