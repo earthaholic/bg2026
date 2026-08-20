@@ -669,14 +669,26 @@ def user_get_student_detail(
     '''
     cursor.execute(studylogs_query, (s_row_id, str(s_row_id), s_id, s_name))
     logs_rows = cursor.fetchall()
+
+    # 추천인 이름은 학생 등록 시 문자열로 저장되므로, 현재 학생 이름과 일치하는 학생을 조회한다.
+    cursor.execute('''
+        SELECT rowid AS row_id, "Id", "Name", "Sex", "Grade", "School", "IsClassEnded"
+        FROM "Students"
+        WHERE TRIM(COALESCE("Referrer", '')) = ?
+          AND rowid <> ?
+        ORDER BY "Name" ASC, rowid ASC
+    ''', (s_name.strip(), s_row_id))
+    referred_students_rows = cursor.fetchall()
     conn.close()
 
     studylogs = [dict(r) for r in logs_rows]
+    referred_students = [dict(r) for r in referred_students_rows]
 
     result = {
         "student": student,
         "studylogs": studylogs,
-        "total_studylogs": len(studylogs)
+        "total_studylogs": len(studylogs),
+        "referred_students": referred_students,
     }
     if current_user.get("role") in ("admin", "manager"):
         result["tuition_progress"] = _get_tuition_progress(s_row_id)

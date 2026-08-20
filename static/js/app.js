@@ -2597,10 +2597,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const studylogs = data.studylogs || [];
             const totalLogs = data.total_studylogs || 0;
+            const referredStudents = data.referred_students || [];
             const tuitionProgress = data.tuition_progress;
             const tuitionHtml = isStaff() ? (tuitionProgress?.has_payment
                 ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><div class="detail-meta-row"><span>누적 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? '<span class="badge badge-warning">차시 소진</span>' : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">특강은 수강 차시에서 차감하지 않습니다.</p></div>`
                 : `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><p class="text-muted">등록된 결제 정보가 없습니다.</p></div>`) : '';
+
+            const referredStudentsHtml = referredStudents.length
+                ? `<div class="student-referrals-list">${referredStudents.map(referred => {
+                    const referredId = referred.row_id || referred.Id;
+                    return `<button type="button" class="student-referral-item" data-student-id="${referredId}">
+                        <strong>${escapeHtml(referred.Name || '이름 없음')}</strong>
+                        <span>${formatGrade(referred.Grade)} · ${formatSex(referred.Sex)}${referred.School ? ` · ${escapeHtml(referred.School)}` : ''}${referred.IsClassEnded ? ' · 수업 종료' : ''}</span>
+                    </button>`;
+                }).join('')}</div>`
+                : '<div class="detail-desc-box student-referrals-empty">추천한 학생이 없습니다.</div>';
 
             let studylogsHtml = '';
             if (studylogs.length === 0) {
@@ -2655,12 +2666,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         ${tuitionHtml}
 
-                        <div style="margin-top: 1rem;">
+                        <div class="student-referrals-section">
+                            <div class="detail-section-title"><i class="fa-solid fa-user-group"></i> 피추천인 (${referredStudents.length}명)</div>
+                            ${referredStudentsHtml}
+                        </div>
+
+                        <div class="student-detail-section">
                             <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 특이사항</div>
                             <div class="detail-desc-box">${escapeHtml(s.Description || '등록된 메모나 특이사항이 없습니다.')}</div>
                         </div>
 
-                        <div style="margin-top: 1.1rem;">
+                        <div class="student-detail-section student-studylogs-section">
                             <div class="detail-section-title">
                                 <span><i class="fa-solid fa-book-open-reader"></i> 최근 수업 진행 내역 (StudyLogs: 총 ${totalLogs}건)</span>
                             </div>
@@ -2716,6 +2732,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (logId) {
                         openStudyLogDetailModal(logId);
                     }
+                });
+            });
+
+            modalStudentDetailBody.querySelectorAll('.student-referral-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const referredStudentId = item.getAttribute('data-student-id');
+                    if (referredStudentId) openStudentDetailModal(referredStudentId);
                 });
             });
 
