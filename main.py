@@ -144,6 +144,9 @@ class UserStudentRegisterRequest(BaseModel):
     IsClassEnded: Optional[int] = 0
     Description: Optional[str] = ""
 
+class StudentConsultationRequest(BaseModel):
+    Content: str
+
 class UserStudyLogRegisterRequest(BaseModel):
     StudentId: Optional[int] = None
     StudentIds: Optional[List[int]] = []
@@ -678,6 +681,89 @@ def user_get_student_detail(
     if current_user.get("role") in ("admin", "manager"):
         result["tuition_progress"] = _get_tuition_progress(s_row_id)
     return result
+
+@app.get("/api/user/students/{student_id}/consultations")
+def user_get_student_consultations(
+    student_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    row_id = _resolve_domain_pk("Students", student_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT rowid AS row_id, * FROM "StudentConsultations"
+                          WHERE "StudentId" = ? ORDER BY "CreatedAt" DESC, rowid DESC''', (row_id,))
+        return {"consultations": [dict(row) for row in cursor.fetchall()]}
+    finally:
+        conn.close()
+
+@app.post("/api/user/students/{student_id}/consultations")
+def user_create_student_consultation(
+    student_id: int,
+    payload: StudentConsultationRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("Students", student_id)
+    content = payload.Content.strip()
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    if not content:
+        raise HTTPException(status_code=400, detail="상담 기록을 입력해 주세요.")
+    try:
+        res = insert_table_row("StudentConsultations", {
+            "StudentId": row_id, "Content": content, "CreatedBy": current_user["username"]
+        })
+        consultation_id = res.get("id")
+        _audit_insert("StudentConsultations", consultation_id,
+                      get_record_snapshot("StudentConsultations", consultation_id),
+                      current_user["username"], current_user["role"])
+        return {"status": "success", "message": "상담 기록이 추가되었습니다.", "id": consultation_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"상담 기록 추가 중 오류가 발생했습니다: {str(e)}")
+
+@app.put("/api/user/consultations/{consultation_id}")
+def user_update_student_consultation(
+    consultation_id: int,
+    payload: StudentConsultationRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("StudentConsultations", consultation_id)
+    content = payload.Content.strip()
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 상담 기록을 찾을 수 없습니다.")
+    if not content:
+        raise HTTPException(status_code=400, detail="상담 기록을 입력해 주세요.")
+    try:
+        old_snapshot = get_record_snapshot("StudentConsultations", row_id)
+        update_table_row("StudentConsultations", "rowid", row_id, {
+            "Content": content, "UpdatedBy": current_user["username"],
+            "UpdatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        _audit_update("StudentConsultations", row_id, old_snapshot,
+                      get_record_snapshot("StudentConsultations", row_id),
+                      current_user["username"], current_user["role"])
+        return {"status": "success", "message": "상담 기록이 수정되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"상담 기록 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.delete("/api/user/consultations/{consultation_id}")
+def user_delete_student_consultation(
+    consultation_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    row_id = _resolve_domain_pk("StudentConsultations", consultation_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 상담 기록을 찾을 수 없습니다.")
+    try:
+        old_snapshot = get_record_snapshot("StudentConsultations", row_id)
+        delete_table_row("StudentConsultations", "rowid", row_id)
+        _audit_delete("StudentConsultations", row_id, old_snapshot,
+                      current_user["username"], current_user["role"])
+        return {"status": "success", "message": "상담 기록이 삭제되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"상담 기록 삭제 중 오류가 발생했습니다: {str(e)}")
 
 # --- Options List APIs for Forms ---
 @app.get("/api/user/students-options")

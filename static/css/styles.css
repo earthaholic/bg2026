@@ -2300,6 +2300,42 @@ body {
     overflow-y: auto;
 }
 
+.consultation-modal-card {
+    width: min(720px, 94vw);
+}
+
+.consultation-form {
+    margin-bottom: 1rem;
+}
+
+.consultation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.consultation-item {
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface-hover);
+}
+
+.consultation-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.55rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.consultation-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
 /* 수업료 화면: 등록 폼·이력·상세 카드가 화면 높이를 넘을 수 있으므로 세로 스크롤을 허용한다. */
 #view-tuition-payment,
 #view-tuition-payment-search,

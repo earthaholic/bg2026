@@ -184,6 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalStudentDetailBody = document.getElementById('modal-student-detail-body');
     const btnCloseStudentDetailModal = document.getElementById('btn-close-student-detail-modal');
 
+    const modalStudentConsultations = document.getElementById('modal-student-consultations');
+    const modalStudentConsultationsTitle = document.getElementById('modal-student-consultations-title');
+    const modalStudentConsultationsBody = document.getElementById('modal-student-consultations-body');
+    const btnCloseStudentConsultationsModal = document.getElementById('btn-close-student-consultations-modal');
+
     // Admin Book Delete Safety Modal Elements
     const modalDeleteConfirm = document.getElementById('modal-delete-confirm');
     const targetDeleteTitleDisplay = document.getElementById('target-delete-title-display');
@@ -798,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnCloseDetailModal.addEventListener('click', () => modalBookDetail.classList.add('hidden'));
         btnCloseStudentDetailModal.addEventListener('click', () => modalStudentDetail.classList.add('hidden'));
+        btnCloseStudentConsultationsModal.addEventListener('click', () => modalStudentConsultations.classList.add('hidden'));
 
         // Admin Book Delete Safety Modal Events
         btnCloseDeleteConfirm.addEventListener('click', () => modalDeleteConfirm.classList.add('hidden'));
@@ -2551,6 +2557,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const s = data.student;
 
             let actionsHtml = `
+                <button id="btn-modal-student-consultations" class="btn btn-sm btn-outline">
+                    <i class="fa-solid fa-comments"></i> 상담 기록
+                </button>
                 <button id="btn-modal-monthly-report-student" class="btn btn-sm btn-success">
                     <i class="fa-solid fa-comment-sms"></i> 월말보고 문자 생성
                 </button>
@@ -2566,6 +2575,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
             modalStudentDetailActions.innerHTML = actionsHtml;
+
+            document.getElementById('btn-modal-student-consultations').addEventListener('click', () => {
+                openStudentConsultationsModal(studentId, s.Name || '학생');
+            });
 
             document.getElementById('btn-modal-monthly-report-student').addEventListener('click', () => {
                 modalStudentDetail.classList.add('hidden');
@@ -2714,6 +2727,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Difficulty Weight Helper (선택안함/초등부: 1.0, 중등부: 2.0, 심화반/독서모임: 3.0)
+    async function openStudentConsultationsModal(studentId, studentName) {
+        modalStudentConsultationsTitle.innerHTML = `<i class="fa-solid fa-comments"></i> ${escapeHtml(studentName)} 상담 기록`;
+        modalStudentConsultationsBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>상담 기록 조회 중...</p></div>';
+        modalStudentConsultations.classList.remove('hidden');
+        try {
+            const data = await apiFetch(`/api/user/students/${studentId}/consultations`);
+            renderStudentConsultations(studentId, studentName, data.consultations || []);
+        } catch (err) {
+            modalStudentConsultationsBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    function renderStudentConsultations(studentId, studentName, consultations) {
+        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form"><div class="form-group"><label for="student-consultation-content">새 상담 기록</label><textarea id="student-consultation-content" class="form-control" rows="4" placeholder="상담 내용을 입력하세요." required></textarea></div><button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> 기록 추가</button></form>` : '';
+        const listHtml = consultations.length ? consultations.map(item => `
+            <article class="consultation-item" data-consultation-id="${item.row_id || item.Id}">
+                <div class="consultation-item-header"><span><i class="fa-regular fa-clock"></i> ${escapeHtml(item.CreatedAt || '작성 시각 없음')}${item.CreatedBy ? ` · ${escapeHtml(item.CreatedBy)}` : ''}</span>${isStaff() ? '<span><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></span>' : ''}</div>
+                <div class="consultation-content">${escapeHtml(item.Content || '')}</div>
+            </article>`).join('') : '<div class="empty-state"><i class="fa-solid fa-comments fa-2x"></i><p>등록된 상담 기록이 없습니다.</p></div>';
+        modalStudentConsultationsBody.innerHTML = `${formHtml}<div class="consultation-list">${listHtml}</div>`;
+
+        const reload = () => openStudentConsultationsModal(studentId, studentName);
+        const form = document.getElementById('student-consultation-form');
+        if (form) form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const content = document.getElementById('student-consultation-content').value.trim();
+            if (!content) return;
+            try {
+                await apiFetch(`/api/user/students/${studentId}/consultations`, { method: 'POST', body: JSON.stringify({ Content: content }) });
+                showToast('상담 기록을 추가했습니다.', 'success'); reload();
+            } catch (err) { showToast(err.message, 'danger'); }
+        });
+
+        modalStudentConsultationsBody.querySelectorAll('.btn-edit-consultation').forEach(button => button.addEventListener('click', () => {
+            const itemEl = button.closest('.consultation-item');
+            const contentEl = itemEl.querySelector('.consultation-content');
+            const original = contentEl.textContent;
+            contentEl.innerHTML = `<textarea class="form-control consultation-edit-input" rows="4">${escapeHtml(original)}</textarea><div class="modal-actions"><button type="button" class="btn btn-sm btn-primary btn-save-consultation">저장</button><button type="button" class="btn btn-sm btn-outline btn-cancel-consultation">취소</button></div>`;
+            button.closest('.consultation-item-header').querySelector('span:last-child').innerHTML = '';
+            itemEl.querySelector('.btn-cancel-consultation').addEventListener('click', reload);
+            itemEl.querySelector('.btn-save-consultation').addEventListener('click', async () => {
+                const content = itemEl.querySelector('.consultation-edit-input').value.trim();
+                if (!content) return showToast('상담 기록을 입력해 주세요.', 'warning');
+                try {
+                    await apiFetch(`/api/user/consultations/${itemEl.dataset.consultationId}`, { method: 'PUT', body: JSON.stringify({ Content: content }) });
+                    showToast('상담 기록을 수정했습니다.', 'success'); reload();
+                } catch (err) { showToast(err.message, 'danger'); }
+            });
+        }));
+
+        modalStudentConsultationsBody.querySelectorAll('.btn-delete-consultation').forEach(button => button.addEventListener('click', async () => {
+            if (!confirm('이 상담 기록을 삭제하시겠습니까?')) return;
+            try {
+                await apiFetch(`/api/user/consultations/${button.closest('.consultation-item').dataset.consultationId}`, { method: 'DELETE' });
+                showToast('상담 기록을 삭제했습니다.', 'success'); reload();
+            } catch (err) { showToast(err.message, 'danger'); }
+        }));
+    }
+
     function getDifficultyWeight(targetStr) {
         const t = String(targetStr || '').trim();
         if (t === '중등부') return 2.0;

@@ -101,6 +101,20 @@ def init_system_tables():
         cursor.execute('ALTER TABLE "TuitionPayments" ADD COLUMN "Memo" TEXT DEFAULT \'\'')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tuition_payments_student_start ON "TuitionPayments"("StudentId", "StartDate")')
 
+    # 학생별 상담 기록 (로컬 전용)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "StudentConsultations" (
+            "Id" INTEGER PRIMARY KEY,
+            "StudentId" INTEGER NOT NULL,
+            "Content" TEXT NOT NULL DEFAULT '',
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT ''
+        )
+    """)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_student_consultations_student_created ON "StudentConsultations"("StudentId", "CreatedAt" DESC)')
+
     # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블
     # (로컬 전용 도메인 테이블 - oracle_sync.py 실행 시 DROP되므로 시작 시점에 재생성됨)
     cursor.execute("""
