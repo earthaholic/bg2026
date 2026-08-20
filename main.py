@@ -168,12 +168,12 @@ class ClassStudyLogItem(BaseModel):
     StudentId: int
     include: bool = True
     is_special: bool = False
+    Description: Optional[str] = ""
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: int
     StudiedDay: str
     LessonContent: Optional[str] = ""
-    Description: Optional[str] = ""
     logs: List[ClassStudyLogItem]
 
 class TuitionFeeSettingRequest(BaseModel):
@@ -1502,7 +1502,6 @@ def user_batch_register_class_studylogs(
     if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
     lesson_content = (payload.LessonContent or "").strip()
-    description = (payload.Description or "").strip()
 
     book_row = _resolve_domain_pk("Books", payload.BookId)
     if book_row is None:
@@ -1558,7 +1557,7 @@ def user_batch_register_class_studylogs(
 
             res = insert_table_row("StudyLogs", {
                 "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
-                "LessonContent": lesson_content, "Description": description,
+                "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
                 "IsSpecial": 1 if item.is_special else 0,
                 "CreatedBy": current_user["username"]
             })

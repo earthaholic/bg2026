@@ -2339,6 +2339,10 @@ body {
     border-bottom: 1px dashed var(--border-color);
 }
 .class-batch-result-list .res-row:last-child { border-bottom: none; }
+.batch-memo-action-header, .batch-memo-action-cell { width: 92px; text-align: center; }
+.batch-memo-row td { padding: 0.75rem 1rem !important; background: var(--bg-section); }
+.batch-memo-label { display: block; margin-bottom: 0.45rem; color: var(--text-main); font-size: 0.82rem; font-weight: 600; }
+.batch-memo-label i { color: var(--primary); }
 .res-status-created { color: var(--success); }
 .res-status-skipped, .res-status-duplicate { color: var(--warning); }
 .res-status-error { color: var(--danger); }

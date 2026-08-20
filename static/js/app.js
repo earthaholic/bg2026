@@ -4739,7 +4739,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBatchStudentsTable(students) {
         if (!classBatchStudentsBody) return;
         if (students.length === 0) {
-            classBatchStudentsBody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            classBatchStudentsBody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
             return;
         }
         let html = '';
@@ -4758,10 +4758,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
                     <td id="batch-tuition-progress-${sId}" class="text-muted">조회 중...</td>
+                    <td class="batch-memo-action-cell">
+                        <button type="button" class="btn btn-xs btn-outline btn-toggle-batch-memo" data-student-id="${sId}" aria-expanded="false">
+                            <i class="fa-solid fa-plus"></i> 추가
+                        </button>
+                    </td>
+                </tr>
+                <tr id="batch-memo-row-${sId}" class="batch-memo-row hidden">
+                    <td colspan="5">
+                        <label for="batch-description-${sId}" class="batch-memo-label"><i class="fa-solid fa-note-sticky"></i> ${name} 학생 메모</label>
+                        <textarea id="batch-description-${sId}" class="form-control batch-description" data-student-id="${sId}" rows="3" placeholder="이 학생에게만 저장할 수업 메모를 입력하세요. (선택사항)"></textarea>
+                    </td>
                 </tr>
             `;
         });
         classBatchStudentsBody.innerHTML = html;
+        classBatchStudentsBody.querySelectorAll('.btn-toggle-batch-memo').forEach(button => {
+            button.addEventListener('click', () => {
+                const studentId = button.dataset.studentId;
+                const memoRow = document.getElementById(`batch-memo-row-${studentId}`);
+                const isOpen = !memoRow.classList.contains('hidden');
+                memoRow.classList.toggle('hidden', isOpen);
+                button.setAttribute('aria-expanded', String(!isOpen));
+                button.innerHTML = isOpen
+                    ? '<i class="fa-solid fa-plus"></i> 추가'
+                    : '<i class="fa-solid fa-minus"></i> 닫기';
+            });
+        });
         students.forEach(async (s) => {
             const sId = s.row_id || s.Id;
             const cell = document.getElementById(`batch-tuition-progress-${sId}`);
@@ -4899,7 +4922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
     }
 
-    // 일괄 학습 기록 등록 제출 (단일 학습 일자 + 수업 내용 메모, 학생별로는 참석 여부·특강 여부)
+    // 일괄 학습 기록 등록 제출 (공통 수업 내용, 학생별 참석·특강·메모)
     async function handleBatchStudyLogSubmit(e) {
         e.preventDefault();
         if (classBatchResult) classBatchResult.classList.add('hidden');
@@ -4919,8 +4942,6 @@ document.addEventListener('DOMContentLoaded', () => {
             classBatchResult.classList.remove('hidden');
             return;
         }
-        const descEl = document.getElementById('batch-description');
-        const desc = descEl ? descEl.value.trim() : '';
         const contentEl = document.getElementById('batch-lesson-content');
         const content = contentEl ? contentEl.value.trim() : '';
 
@@ -4928,7 +4949,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.batch-attend').forEach(chk => {
             const sid = parseInt(chk.getAttribute('data-student-id'));
             const specialEl = document.querySelector(`.batch-special[data-student-id="${sid}"]`);
-            logs.push({ StudentId: sid, include: chk.checked, is_special: specialEl ? specialEl.checked : false });
+            const descriptionEl = document.querySelector(`.batch-description[data-student-id="${sid}"]`);
+            logs.push({ StudentId: sid, include: chk.checked, is_special: specialEl ? specialEl.checked : false, Description: descriptionEl ? descriptionEl.value.trim() : '' });
         });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
@@ -4939,7 +4961,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, Description: desc, logs: logs })
+                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {
