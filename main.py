@@ -579,6 +579,17 @@ def user_search_students(
     if not include_ended:
         conditions.append('(COALESCE("IsClassEnded", 0) = 0)')
 
+    # 일반 선생님은 본인 수업에 배정된 학생만 조회할 수 있다.
+    if current_user.get("role") == "teacher":
+        conditions.append('''EXISTS (
+            SELECT 1
+            FROM "ClassStudents" cs
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            WHERE c."TeacherUsername" = ?
+              AND (cs."StudentId" = "Students".rowid OR cs."StudentId" = "Students"."Id")
+        )''')
+        params.append(current_user["username"])
+
     where_str = ""
     if conditions:
         where_str = " WHERE " + " AND ".join(conditions)
@@ -1070,6 +1081,19 @@ def user_search_studylogs(
     if studied_day and studied_day.strip():
         conditions.append('sl.StudiedDay LIKE ?')
         params.append(f"%{studied_day.strip()}%")
+
+    # 일반 선생님은 본인 수업에 배정된 학생의 학습 기록만 조회할 수 있다.
+    if current_user.get("role") == "teacher":
+        conditions.append('''EXISTS (
+            SELECT 1
+            FROM "ClassStudents" cs
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            WHERE c."TeacherUsername" = ?
+              AND (cs."StudentId" = sl."StudentId"
+                   OR cs."StudentId" = s.rowid
+                   OR cs."StudentId" = s."Id")
+        )''')
+        params.append(current_user["username"])
 
     where_str = ""
     if conditions:
