@@ -965,10 +965,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classBatchSelect) {
             classBatchSelect.addEventListener('change', (e) => {
                 const classId = parseInt(e.target.value || '0');
+                // 수업을 변경할 때 이전 수업의 입력값이 새 수업에 남지 않도록 초기화한다.
+                resetBatchRegView();
                 if (classId > 0) {
                     loadClassBatchForm(classId);
-                } else {
-                    resetBatchRegView();
                 }
             });
         }
@@ -4909,6 +4909,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classBatchRegCard) classBatchRegCard.classList.add('hidden');
         if (classBatchResult) classBatchResult.classList.add('hidden');
         if (classBatchStudentsBody) classBatchStudentsBody.innerHTML = '';
+        if (formClassBatchStudyLog) formClassBatchStudyLog.reset();
         batchCalendarDays = {};
         batchCalendarMonth = '';
         if (batchCalendarGrid) { batchCalendarGrid.innerHTML = ''; batchCalendarGrid.classList.add('hidden'); }
