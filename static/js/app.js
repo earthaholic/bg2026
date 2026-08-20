@@ -5479,13 +5479,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tuitionSettingsCache = data.settings || [];
             body.innerHTML = TUITION_CLASS_TYPES.flatMap(type => [10, 20, 30].map(lessons => {
                 const setting = tuitionSettingsCache.find(s => s.ClassType === type && Number(s.PaidLessons) === lessons);
-                return `<tr><td>${type}</td><td>${lessons}차시</td><td><input class="form-control tuition-setting-fee" type="number" min="0" value="${setting ? setting.DefaultFee : ''}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"></td><td><button class="btn btn-xs btn-primary btn-save-tuition-setting">저장</button></td></tr>`;
+                return `<tr><td>${type}</td><td>${lessons}차시</td><td><input class="form-control tuition-setting-fee" type="number" min="0" value="${setting ? setting.DefaultFee : ''}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"></td></tr>`;
             })).join('');
-            body.querySelectorAll('.btn-save-tuition-setting').forEach(btn => btn.addEventListener('click', async () => {
-                const input = btn.closest('tr').querySelector('.tuition-setting-fee');
-                if (input.value === '' || Number(input.value) < 0) { alert('0원 이상의 금액을 입력해 주세요.'); return; }
-                try { await apiFetch('/api/user/tuition-fee-settings', { method: 'POST', body: JSON.stringify({ ClassType: input.dataset.classType, PaidLessons: Number(input.dataset.paidLessons), DefaultFee: Number(input.value) }) }); showToast('기본 수업료가 저장되었습니다.', 'success'); await loadTuitionFeeSettings(); } catch (err) { alert(err.message); }
-            }));
         } catch (err) { body.innerHTML = `<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`; }
     }
 
@@ -5531,6 +5526,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-tuition-search')?.addEventListener('click', loadTuitionPaymentSearch);
     document.getElementById('tuition-search-q')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); loadTuitionPaymentSearch(); } });
+    document.getElementById('btn-save-all-tuition-settings')?.addEventListener('click', async () => {
+        const msg = document.getElementById('tuition-settings-msg');
+        const inputs = Array.from(document.querySelectorAll('.tuition-setting-fee'));
+        const settings = [];
+        for (const input of inputs) {
+            if (input.value === '') continue;
+            if (Number(input.value) < 0) { msg.className = 'alert alert-danger'; msg.textContent = '수업료는 0원 이상으로 입력해 주세요.'; msg.classList.remove('hidden'); return; }
+            settings.push({ ClassType: input.dataset.classType, PaidLessons: Number(input.dataset.paidLessons), DefaultFee: Number(input.value) });
+        }
+        if (!settings.length) { msg.className = 'alert alert-warning'; msg.textContent = '저장할 수업료를 1개 이상 입력해 주세요.'; msg.classList.remove('hidden'); return; }
+        try {
+            await Promise.all(settings.map(setting => apiFetch('/api/user/tuition-fee-settings', { method: 'POST', body: JSON.stringify(setting) })));
+            msg.className = 'alert alert-success'; msg.textContent = `${settings.length}개 기본 수업료를 저장했습니다.`; msg.classList.remove('hidden');
+            await loadTuitionFeeSettings();
+        } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
+    });
 
     if (btnDoAuditSearch) {
         btnDoAuditSearch.addEventListener('click', () => {

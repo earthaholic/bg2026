@@ -2300,6 +2300,20 @@ body {
     overflow-y: auto;
 }
 
+/* 수업료 화면: 등록 폼·이력·상세 카드가 화면 높이를 넘을 수 있으므로 세로 스크롤을 허용한다. */
+#view-tuition-payment,
+#view-tuition-payment-search,
+#view-tuition-fee-settings {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#view-tuition-payment .book-search-layout,
+#view-tuition-payment-search .book-search-layout,
+#view-tuition-fee-settings .book-search-layout {
+    overflow-y: auto;
+}
+
 .batch-calendar-panel {
     margin-top: 1rem;
     padding: 1rem;
