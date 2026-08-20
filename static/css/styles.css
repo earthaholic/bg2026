@@ -2398,12 +2398,14 @@ body {
     .batch-existing-records > div { flex-basis: auto; }
 }
 
-#tuition-student-results {
+#tuition-student-results,
+#student-referrer-results {
     max-height: 12rem;
     margin-top: 0.5rem;
 }
 
-#tuition-student-results .picker-result-item {
+#tuition-student-results .picker-result-item,
+#student-referrer-results .picker-result-item {
     width: 100%;
     padding: 0.7rem 0.85rem;
     background: var(--bg-surface);
@@ -2414,12 +2416,14 @@ body {
     text-align: left;
 }
 
-#tuition-student-results .picker-result-item:hover {
+#tuition-student-results .picker-result-item:hover,
+#student-referrer-results .picker-result-item:hover {
     border-color: var(--primary);
     background: rgba(59, 130, 246, 0.08);
 }
 
-#tuition-student-results .picker-result-item span {
+#tuition-student-results .picker-result-item span,
+#student-referrer-results .picker-result-item span {
     display: block;
     margin-top: 0.2rem;
     color: var(--text-muted);

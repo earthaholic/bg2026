@@ -571,8 +571,13 @@
                                             </datalist>
                                         </div>
                                         <div class="form-group">
-                                            <label for="student-referrer">추천인 (Referrer)</label>
-                                            <input type="text" id="student-referrer" name="Referrer" class="form-control" placeholder="예) 김OO 학부모" autocomplete="off">
+                                            <label for="student-referrer-search">추천 학생</label>
+                                            <input type="hidden" id="student-referrer" name="Referrer">
+                                            <div class="picker-input-group">
+                                                <input type="search" id="student-referrer-search" class="form-control" placeholder="기존 학생 이름을 입력해 검색하세요" autocomplete="off">
+                                            </div>
+                                            <div id="student-referrer-results" class="picker-results-container hidden"></div>
+                                            <div id="student-referrer-selected" class="text-muted">추천 학생을 검색해 선택해 주세요. (선택사항)</div>
                                         </div>
                                     </div>
                                 </div>

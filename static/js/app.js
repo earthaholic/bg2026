@@ -1068,6 +1068,12 @@ document.addEventListener('DOMContentLoaded', () => {
             userStudentMsg.classList.remove('hidden');
 
             formUserStudentReg.reset();
+            const referrerSearch = document.getElementById('student-referrer-search');
+            const referrerResults = document.getElementById('student-referrer-results');
+            const referrerSelected = document.getElementById('student-referrer-selected');
+            if (referrerSearch) referrerSearch.value = '';
+            if (referrerResults) { referrerResults.innerHTML = ''; referrerResults.classList.add('hidden'); }
+            if (referrerSelected) referrerSelected.textContent = '추천 학생을 검색해 선택해 주세요. (선택사항)';
             clearStudentSimilar();
             await loadRecentStudents();
             if (isAdmin() && currentTable === 'Students') {
@@ -5581,6 +5587,34 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.className = 'alert alert-success'; msg.textContent = `${settings.length}개 기본 수업료를 저장했습니다.`; msg.classList.remove('hidden');
             await loadTuitionFeeSettings();
         } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
+    });
+
+    let studentReferrerSearchTimer = null;
+    async function searchStudentReferrer() {
+        const input = document.getElementById('student-referrer-search');
+        const results = document.getElementById('student-referrer-results');
+        if (!input || !results) return;
+        const query = input.value.trim();
+        if (!query) { results.classList.add('hidden'); results.innerHTML = ''; return; }
+        results.classList.remove('hidden');
+        results.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 검색 중...</div>';
+        try {
+            const data = await apiFetch(`/api/user/picker/students?q=${encodeURIComponent(query)}`);
+            const students = data.students || [];
+            results.innerHTML = students.length ? students.map(s => `<button type="button" class="picker-result-item btn-select-student-referrer" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`).join('') : '<div class="empty-state"><p>검색 결과가 없습니다.</p></div>';
+            results.querySelectorAll('.btn-select-student-referrer').forEach(btn => btn.addEventListener('click', () => {
+                document.getElementById('student-referrer').value = btn.dataset.name;
+                input.value = btn.dataset.name;
+                document.getElementById('student-referrer-selected').innerHTML = `<i class="fa-solid fa-circle-check"></i> 선택된 추천 학생: <strong>${escapeHtml(btn.dataset.name)}</strong>${btn.dataset.grade ? ` (${escapeHtml(btn.dataset.grade)})` : ''}`;
+                results.classList.add('hidden');
+            }));
+        } catch (err) { results.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
+    }
+    document.getElementById('student-referrer-search')?.addEventListener('input', () => {
+        document.getElementById('student-referrer').value = '';
+        document.getElementById('student-referrer-selected').textContent = '추천 학생을 검색해 선택해 주세요. (선택사항)';
+        clearTimeout(studentReferrerSearchTimer);
+        studentReferrerSearchTimer = setTimeout(searchStudentReferrer, 250);
     });
 
     if (btnDoAuditSearch) {
