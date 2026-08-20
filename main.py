@@ -170,6 +170,59 @@ class ClassStudyLogBatchRequest(BaseModel):
     Description: Optional[str] = ""
     logs: List[ClassStudyLogItem]
 
+class TuitionFeeSettingRequest(BaseModel):
+    ClassType: str
+    PaidLessons: int
+    DefaultFee: int
+
+class TuitionPaymentRequest(BaseModel):
+    StudentId: int
+    ClassType: str
+    PaidLessons: int
+    ServiceLessons: int = 0
+    StartDate: str
+    PaidDate: str
+    FeeAmount: int
+
+TUITION_CLASS_TYPES = (
+    "초등부 독서반", "초등부 기초글쓰기반", "초등부 토론반",
+    "중등부 독서반", "중등부 기초글쓰기반", "중등부 토론반", "심화반"
+)
+
+def _validate_tuition_values(class_type: str, paid_lessons: int, service_lessons: int = 0, fee_amount: int = 0):
+    if class_type not in TUITION_CLASS_TYPES:
+        raise HTTPException(status_code=400, detail="올바른 반 정보를 선택해 주세요.")
+    if paid_lessons not in (10, 20, 30):
+        raise HTTPException(status_code=400, detail="결제차시는 10, 20, 30회 중에서 선택해 주세요.")
+    if not 0 <= service_lessons <= 10:
+        raise HTTPException(status_code=400, detail="서비스차시는 0~10회 사이로 입력해 주세요.")
+    if fee_amount < 0:
+        raise HTTPException(status_code=400, detail="수업료는 0원 이상으로 입력해 주세요.")
+
+def _get_tuition_progress(student_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
+    """시작일 순으로 결제차시를 합산하고, 시작일 이후의 학습 이력을 차감한다."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT rowid as row_id, * FROM "TuitionPayments"
+                          WHERE "StudentId" = ? AND "StartDate" <= ? ORDER BY "StartDate", rowid''',
+                       (student_id, as_of or datetime.now().strftime("%Y-%m-%d")))
+        payments = [dict(r) for r in cursor.fetchall()]
+        if not payments:
+            return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
+                    "next_lesson": None, "remaining_lessons": 0, "payments": []}
+        earliest_start = payments[0]["StartDate"]
+        cursor.execute('''SELECT COUNT(*) AS count FROM "StudyLogs"
+                          WHERE "StudentId" = ? AND "StudiedDay" >= ? AND "StudiedDay" <= ?''',
+                       (student_id, earliest_start, as_of or "9999-12-31"))
+        used = cursor.fetchone()["count"]
+        total = sum((p.get("PaidLessons") or 0) + (p.get("ServiceLessons") or 0) for p in payments)
+        return {"has_payment": True, "total_lessons": total, "used_lessons": used,
+                "next_lesson": used + 1, "remaining_lessons": total - used,
+                "is_exhausted": used >= total, "payments": payments}
+    finally:
+        conn.close()
+
 # --- Web UI Route ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -662,6 +715,119 @@ def picker_search_books(
     rows = cursor.fetchall()
     conn.close()
     return {"books": [dict(r) for r in rows]}
+
+# --- 수업료 결제 관리 APIs (관리 선생님 이상 전용) ---
+@app.get("/api/user/tuition-fee-settings")
+def get_tuition_fee_settings(current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT rowid as row_id, * FROM "TuitionFeeSettings" ORDER BY "ClassType", "PaidLessons"')
+        return {"settings": [dict(r) for r in cursor.fetchall()]}
+    finally:
+        conn.close()
+
+@app.post("/api/user/tuition-fee-settings")
+def save_tuition_fee_setting(payload: TuitionFeeSettingRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    _validate_tuition_values(payload.ClassType, payload.PaidLessons, 0, payload.DefaultFee)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT rowid FROM "TuitionFeeSettings" WHERE "ClassType" = ? AND "PaidLessons" = ?', (payload.ClassType, payload.PaidLessons))
+        row = cursor.fetchone()
+        if row:
+            record_id = row[0]
+            old = get_record_snapshot("TuitionFeeSettings", record_id)
+            cursor.execute('''UPDATE "TuitionFeeSettings" SET "DefaultFee" = ?, "UpdatedBy" = ?,
+                              "UpdatedAt" = datetime('now','localtime') WHERE rowid = ?''',
+                           (payload.DefaultFee, current_user["username"], record_id))
+            conn.commit()
+            _audit_update("TuitionFeeSettings", record_id, old, get_record_snapshot("TuitionFeeSettings", record_id), current_user["username"], current_user["role"])
+        else:
+            cursor.execute('''INSERT INTO "TuitionFeeSettings" ("ClassType", "PaidLessons", "DefaultFee", "CreatedBy")
+                              VALUES (?, ?, ?, ?)''', (payload.ClassType, payload.PaidLessons, payload.DefaultFee, current_user["username"]))
+            record_id = cursor.lastrowid
+            conn.commit()
+            _audit_insert("TuitionFeeSettings", record_id, get_record_snapshot("TuitionFeeSettings", record_id), current_user["username"], current_user["role"])
+        return {"status": "success", "id": record_id, "message": "기본 수업료가 저장되었습니다."}
+    finally:
+        conn.close()
+
+@app.get("/api/user/tuition-payments")
+def get_tuition_payments(student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        where, params = "", []
+        if student_id:
+            where, params = ' WHERE p."StudentId" = ?', [student_id]
+        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName"
+                           FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
+                           {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
+        return {"payments": [dict(r) for r in cursor.fetchall()]}
+    finally:
+        conn.close()
+
+@app.post("/api/user/tuition-payments")
+def create_tuition_payment(payload: TuitionPaymentRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    _validate_tuition_values(payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.FeeAmount)
+    try:
+        datetime.strptime(payload.StartDate, "%Y-%m-%d")
+        datetime.strptime(payload.PaidDate, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="차시 시작일과 납부일은 YYYY-MM-DD 형식이어야 합니다.")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT rowid FROM "Students" WHERE rowid = ? OR "Id" = ?', (payload.StudentId, payload.StudentId))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="해당 학생을 찾을 수 없습니다.")
+        cursor.execute('''INSERT INTO "TuitionPayments" ("StudentId", "ClassType", "PaidLessons", "ServiceLessons", "StartDate", "PaidDate", "FeeAmount", "CreatedBy")
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, current_user["username"]))
+        payment_id = cursor.lastrowid
+        conn.commit()
+        _audit_insert("TuitionPayments", payment_id, get_record_snapshot("TuitionPayments", payment_id), current_user["username"], current_user["role"])
+        return {"status": "success", "id": payment_id, "message": "학생 결제 정보가 등록되었습니다."}
+    finally:
+        conn.close()
+
+@app.put("/api/user/tuition-payments/{payment_id}")
+def update_tuition_payment(payment_id: int, payload: TuitionPaymentRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    _validate_tuition_values(payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.FeeAmount)
+    try:
+        datetime.strptime(payload.StartDate, "%Y-%m-%d")
+        datetime.strptime(payload.PaidDate, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="차시 시작일과 납부일은 YYYY-MM-DD 형식이어야 합니다.")
+    row_id = _resolve_domain_pk("TuitionPayments", payment_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
+    old = get_record_snapshot("TuitionPayments", row_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''UPDATE "TuitionPayments" SET "StudentId"=?, "ClassType"=?, "PaidLessons"=?, "ServiceLessons"=?,
+                          "StartDate"=?, "PaidDate"=?, "FeeAmount"=?, "UpdatedBy"=?, "UpdatedAt"=datetime('now','localtime') WHERE rowid=?''',
+                       (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, current_user["username"], row_id))
+        conn.commit()
+    finally:
+        conn.close()
+    _audit_update("TuitionPayments", row_id, old, get_record_snapshot("TuitionPayments", row_id), current_user["username"], current_user["role"])
+    return {"status": "success", "message": "결제 정보가 수정되었습니다."}
+
+@app.delete("/api/user/tuition-payments/{payment_id}")
+def delete_tuition_payment(payment_id: int, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    row_id = _resolve_domain_pk("TuitionPayments", payment_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
+    old = get_record_snapshot("TuitionPayments", row_id)
+    delete_table_row("TuitionPayments", "rowid", row_id)
+    _audit_delete("TuitionPayments", row_id, old, current_user["username"], current_user["role"])
+    return {"status": "success", "message": "결제 정보가 삭제되었습니다."}
+
+@app.get("/api/user/students/{student_id}/tuition-progress")
+def get_student_tuition_progress(student_id: int, studied_day: Optional[str] = None, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    return _get_tuition_progress(student_id, studied_day)
 
 # --- User StudyLog Registration & Search APIs ---
 @app.post("/api/user/studylogs")

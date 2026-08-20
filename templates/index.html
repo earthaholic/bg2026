@@ -88,6 +88,16 @@
                         <span>새 학습 기록 등록</span>
                     </div>
 
+                    <div class="menu-section-label staff-only hidden">수업료 관리</div>
+                    <div class="menu-nav-item staff-only hidden" data-view="tuition-payment">
+                        <i class="fa-solid fa-won-sign nav-icon"></i>
+                        <span>수업료 결제 관리</span>
+                    </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="tuition-fee-settings">
+                        <i class="fa-solid fa-sliders nav-icon"></i>
+                        <span>기본 수업료 설정</span>
+                    </div>
+
                     <div class="menu-section-label">학생 관리</div>
                     <div class="menu-nav-item" data-view="student-search">
                         <i class="fa-solid fa-users-viewfinder nav-icon"></i>
@@ -706,6 +716,7 @@
                                                 </button>
                                             </div>
                                             <div id="preview-selected-student" class="picker-preview-card hidden"></div>
+                                            <div id="studylog-tuition-progress" class="alert alert-info hidden"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -1385,6 +1396,33 @@
                     </div>
                 </section>
 
+                <section id="view-tuition-payment" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="card-header-styled"><h3><i class="fa-solid fa-won-sign"></i> 학생 수업료 결제 등록</h3></div>
+                            <form id="form-tuition-payment" class="book-form">
+                                <div id="tuition-payment-msg" class="alert hidden"></div>
+                                <div class="form-grid">
+                                    <div class="form-group"><label for="tuition-student">학생 <span class="required">*</span></label><select id="tuition-student" class="form-control" required><option value="">학생을 불러오는 중...</option></select></div>
+                                    <div class="form-group"><label for="tuition-class-type">반 정보 <span class="required">*</span></label><select id="tuition-class-type" class="form-control" required><option value="">-- 반 선택 --</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select></div>
+                                    <div class="form-group"><label for="tuition-paid-lessons">결제차시 <span class="required">*</span></label><select id="tuition-paid-lessons" class="form-control"><option value="10">10차시</option><option value="20">20차시</option><option value="30">30차시</option></select></div>
+                                    <div class="form-group"><label for="tuition-service-lessons">서비스차시</label><input id="tuition-service-lessons" class="form-control" type="number" min="0" max="10" value="0"></div>
+                                    <div class="form-group"><label for="tuition-start-date">차시 시작일 <span class="required">*</span></label><input id="tuition-start-date" class="form-control" type="date" required></div>
+                                    <div class="form-group"><label for="tuition-paid-date">납부일 <span class="required">*</span></label><input id="tuition-paid-date" class="form-control" type="date" required></div>
+                                    <div class="form-group"><label for="tuition-fee-amount">수업료 (KRW) <span class="required">*</span></label><input id="tuition-fee-amount" class="form-control" type="number" min="0" required><div class="text-muted">기본 수업료가 자동 입력되며 수정할 수 있습니다.</div></div>
+                                </div>
+                                <div id="tuition-progress-preview" class="alert alert-info hidden"></div>
+                                <div class="form-actions"><button class="btn btn-success btn-lg" type="submit"><i class="fa-solid fa-floppy-disk"></i> 결제 정보 등록</button></div>
+                            </form>
+                        </div>
+                        <div class="card table-card"><div class="card-header-styled"><h3>결제 이력</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>관리</th></tr></thead><tbody id="tuition-payments-body"></tbody></table></div></div>
+                    </div>
+                </section>
+
+                <section id="view-tuition-fee-settings" class="workspace-view">
+                    <div class="book-search-layout"><div class="card search-filter-card"><div class="card-header-styled"><h3><i class="fa-solid fa-sliders"></i> 반별 기본 수업료 설정</h3><p class="subtitle">반과 결제차시별 기본 수업료를 입력해 저장하세요.</p></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>반 정보</th><th>결제차시</th><th>기본 수업료 (KRW)</th><th></th></tr></thead><tbody id="tuition-settings-body"></tbody></table></div></div></div>
+                </section>
+
                 <!-- View 10: 학습 이력 일괄 등록 (수업 단위) -->
                 <section id="view-class-studylog-reg" class="workspace-view">
                     <div class="book-search-layout">
@@ -1500,6 +1538,7 @@
                                                     <th style="width: 70px;">참석</th>
                                                     <th style="width: 70px;">특강</th>
                                                     <th>학생 이름</th>
+                                                    <th>수강 차시</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="class-batch-students-body"></tbody>

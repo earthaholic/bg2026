@@ -64,6 +64,40 @@ def init_system_tables():
     # 참고: 기본 manager/teacher 계정은 시드하지 않는다. (배포 시 admin 계정만 존재)
     # 필요한 staff(manager/teacher) 계정은 admin이 계정 관리 UI에서 직접 발급한다.
 
+    # 수업료 기본 설정과 학생별 결제 이력 (로컬 전용 테이블)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "TuitionFeeSettings" (
+            "Id" INTEGER PRIMARY KEY,
+            "ClassType" TEXT NOT NULL,
+            "PaidLessons" INTEGER NOT NULL CHECK("PaidLessons" IN (10, 20, 30)),
+            "DefaultFee" INTEGER NOT NULL DEFAULT 0 CHECK("DefaultFee" >= 0),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT '',
+            UNIQUE("ClassType", "PaidLessons")
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "TuitionPayments" (
+            "Id" INTEGER PRIMARY KEY,
+            "StudentId" INTEGER NOT NULL,
+            "ClassType" TEXT NOT NULL,
+            "PaidLessons" INTEGER NOT NULL CHECK("PaidLessons" IN (10, 20, 30)),
+            "ServiceLessons" INTEGER NOT NULL DEFAULT 0 CHECK("ServiceLessons" BETWEEN 0 AND 10),
+            "StartDate" TEXT NOT NULL,
+            "PaidDate" TEXT NOT NULL DEFAULT '',
+            "FeeAmount" INTEGER NOT NULL DEFAULT 0 CHECK("FeeAmount" >= 0),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT ''
+        )
+    """)
+    cursor.execute('PRAGMA table_info("TuitionPayments")')
+    tuition_payment_cols = [r["name"] for r in cursor.fetchall()]
+    if "PaidDate" not in tuition_payment_cols:
+        cursor.execute('ALTER TABLE "TuitionPayments" ADD COLUMN "PaidDate" TEXT NOT NULL DEFAULT \'\'')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_tuition_payments_student_start ON "TuitionPayments"("StudentId", "StartDate")')
+
     # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블
     # (로컬 전용 도메인 테이블 - oracle_sync.py 실행 시 DROP되므로 시작 시점에 재생성됨)
     cursor.execute("""

@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg'];
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'tuition-payment', 'tuition-fee-settings'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
@@ -532,6 +532,10 @@ document.addEventListener('DOMContentLoaded', () => {
             loadClassOptionsForBatch();
         } else if (targetView === 'monthly-report') {
             initMonthlyReportView();
+        } else if (targetView === 'tuition-payment') {
+            loadTuitionPaymentView();
+        } else if (targetView === 'tuition-fee-settings') {
+            loadTuitionFeeSettings();
         }
     }
 
@@ -1405,6 +1409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elPrev.innerHTML = '';
                 elPrev.classList.add('hidden');
             }
+            document.getElementById('studylog-tuition-progress')?.classList.add('hidden');
             return;
         }
 
@@ -1449,6 +1454,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         }
+        renderStudylogTuitionProgress(students);
+    }
+
+    async function renderStudylogTuitionProgress(students) {
+        const box = document.getElementById('studylog-tuition-progress');
+        if (!box) return;
+        if (!students.length) { box.classList.add('hidden'); return; }
+        try {
+            const progresses = await Promise.all(students.map(s => apiFetch(`/api/user/students/${s.id}/tuition-progress`)));
+            box.className = 'alert alert-info';
+            box.innerHTML = progresses.map((p, i) => p.has_payment
+                ? `<div><strong>${escapeHtml(students[i].name)}</strong>: 총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째 수업</strong> 등록 · 등록 후 잔여 ${p.remaining_lessons - 1}회</div>`
+                : `<div><strong>${escapeHtml(students[i].name)}</strong>: 유효한 결제 정보가 없습니다.</div>`).join('');
+            box.classList.remove('hidden');
+        } catch (_) { box.classList.add('hidden'); }
     }
 
     function updatePickerSelectCountBadge() {
@@ -4550,7 +4570,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBatchStudentsTable(students) {
         if (!classBatchStudentsBody) return;
         if (students.length === 0) {
-            classBatchStudentsBody.innerHTML = '<tr><td colspan="3" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            classBatchStudentsBody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
             return;
         }
         let html = '';
@@ -4568,10 +4588,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" class="batch-special" data-student-id="${sId}" ${specialChecked} title="특강 수업 여부" style="width: 16px; height: 16px; accent-color: var(--warning); cursor: pointer;">
                     </td>
                     <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
+                    <td id="batch-tuition-progress-${sId}" class="text-muted">조회 중...</td>
                 </tr>
             `;
         });
         classBatchStudentsBody.innerHTML = html;
+        students.forEach(async (s) => {
+            const sId = s.row_id || s.Id;
+            const cell = document.getElementById(`batch-tuition-progress-${sId}`);
+            if (!cell) return;
+            try {
+                const p = await apiFetch(`/api/user/students/${sId}/tuition-progress`);
+                cell.innerHTML = p.has_payment ? `총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째</strong><br><span class="text-muted">등록 후 잔여 ${p.remaining_lessons - 1}회</span>` : '<span class="text-warning">결제 정보 없음</span>';
+            } catch (_) { cell.textContent = '-'; }
+        });
     }
 
     function getBatchMonth(dateValue) {
@@ -5341,6 +5371,110 @@ document.addEventListener('DOMContentLoaded', () => {
             ${sections}`;
         modalAuditDetail.classList.remove('hidden');
     }
+
+    // 수업료 결제 관리
+    const TUITION_CLASS_TYPES = ['초등부 독서반', '초등부 기초글쓰기반', '초등부 토론반', '중등부 독서반', '중등부 기초글쓰기반', '중등부 토론반', '심화반'];
+    let tuitionSettingsCache = [];
+    let tuitionPaymentsCache = [];
+
+    function formatWon(value) { return `${Number(value || 0).toLocaleString('ko-KR')}원`; }
+
+    async function loadTuitionPaymentView() {
+        const studentSelect = document.getElementById('tuition-student');
+        if (!studentSelect) return;
+        if (!document.getElementById('tuition-start-date').value) {
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('tuition-start-date').value = today;
+            document.getElementById('tuition-paid-date').value = today;
+        }
+        try {
+            const [studentData, settingData] = await Promise.all([
+                apiFetch('/api/user/students-options?include_ended=true'), apiFetch('/api/user/tuition-fee-settings')
+            ]);
+            tuitionSettingsCache = settingData.settings || [];
+            studentSelect.innerHTML = '<option value="">-- 학생 선택 --</option>' + (studentData.students || []).map(s =>
+                `<option value="${s.row_id || s.Id}">${escapeHtml(s.Name || '')}${s.Grade ? ` (${escapeHtml(s.Grade)})` : ''}</option>`).join('');
+            await loadTuitionPayments();
+        } catch (err) { studentSelect.innerHTML = `<option value="">학생 로딩 실패: ${escapeHtml(err.message)}</option>`; }
+    }
+
+    function applyDefaultTuitionFee() {
+        const classType = document.getElementById('tuition-class-type')?.value;
+        const paidLessons = parseInt(document.getElementById('tuition-paid-lessons')?.value || '0');
+        const setting = tuitionSettingsCache.find(s => s.ClassType === classType && Number(s.PaidLessons) === paidLessons);
+        if (setting) document.getElementById('tuition-fee-amount').value = setting.DefaultFee;
+    }
+
+    async function showTuitionProgress() {
+        const studentId = document.getElementById('tuition-student')?.value;
+        const box = document.getElementById('tuition-progress-preview');
+        if (!studentId || !box) { if (box) box.classList.add('hidden'); return; }
+        try {
+            const p = await apiFetch(`/api/user/students/${studentId}/tuition-progress`);
+            box.className = `alert ${p.has_payment && !p.is_exhausted ? 'alert-info' : 'alert-warning'}`;
+            box.innerHTML = p.has_payment
+                ? `<i class="fa-solid fa-chart-line"></i> 현재 누적 수강 현황: <strong>총 ${p.total_lessons}회 중 ${p.used_lessons}회 사용</strong> · 잔여 ${p.remaining_lessons}회${p.is_exhausted ? ' (차시 소진)' : ` · 다음 수업은 ${p.next_lesson}번째`}`
+                : '<i class="fa-solid fa-circle-exclamation"></i> 유효한 결제 이력이 없습니다.';
+            box.classList.remove('hidden');
+        } catch (_) { box.classList.add('hidden'); }
+    }
+
+    async function loadTuitionPayments() {
+        const body = document.getElementById('tuition-payments-body');
+        if (!body) return;
+        try {
+            const data = await apiFetch('/api/user/tuition-payments');
+            const rows = data.payments || [];
+            tuitionPaymentsCache = rows;
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
+            body.querySelectorAll('.btn-edit-tuition').forEach(btn => btn.addEventListener('click', () => editTuitionPayment(btn.dataset.id)));
+            body.querySelectorAll('.btn-delete-tuition').forEach(btn => btn.addEventListener('click', async () => {
+                if (!confirm('이 결제 정보를 삭제하시겠습니까?')) return;
+                try { await apiFetch(`/api/user/tuition-payments/${btn.dataset.id}`, { method: 'DELETE' }); await loadTuitionPayments(); showToast('결제 정보가 삭제되었습니다.', 'success'); } catch (err) { alert(err.message); }
+            }));
+        } catch (err) { body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    async function editTuitionPayment(id) {
+        const p = tuitionPaymentsCache.find(row => String(row.row_id || row.Id) === String(id));
+        if (!p) return;
+        const fee = prompt('수정할 수업료(KRW)를 입력해 주세요.', p.FeeAmount);
+        if (fee === null) return;
+        const service = prompt('서비스차시(0~10)를 입력해 주세요.', p.ServiceLessons);
+        if (service === null) return;
+        try {
+            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: Number(fee) }) });
+            await loadTuitionPayments(); showToast('결제 정보가 수정되었습니다.', 'success');
+        } catch (err) { alert(err.message); }
+    }
+
+    async function loadTuitionFeeSettings() {
+        const body = document.getElementById('tuition-settings-body');
+        if (!body) return;
+        try {
+            const data = await apiFetch('/api/user/tuition-fee-settings');
+            tuitionSettingsCache = data.settings || [];
+            body.innerHTML = TUITION_CLASS_TYPES.flatMap(type => [10, 20, 30].map(lessons => {
+                const setting = tuitionSettingsCache.find(s => s.ClassType === type && Number(s.PaidLessons) === lessons);
+                return `<tr><td>${type}</td><td>${lessons}차시</td><td><input class="form-control tuition-setting-fee" type="number" min="0" value="${setting ? setting.DefaultFee : ''}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"></td><td><button class="btn btn-xs btn-primary btn-save-tuition-setting">저장</button></td></tr>`;
+            })).join('');
+            body.querySelectorAll('.btn-save-tuition-setting').forEach(btn => btn.addEventListener('click', async () => {
+                const input = btn.closest('tr').querySelector('.tuition-setting-fee');
+                if (input.value === '' || Number(input.value) < 0) { alert('0원 이상의 금액을 입력해 주세요.'); return; }
+                try { await apiFetch('/api/user/tuition-fee-settings', { method: 'POST', body: JSON.stringify({ ClassType: input.dataset.classType, PaidLessons: Number(input.dataset.paidLessons), DefaultFee: Number(input.value) }) }); showToast('기본 수업료가 저장되었습니다.', 'success'); await loadTuitionFeeSettings(); } catch (err) { alert(err.message); }
+            }));
+        } catch (err) { body.innerHTML = `<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    document.getElementById('tuition-class-type')?.addEventListener('change', applyDefaultTuitionFee);
+    document.getElementById('tuition-paid-lessons')?.addEventListener('change', applyDefaultTuitionFee);
+    document.getElementById('tuition-student')?.addEventListener('change', showTuitionProgress);
+    document.getElementById('form-tuition-payment')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('tuition-payment-msg');
+        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: Number(document.getElementById('tuition-fee-amount').value) };
+        try { const result = await apiFetch('/api/user/tuition-payments', { method: 'POST', body: JSON.stringify(payload) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadTuitionPayments(); await showTuitionProgress(); } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
+    });
 
     if (btnDoAuditSearch) {
         btnDoAuditSearch.addEventListener('click', () => {
