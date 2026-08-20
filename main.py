@@ -307,6 +307,11 @@ def user_search_books(
     has_reading: Optional[int] = Query(None),
     has_writing: Optional[int] = Query(None),
     has_pdf: Optional[int] = Query(None),
+    has_advanced: Optional[int] = Query(None),
+    has_debate: Optional[int] = Query(None),
+    has_paperbook: Optional[int] = Query(None),
+    has_yes24: Optional[int] = Query(None),
+    has_millie: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -362,6 +367,16 @@ def user_search_books(
 
     if has_pdf == 1:
         conditions.append('"IsPdfExist" = 1')
+    if has_advanced == 1:
+        conditions.append('"HasAdvancedMaterial" = 1')
+    if has_debate == 1:
+        conditions.append('"HasDebateMaterial" = 1')
+    if has_paperbook == 1:
+        conditions.append('"IsPaperbookExist" = 1')
+    if has_yes24 == 1:
+        conditions.append('"IsYes24Exist" = 1')
+    if has_millie == 1:
+        conditions.append('"IsMillieExist" = 1')
 
     where_str = ""
     if conditions:

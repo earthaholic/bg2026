@@ -135,6 +135,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterChkReading = document.getElementById('filter-chk-reading');
     const filterChkWriting = document.getElementById('filter-chk-writing');
     const filterChkPdf = document.getElementById('filter-chk-pdf');
+    const filterChkAdvanced = document.getElementById('filter-chk-advanced');
+    const filterChkDebate = document.getElementById('filter-chk-debate');
+    const filterChkPaperbook = document.getElementById('filter-chk-paperbook');
+    const filterChkYes24 = document.getElementById('filter-chk-yes24');
+    const filterChkMillie = document.getElementById('filter-chk-millie');
     const btnResetFilters = document.getElementById('btn-reset-filters');
 
     const searchTotalCount = document.getElementById('search-total-count');
@@ -708,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filterChkReading.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkWriting.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkPdf.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
+        [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); }));
 
         btnResetFilters.addEventListener('click', () => {
             bookSearchQ.value = '';
@@ -726,6 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkReading.checked = false;
             filterChkWriting.checked = false;
             filterChkPdf.checked = false;
+            [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
             searchPage = 1;
             loadBookSearchResults();
         });
@@ -2153,6 +2160,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasReading = filterChkReading.checked ? 1 : 0;
             const hasWriting = filterChkWriting.checked ? 1 : 0;
             const hasPdf = filterChkPdf.checked ? 1 : 0;
+            const hasAdvanced = filterChkAdvanced.checked ? 1 : 0;
+            const hasDebate = filterChkDebate.checked ? 1 : 0;
+            const hasPaperbook = filterChkPaperbook.checked ? 1 : 0;
+            const hasYes24 = filterChkYes24.checked ? 1 : 0;
+            const hasMillie = filterChkMillie.checked ? 1 : 0;
 
             const queryParams = new URLSearchParams({
                 page: searchPage,
@@ -2172,6 +2184,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasReading) queryParams.append('has_reading', 1);
             if (hasWriting) queryParams.append('has_writing', 1);
             if (hasPdf) queryParams.append('has_pdf', 1);
+            if (hasAdvanced) queryParams.append('has_advanced', 1);
+            if (hasDebate) queryParams.append('has_debate', 1);
+            if (hasPaperbook) queryParams.append('has_paperbook', 1);
+            if (hasYes24) queryParams.append('has_yes24', 1);
+            if (hasMillie) queryParams.append('has_millie', 1);
 
             const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`);
             searchTotalPages = data.total_pages;
