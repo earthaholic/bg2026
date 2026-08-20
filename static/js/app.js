@@ -4713,12 +4713,16 @@ document.addEventListener('DOMContentLoaded', () => {
             batchExistingRecords.innerHTML = '';
             return;
         }
-        const previews = records.slice(0, 3).map(record => {
-            const detail = record.lesson_content || record.description || '수업 내용 미입력';
-            return `<li><strong>${escapeHtml(record.student_name)}</strong> · ${escapeHtml(record.book_title)}<span>${escapeHtml(detail)}</span></li>`;
-        }).join('');
-        const more = records.length > 3 ? `<p class="batch-records-more">외 ${records.length - 3}건</p>` : '';
-        batchExistingRecords.innerHTML = `<div><strong><i class="fa-solid fa-circle-info"></i> ${date} 기존 학습 기록 ${records.length}건</strong><p>동일 날짜에도 필요하면 추가 등록할 수 있습니다.</p></div><ul>${previews}</ul>${more}`;
+        const representative = records[0];
+        const detail = representative.lesson_content || representative.description || '수업 내용 미입력';
+        const studentNames = [...new Set(records.map(record => record.student_name || '학생 정보 없음'))];
+        const namesHtml = studentNames.map(name => `<span class="batch-record-student-name"><i class="fa-solid fa-user-graduate"></i> ${escapeHtml(name)}</span>`).join('');
+        batchExistingRecords.innerHTML = `
+            <div><strong><i class="fa-solid fa-circle-info"></i> ${date} 기존 학습 기록 ${records.length}건</strong><p>동일 날짜에도 필요하면 추가 등록할 수 있습니다.</p></div>
+            <div class="batch-record-summary">
+                <div class="batch-record-representative"><strong>대표 기록 · ${escapeHtml(representative.student_name)}</strong> · ${escapeHtml(representative.book_title)}<span>${escapeHtml(detail)}</span></div>
+                <div class="batch-record-student-list"><strong>등록 학생 (${studentNames.length}명)</strong><div>${namesHtml}</div></div>
+            </div>`;
         batchExistingRecords.classList.remove('hidden');
     }
 

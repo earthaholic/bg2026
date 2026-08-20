@@ -2360,6 +2360,37 @@ body {
 .batch-existing-records li + li { margin-top: 0.3rem; }
 .batch-existing-records li span { display: block; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .batch-records-more { white-space: nowrap; }
+.batch-existing-records .batch-record-summary {
+    flex: 1;
+    min-width: 0;
+}
+.batch-record-representative {
+    font-size: 0.8rem;
+}
+.batch-record-representative span {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.batch-record-student-list {
+    margin-top: 0.65rem;
+    font-size: 0.78rem;
+}
+.batch-record-student-list > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+.batch-record-student-name {
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
 @media (max-width: 640px) {
     .batch-calendar-header, .batch-existing-records { flex-direction: column; align-items: stretch; }
     .batch-calendar-controls { justify-content: space-between; }
