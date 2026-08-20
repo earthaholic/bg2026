@@ -5380,22 +5380,43 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatWon(value) { return `${Number(value || 0).toLocaleString('ko-KR')}원`; }
 
     async function loadTuitionPaymentView() {
-        const studentSelect = document.getElementById('tuition-student');
-        if (!studentSelect) return;
+        const studentInput = document.getElementById('tuition-student-search');
+        if (!studentInput) return;
         if (!document.getElementById('tuition-start-date').value) {
             const today = new Date().toISOString().slice(0, 10);
             document.getElementById('tuition-start-date').value = today;
             document.getElementById('tuition-paid-date').value = today;
         }
         try {
-            const [studentData, settingData] = await Promise.all([
-                apiFetch('/api/user/students-options?include_ended=true'), apiFetch('/api/user/tuition-fee-settings')
-            ]);
+            const settingData = await apiFetch('/api/user/tuition-fee-settings');
             tuitionSettingsCache = settingData.settings || [];
-            studentSelect.innerHTML = '<option value="">-- 학생 선택 --</option>' + (studentData.students || []).map(s =>
-                `<option value="${s.row_id || s.Id}">${escapeHtml(s.Name || '')}${s.Grade ? ` (${escapeHtml(s.Grade)})` : ''}</option>`).join('');
             await loadTuitionPayments();
-        } catch (err) { studentSelect.innerHTML = `<option value="">학생 로딩 실패: ${escapeHtml(err.message)}</option>`; }
+        } catch (err) { showToast(`기본 수업료를 불러오지 못했습니다: ${err.message}`, 'error'); }
+    }
+
+    async function searchTuitionStudents() {
+        const input = document.getElementById('tuition-student-search');
+        const results = document.getElementById('tuition-student-results');
+        if (!input || !results) return;
+        const query = input.value.trim();
+        if (!query) { results.classList.add('hidden'); results.innerHTML = ''; return; }
+        results.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 검색 중...</div>';
+        results.classList.remove('hidden');
+        try {
+            const data = await apiFetch(`/api/user/picker/students?q=${encodeURIComponent(query)}`);
+            const students = data.students || [];
+            results.innerHTML = students.length ? students.map(s => {
+                const id = s.row_id || s.Id;
+                return `<button type="button" class="picker-result-item btn-select-tuition-student" data-id="${id}" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`;
+            }).join('') : '<div class="empty-state"><p>검색 결과가 없습니다.</p></div>';
+            results.querySelectorAll('.btn-select-tuition-student').forEach(btn => btn.addEventListener('click', () => {
+                document.getElementById('tuition-student').value = btn.dataset.id;
+                input.value = btn.dataset.name;
+                document.getElementById('tuition-selected-student').innerHTML = `<i class="fa-solid fa-circle-check"></i> 선택된 학생: <strong>${escapeHtml(btn.dataset.name)}</strong>${btn.dataset.grade ? ` (${escapeHtml(btn.dataset.grade)})` : ''}`;
+                results.classList.add('hidden');
+                showTuitionProgress();
+            }));
+        } catch (err) { results.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
     }
 
     function applyDefaultTuitionFee() {
@@ -5468,7 +5489,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('tuition-class-type')?.addEventListener('change', applyDefaultTuitionFee);
     document.getElementById('tuition-paid-lessons')?.addEventListener('change', applyDefaultTuitionFee);
-    document.getElementById('tuition-student')?.addEventListener('change', showTuitionProgress);
+    let tuitionStudentSearchTimer = null;
+    document.getElementById('tuition-student-search')?.addEventListener('input', () => {
+        document.getElementById('tuition-student').value = '';
+        document.getElementById('tuition-selected-student').textContent = '학생을 검색해 선택해 주세요.';
+        clearTimeout(tuitionStudentSearchTimer);
+        tuitionStudentSearchTimer = setTimeout(searchTuitionStudents, 250);
+    });
     document.getElementById('form-tuition-payment')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('tuition-payment-msg');

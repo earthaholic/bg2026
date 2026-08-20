@@ -2352,6 +2352,34 @@ body {
     .batch-calendar-months { grid-template-columns: 1fr; }
     .batch-existing-records > div { flex-basis: auto; }
 }
+
+#tuition-student-results {
+    max-height: 12rem;
+    margin-top: 0.5rem;
+}
+
+#tuition-student-results .picker-result-item {
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: left;
+}
+
+#tuition-student-results .picker-result-item:hover {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+#tuition-student-results .picker-result-item span {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
 /* 학습 기록 검색 카드: 수업 내용/메모 미리보기 */
 .studylog-card-preview {
     margin-top: 0.45rem;
