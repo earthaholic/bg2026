@@ -1733,6 +1733,15 @@ def user_update_studylog(
     try:
         old_snapshot = get_record_snapshot("StudyLogs", row_id)
         update_data = dict(payload.data)
+        if "StudiedDay" in update_data:
+            studied_day = str(update_data["StudiedDay"] or "").strip()
+            if not studied_day:
+                raise HTTPException(status_code=400, detail="학습 수행 일자를 입력해 주세요.")
+            try:
+                datetime.strptime(studied_day, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="학습 수행 일자는 YYYY-MM-DD 형식으로 입력해 주세요.")
+            update_data["StudiedDay"] = studied_day
         update_data["UpdatedBy"] = current_user["username"]
         update_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         res = update_table_row("StudyLogs", "rowid", row_id, update_data)

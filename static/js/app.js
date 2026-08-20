@@ -2062,6 +2062,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const bAuthor = escapeHtml(l.BookAuthor || '저자 미상');
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const bSubject = escapeHtml(l.BookSubject || '분야 미상');
+            const studiedDay = String(l.StudiedDay || '').trim().split('T')[0].split(' ')[0];
+            const studiedDayHtml = isStaff()
+                ? `<div class="studylog-date-editor">
+                    <label for="input-studylog-studied-day"><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자</label>
+                    <div class="studylog-date-editor-controls">
+                        <input type="date" id="input-studylog-studied-day" class="form-control" value="${escapeHtml(studiedDay)}" required>
+                        <button type="button" id="btn-save-studylog-studied-day" class="btn btn-sm btn-primary"><i class="fa-solid fa-floppy-disk"></i> 일자 저장</button>
+                    </div>
+                </div>`
+                : `<span><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자: <strong>${escapeHtml(l.StudiedDay || '미상')}</strong></span>`;
 
             // 수업 내용 + 수업 내용 메모 (항상 표시, 수업 내용이 앞. 값이 없으면 안내 문구)
             const lc = (l.LessonContent || '').trim();
@@ -2087,7 +2097,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="detail-header-block">
                     <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})${sRef} 학생의 학습 기록 ${l.IsSpecial ? '<span class="badge" style="margin-left: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}</div>
                     <div class="detail-meta-row">
-                        <span><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자: <strong>${escapeHtml(l.StudiedDay || '미상')}</strong></span>
+                        ${studiedDayHtml}
                         <span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${l.row_id || l.Id}</strong></span>
                     </div>
                 </div>
@@ -2121,6 +2131,32 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             modalStudyLogDetailBody.innerHTML = html;
+
+            const saveStudiedDayButton = document.getElementById('btn-save-studylog-studied-day');
+            if (saveStudiedDayButton) {
+                saveStudiedDayButton.addEventListener('click', async () => {
+                    const input = document.getElementById('input-studylog-studied-day');
+                    const newStudiedDay = input.value;
+                    if (!newStudiedDay) {
+                        showToast('학습 수행 일자를 선택해 주세요.', 'warning');
+                        return;
+                    }
+                    try {
+                        saveStudiedDayButton.disabled = true;
+                        await apiFetch(`/api/user/studylogs/${l.row_id || l.Id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ data: { StudiedDay: newStudiedDay } })
+                        });
+                        showToast('학습 수행 일자를 수정했습니다.', 'success');
+                        await openStudyLogDetailModal(l.row_id || l.Id);
+                        await loadStudyLogSearchResults();
+                        await loadRecentStudyLogs();
+                    } catch (err) {
+                        showToast(err.message, 'danger');
+                        saveStudiedDayButton.disabled = false;
+                    }
+                });
+            }
         } catch (err) {
             modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }

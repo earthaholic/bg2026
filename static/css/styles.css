@@ -1364,7 +1364,6 @@ body {
     line-height: 1.5;
 }
 
-
 .student-detail-section {
     margin-top: 1rem;
 }
@@ -1406,6 +1405,40 @@ body {
     font-size: 0.8rem;
     color: var(--text-muted);
 }
+
+.studylog-date-editor {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.studylog-date-editor label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.studylog-date-editor-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.studylog-date-editor input[type="date"] {
+    width: 145px;
+}
+
+@media (max-width: 640px) {
+    .studylog-date-editor,
+    .studylog-date-editor-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .studylog-date-editor input[type="date"] {
+        width: 100%;
+    }
+}
+
 /* Student Detail StudyLog List */
 .student-studylog-list {
     display: flex;
