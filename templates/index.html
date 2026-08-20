@@ -998,10 +998,23 @@
                                     </div>
                                 </div>
                                 <div class="card-body">
+                                    <div class="monthly-report-log-filter">
+                                        <div class="form-group">
+                                            <label for="monthly-report-log-date-from" class="form-label">학습 시작일</label>
+                                            <input type="date" id="monthly-report-log-date-from" class="form-control">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="monthly-report-log-date-to" class="form-label">학습 종료일</label>
+                                            <input type="date" id="monthly-report-log-date-to" class="form-control">
+                                        </div>
+                                        <button type="button" id="btn-apply-monthly-log-period" class="btn btn-outline">
+                                            <i class="fa-solid fa-filter"></i> 기간 적용
+                                        </button>
+                                    </div>
                                     <div id="monthly-report-logs-container" class="report-logs-list">
                                         <div class="empty-state-sm">
                                             <i class="fa-solid fa-arrow-up"></i>
-                                            <p>학생과 보고 연월을 선택한 후 [기록 불러오기]를 눌러주세요.</p>
+                                            <p>학생을 선택한 후 기간을 설정하고 [기록 불러오기]를 눌러주세요.</p>
                                         </div>
                                     </div>
                                 </div>

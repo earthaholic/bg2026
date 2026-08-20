@@ -5144,6 +5144,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadMonthlyReportLogs() {
         const studentSelect = document.getElementById('monthly-report-student-select');
         const container = document.getElementById('monthly-report-logs-container');
+        const dateFromInput = document.getElementById('monthly-report-log-date-from');
+        const dateToInput = document.getElementById('monthly-report-log-date-to');
 
         if (!studentSelect || !container) return;
 
@@ -5153,18 +5155,28 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const dateFrom = dateFromInput ? dateFromInput.value : '';
+        const dateTo = dateToInput ? dateToInput.value : '';
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            showToast('학습 시작일은 종료일보다 늦을 수 없습니다.', 'warning');
+            return;
+        }
+
         container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학습 기록 불러오는 중...</div>';
         currentMonthlyLogs = [];
 
         try {
-            const res = await apiFetch(`/api/user/monthly-report/studylogs?student_id=${studentId}`);
+            const params = new URLSearchParams({ student_id: studentId });
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            const res = await apiFetch(`/api/user/monthly-report/studylogs?${params.toString()}`);
             currentMonthlyLogs = res.logs || []; // 최신순(StudiedDay DESC) 반환
 
             if (currentMonthlyLogs.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state-sm">
                         <i class="fa-solid fa-folder-open"></i>
-                        <p>해당 학생의 등록된 학습 기록이 없습니다.</p>
+                        <p>선택한 기간에 등록된 학습 기록이 없습니다.</p>
                     </div>
                 `;
                 generateMonthlyReportText();
@@ -5310,22 +5322,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const ymInputEl = document.getElementById('monthly-report-year-month');
-    const monthLabelEl = document.getElementById('monthly-report-month-label');
-    if (ymInputEl) {
-        ymInputEl.addEventListener('change', () => {
-            if (ymInputEl.value) {
-                const parts = ymInputEl.value.split('-');
-                if (parts.length >= 2 && monthLabelEl) {
-                    monthLabelEl.value = `${parseInt(parts[1], 10)}월`;
-                }
-                if (studentSelectEl && studentSelectEl.value) {
-                    loadMonthlyReportLogs();
-                } else {
-                    generateMonthlyReportText();
-                }
-            }
-        });
+    const btnApplyMonthlyLogPeriod = document.getElementById('btn-apply-monthly-log-period');
+    if (btnApplyMonthlyLogPeriod) {
+        btnApplyMonthlyLogPeriod.addEventListener('click', () => loadMonthlyReportLogs());
     }
 
     ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-start-lecture', 'monthly-report-special-teacher'].forEach(id => {

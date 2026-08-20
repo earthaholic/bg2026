@@ -2636,6 +2636,24 @@ body {
     align-items: start;
 }
 
+.monthly-report-log-filter {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.monthly-report-log-filter .form-group {
+    margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+    .monthly-report-log-filter {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 1024px) {
     .monthly-report-layout {
         grid-template-columns: 1fr;

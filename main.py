@@ -1260,6 +1260,8 @@ def build_monthly_report_text(
 @app.get("/api/user/monthly-report/studylogs")
 def user_get_monthly_report_studylogs(
     student_id: int = Query(...),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -1280,10 +1282,17 @@ def user_get_monthly_report_studylogs(
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher
         FROM "StudyLogs" sl
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
-        WHERE sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?
-        ORDER BY sl.StudiedDay DESC, sl.rowid DESC
+        WHERE (sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?)
     '''
-    cursor.execute(query, (s_row_id, str(s_row_id), s_id, s_name))
+    params = [s_row_id, str(s_row_id), s_id, s_name]
+    if date_from:
+        query += ' AND sl.StudiedDay >= ?'
+        params.append(date_from)
+    if date_to:
+        query += ' AND sl.StudiedDay <= ?'
+        params.append(date_to)
+    query += ' ORDER BY sl.StudiedDay DESC, sl.rowid DESC'
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 
