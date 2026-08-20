@@ -1045,6 +1045,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Name: (formData.get('Name') || '').trim(),
             Sex: (formData.get('Sex') || '').trim(),
             Grade: (formData.get('Grade') || '').trim(),
+            School: (formData.get('School') || '').trim(),
             Referrer: (formData.get('Referrer') || '').trim(),
             Description: (formData.get('Description') || '').trim(),
             IsClassEnded: formData.get('IsClassEnded') ? 1 : 0
@@ -2631,6 +2632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="detail-meta-row">
                                 <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
                                 <span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${formatGrade(s.Grade)}</strong></span>
+                                <span><i class="fa-solid fa-school"></i> 학교: <strong>${escapeHtml(s.School || '미입력')}</strong></span>
                                 <span><i class="fa-solid fa-user-plus"></i> 추천인: <strong>${formatReferrer(s.Referrer) || '미입력'}</strong></span>
                                 ${s.IsClassEnded ? '<span class="badge badge-warning"><i class="fa-solid fa-graduation-cap"></i> 수업 종료</span>' : ''}
                                 <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
@@ -3004,6 +3006,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="text" name="Grade" class="form-control" value="${escapeHtml(s.Grade || '')}">
                         </div>
                         <div class="form-group">
+                            <label>학교</label>
+                            <input type="text" name="School" class="form-control" value="${escapeHtml(s.School || '')}">
+                        </div>
+                        <div class="form-group">
                             <label>추천인 (Referrer)</label>
                             <input type="text" name="Referrer" class="form-control" value="${escapeHtml(s.Referrer || '')}">
                         </div>
@@ -3056,6 +3062,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Name: (formData.get('Name') || '').trim(),
             Sex: (formData.get('Sex') || '').trim(),
             Grade: (formData.get('Grade') || '').trim(),
+            School: (formData.get('School') || '').trim(),
             Referrer: (formData.get('Referrer') || '').trim(),
             Description: (formData.get('Description') || '').trim(),
             IsClassEnded: formData.get('IsClassEnded') ? 1 : 0

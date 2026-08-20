@@ -193,6 +193,10 @@ def init_system_tables():
         for _col, _ddl in [
             ("Grade", "TEXT DEFAULT ''"),
             ("Referrer", "TEXT DEFAULT ''"),
+            ("School", "TEXT DEFAULT ''"),
+            ("GradeAtRegistration", "TEXT DEFAULT ''"),
+            ("RegistrationYear", "INTEGER DEFAULT 0"),
+            ("RegistrationMonth", "INTEGER DEFAULT 0"),
         ]:
             if _col not in students_cols:
                 cursor.execute(f'ALTER TABLE "Students" ADD COLUMN "{_col}" {_ddl}')
@@ -241,6 +245,34 @@ def init_system_tables():
 
     conn.commit()
     conn.close()
+
+def advance_student_grades() -> None:
+    """등록 당시 학년을 기준으로 새해마다 학생 학년을 계산해 반영한다."""
+    from datetime import datetime
+    grade_order = ["초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3"]
+    now_year = datetime.now().year
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT rowid, "Grade", "GradeAtRegistration", "RegistrationYear"
+                          FROM "Students" WHERE COALESCE("GradeAtRegistration", '') != '' AND COALESCE("RegistrationYear", 0) > 0''')
+        for row in cursor.fetchall():
+            base_grade = row["GradeAtRegistration"]
+            if base_grade not in grade_order:
+                continue
+            target_index = min(grade_order.index(base_grade) + max(0, now_year - row["RegistrationYear"]), len(grade_order) - 1)
+            next_grade = grade_order[target_index]
+            if next_grade != row["Grade"]:
+                clear_school = 1 if (row["Grade"] == "초6" and next_grade == "중1") or (row["Grade"] == "중3" and next_grade == "고1") else 0
+                if clear_school:
+                    cursor.execute('UPDATE "Students" SET "Grade" = ?, "School" = \'\' WHERE rowid = ?', (next_grade, row["rowid"]))
+                else:
+                    cursor.execute('UPDATE "Students" SET "Grade" = ? WHERE rowid = ?', (next_grade, row["rowid"]))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        conn.close()
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()

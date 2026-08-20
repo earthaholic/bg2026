@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from config import settings
 from database import (
     init_system_tables,
+    advance_student_grades,
     get_user_by_username,
     verify_password,
     get_all_tables,
@@ -71,6 +72,7 @@ templates = Jinja2Templates(directory=templates_dir)
 @app.on_event("startup")
 def on_startup():
     init_system_tables()
+    advance_student_grades()
 
 # Pydantic Schemas
 
@@ -137,6 +139,7 @@ class UserStudentRegisterRequest(BaseModel):
     Sex: Optional[str] = ""
     Birthday: Optional[str] = "1970-01-01"
     Grade: Optional[str] = ""
+    School: Optional[str] = ""
     Referrer: Optional[str] = ""
     IsClassEnded: Optional[int] = 0
     Description: Optional[str] = ""
@@ -505,6 +508,10 @@ def user_register_student(
         student_data["Birthday"] = "1970-01-01"
         
     student_data["Grade"] = (student_data.get("Grade") or "").strip()
+    student_data["School"] = (student_data.get("School") or "").strip()
+    student_data["GradeAtRegistration"] = student_data["Grade"]
+    student_data["RegistrationYear"] = datetime.now().year
+    student_data["RegistrationMonth"] = datetime.now().month
     student_data["Referrer"] = (student_data.get("Referrer") or "").strip()
     student_data["IsClassEnded"] = 1 if student_data.get("IsClassEnded") else 0
     student_data["Sex"] = (student_data["Sex"] or "").strip()
@@ -542,6 +549,7 @@ def user_search_students(
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    advance_student_grades()
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -632,6 +640,7 @@ def user_get_student_detail(
     student_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    advance_student_grades()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT rowid as row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
@@ -676,6 +685,7 @@ def user_get_students_options(
     include_ended: bool = Query(False),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    advance_student_grades()
     conn = get_db_connection()
     cursor = conn.cursor()
     where_clause = '' if include_ended else ' WHERE (COALESCE("IsClassEnded", 0) = 0)'
