@@ -99,20 +99,20 @@ python server_daemon.py
 `import_lessoncontent_csv.py`는 기존 `StudyLogs`의 `LessonContent`만 수정하는 일회성 반영 도구입니다. DB 파일은 Git에 포함하지 않습니다.
 
 1. 운영 서버에서 코드 반영 전후로 웹 서버를 중지합니다.
-2. 기본 반영 CSV인 `imports/jiyoonju_lessoncontent_exact_matches.csv`는 저장소에 포함되어 함께 배포됩니다. 다른 CSV를 사용할 경우에만 같은 폴더에 SFTP로 업로드합니다.
+2. 기본 반영 CSV는 `imports/`에 포함되어 함께 배포됩니다. 다른 선생님의 CSV도 같은 폴더에 업로드하세요. 스크립트는 `imports/`의 모든 `.csv` 파일을 자동으로 처리합니다. 이 폴더에는 수업 내용 반영용 CSV만 넣어야 합니다.
 3. 먼저 검증 모드를 실행합니다. 이 명령은 DB를 변경하지 않습니다.
 
    ```powershell
-   .\.venv\Scripts\python.exe import_lessoncontent_csv.py --csv .\imports\jiyoonju_lessoncontent_exact_matches.csv
+   .\.venv\Scripts\python.exe import_lessoncontent_csv.py
    ```
 
 4. 오류가 없고 변경 예정 건수가 맞으면 실제 반영합니다. 실행 전 DB 백업이 `backups/`에 자동 생성되고, 각 변경은 감사 이력에 남습니다.
 
    ```powershell
-   .\.venv\Scripts\python.exe import_lessoncontent_csv.py --csv .\imports\jiyoonju_lessoncontent_exact_matches.csv --apply --operator admin
+   .\.venv\Scripts\python.exe import_lessoncontent_csv.py --apply --operator admin
    ```
 
-기본값은 `ImportStatus=ready`만 반영합니다. `review` 행은 검토를 마친 뒤에만 `--include-review` 옵션을 추가해 반영하세요.
+기본값은 `ImportStatus=ready`만 반영합니다. `review` 행은 검토를 마친 뒤에만 `--include-review` 옵션을 추가해 반영하세요. 같은 `StudyLogId`가 여러 파일에 있고 수업 내용이 서로 다르면 안전을 위해 전체 반영을 중단합니다. 특정 파일 하나만 처리하려면 `--csv 파일경로`를 추가하세요.
 
 ---
 

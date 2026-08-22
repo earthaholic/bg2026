@@ -11,37 +11,60 @@ import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 REQUIRED_COLUMNS = {"StudyLogId", "LessonContent", "ImportStatus"}
 
 
-def read_rows(csv_path: Path, include_review: bool) -> Tuple[List[Dict[str, str]], List[str]]:
-    """반영 대상 CSV 행과 형식 오류를 읽는다."""
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
-        reader = csv.DictReader(file)
-        missing_columns = REQUIRED_COLUMNS - set(reader.fieldnames or [])
-        if missing_columns:
-            raise ValueError(f"CSV에 필수 열이 없습니다: {', '.join(sorted(missing_columns))}")
-        allowed_statuses = {"ready", "review"} if include_review else {"ready"}
-        rows: List[Dict[str, str]] = []
-        errors: List[str] = []
-        seen_ids = set()
-        for line_number, row in enumerate(reader, start=2):
-            if (row.get("ImportStatus") or "").strip().lower() not in allowed_statuses:
-                continue
-            raw_id = (row.get("StudyLogId") or "").strip()
-            if not raw_id.isdigit() or int(raw_id) <= 0:
-                errors.append(f"{line_number}행: StudyLogId가 올바른 양의 정수가 아닙니다.")
-                continue
-            log_id = int(raw_id)
-            if log_id in seen_ids:
-                errors.append(f"{line_number}행: StudyLogId {log_id}가 CSV에 중복되어 있습니다.")
-                continue
-            seen_ids.add(log_id)
-            rows.append({"line": str(line_number), "id": str(log_id), "content": (row.get("LessonContent") or "").strip()})
+def read_rows(csv_paths: List[Path], include_review: bool) -> Tuple[List[Dict[str, str]], List[str]]:
+    """여러 CSV의 반영 대상 행을 읽고, 파일 사이의 충돌도 검증한다."""
+    allowed_statuses = {"ready", "review"} if include_review else {"ready"}
+    rows: List[Dict[str, str]] = []
+    errors: List[str] = []
+    seen_rows: Dict[int, Dict[str, str]] = {}
+    for csv_path in csv_paths:
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            missing_columns = REQUIRED_COLUMNS - set(reader.fieldnames or [])
+            if missing_columns:
+                raise ValueError(f"{csv_path}: CSV에 필수 열이 없습니다: {', '.join(sorted(missing_columns))}")
+            for line_number, row in enumerate(reader, start=2):
+                if (row.get("ImportStatus") or "").strip().lower() not in allowed_statuses:
+                    continue
+                raw_id = (row.get("StudyLogId") or "").strip()
+                if not raw_id.isdigit() or int(raw_id) <= 0:
+                    errors.append(f"{csv_path.name} {line_number}행: StudyLogId가 올바른 양의 정수가 아닙니다.")
+                    continue
+                log_id = int(raw_id)
+                content = (row.get("LessonContent") or "").strip()
+                previous = seen_rows.get(log_id)
+                if previous and previous["content"] != content:
+                    errors.append(
+                        f"StudyLogId {log_id}가 {previous['source']} {previous['line']}행 및 "
+                        f"{csv_path.name} {line_number}행에서 서로 다른 수업 내용으로 중복됩니다."
+                    )
+                    continue
+                if previous:
+                    continue
+                item = {"source": csv_path.name, "line": str(line_number), "id": str(log_id), "content": content}
+                seen_rows[log_id] = item
+                rows.append(item)
     return rows, errors
+
+
+def collect_csv_paths(csv_path: Optional[Path], csv_dir: Path) -> List[Path]:
+    """단일 파일 또는 imports 폴더의 모든 CSV 파일 목록을 반환한다."""
+    if csv_path is not None:
+        if not csv_path.is_file():
+            raise ValueError(f"CSV 파일을 찾을 수 없습니다: {csv_path}")
+        return [csv_path]
+    if not csv_dir.is_dir():
+        raise ValueError(f"CSV 폴더를 찾을 수 없습니다: {csv_dir}")
+    paths = sorted(path for path in csv_dir.glob("*.csv") if path.is_file())
+    if not paths:
+        raise ValueError(f"{csv_dir}에 CSV 파일이 없습니다.")
+    return paths
 
 
 def verify_schema(conn: sqlite3.Connection) -> None:
@@ -64,10 +87,10 @@ def resolve_rows(conn: sqlite3.Connection, rows: List[Dict[str, str]]) -> Tuple[
         cursor.execute('SELECT rowid, "LessonContent" FROM "StudyLogs" WHERE rowid = ? OR "Id" = ?', (log_id, log_id))
         matches = cursor.fetchall()
         if not matches:
-            errors.append(f"{item['line']}행: StudyLogId {log_id}에 해당하는 학습 기록이 없습니다.")
+            errors.append(f"{item['source']} {item['line']}행: StudyLogId {log_id}에 해당하는 학습 기록이 없습니다.")
             continue
         if len(matches) != 1:
-            errors.append(f"{item['line']}행: StudyLogId {log_id}가 둘 이상의 학습 기록과 일치합니다.")
+            errors.append(f"{item['source']} {item['line']}행: StudyLogId {log_id}가 둘 이상의 학습 기록과 일치합니다.")
             continue
         rowid, previous_content = matches[0]
         resolved.append({"line": item["line"], "id": log_id, "rowid": rowid,
@@ -124,18 +147,20 @@ def apply_updates(db_path: Path, resolved: List[Dict[str, object]], operator: st
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="StudyLogs.LessonContent CSV 일괄 반영 도구")
-    parser.add_argument("--csv", required=True, type=Path, help="반영할 CSV 파일 경로")
+    parser.add_argument("--csv", type=Path, help="반영할 단일 CSV 파일 경로 (기본값: imports 폴더 자동 탐색)")
+    parser.add_argument("--csv-dir", type=Path, default=Path("imports"), help="모든 CSV를 자동 탐색할 폴더 (기본: imports)")
     parser.add_argument("--db", type=Path, default=Path("data.db"), help="운영 SQLite DB 경로 (기본: data.db)")
     parser.add_argument("--apply", action="store_true", help="검증만 하지 않고 실제로 반영")
     parser.add_argument("--include-review", action="store_true", help="review 행도 함께 반영 (기본: ready만)")
     parser.add_argument("--operator", default="lessoncontent-csv-import", help="감사 이력에 남길 작업자명")
     parser.add_argument("--backup-dir", type=Path, default=Path("backups"), help="적용 전 DB 백업 폴더")
     args = parser.parse_args()
-    if not args.csv.is_file() or not args.db.is_file():
-        print("오류: CSV 또는 DB 파일을 찾을 수 없습니다.", file=sys.stderr)
+    if not args.db.is_file():
+        print(f"오류: DB 파일을 찾을 수 없습니다: {args.db}", file=sys.stderr)
         return 2
     try:
-        rows, errors = read_rows(args.csv, args.include_review)
+        csv_paths = collect_csv_paths(args.csv, args.csv_dir)
+        rows, errors = read_rows(csv_paths, args.include_review)
         conn = sqlite3.connect(str(args.db))
         try:
             verify_schema(conn)
@@ -147,6 +172,8 @@ def main() -> int:
         print(f"오류: {error}", file=sys.stderr)
         return 2
     changes = [row for row in resolved if row["old_content"] != row["new_content"]]
+    print(f"발견한 CSV 파일: {len(csv_paths)}개")
+    print(*[f"- {path.name}" for path in csv_paths], sep="\n")
     print(f"대상 CSV 행: {len(rows)}건\n일치한 학습 기록: {len(resolved)}건\n수업 내용 변경 예정: {len(changes)}건\n기존 값과 같아 건너뜀: {len(resolved) - len(changes)}건")
     if errors:
         print("\n반영을 중단합니다. 아래 오류를 해결해 주세요:", file=sys.stderr)
