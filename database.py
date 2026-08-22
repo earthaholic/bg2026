@@ -177,13 +177,32 @@ def init_system_tables():
         "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
     )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClosures" (
-        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL UNIQUE, "ClosedAt" TEXT DEFAULT (datetime('now','localtime')),
-        "ClosedBy" TEXT NOT NULL
+        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
+        "ClosedAt" TEXT DEFAULT (datetime('now','localtime')), "ClosedBy" TEXT NOT NULL,
+        UNIQUE("PayrollMonth", "TeacherUsername")
     )''')
+    # 초기 단일 월 마감 스키마를 선생님별 마감 스키마로 보완한다.
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='TeacherPayrollClosures'")
+    closure_ddl = (cursor.fetchone()[0] or '')
+    if 'TeacherUsername' not in closure_ddl:
+        cursor.execute('ALTER TABLE "TeacherPayrollClosures" RENAME TO "TeacherPayrollClosures_legacy"')
+        cursor.execute('''CREATE TABLE "TeacherPayrollClosures" (
+            "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
+            "ClosedAt" TEXT DEFAULT (datetime('now','localtime')), "ClosedBy" TEXT NOT NULL,
+            UNIQUE("PayrollMonth", "TeacherUsername")
+        )''')
+        cursor.execute('DROP TABLE "TeacherPayrollClosures_legacy"')
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollLines" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "StudyLogId" INTEGER NOT NULL,
         "TeacherUsername" TEXT NOT NULL, "UnitAmount" INTEGER NOT NULL, "Amount" INTEGER NOT NULL,
         "Reason" TEXT DEFAULT '', UNIQUE("PayrollMonth", "StudyLogId")
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClaims" (
+        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
+        "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',
+        "Status" TEXT NOT NULL DEFAULT 'pending' CHECK("Status" IN ('pending','approved','rejected')),
+        "ReviewedBy" TEXT DEFAULT '', "ReviewedAt" TEXT DEFAULT '',
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
     )''')
     try:
         cursor.execute('PRAGMA table_info("Classes")')

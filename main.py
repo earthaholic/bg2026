@@ -191,6 +191,15 @@ class SpecialLessonTypeRequest(BaseModel):
     UnitAmount: int
     EffectiveFrom: str
 
+class PayrollClaimRequest(BaseModel):
+    PayrollMonth: str
+    ItemName: str
+    Amount: int
+    Description: Optional[str] = ""
+
+class PayrollClaimReviewRequest(BaseModel):
+    Status: str
+
 class TuitionFeeSettingRequest(BaseModel):
     ClassType: str
     PaidLessons: int
@@ -1712,27 +1721,48 @@ def create_special_type(payload: SpecialLessonTypeRequest, current_user: Dict[st
     finally: conn.close()
 
 @app.get("/api/user/payroll")
-def get_payroll(month: str = Query(...), current_user: Dict[str, Any] = Depends(get_current_user)):
+def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(get_current_user)):
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
-    teacher = current_user["username"] if current_user["role"] == "teacher" else None
+    teacher = current_user["username"] if current_user["role"] == "teacher" else (teacher_username or None)
     rows=_payroll_rows(month, teacher)
     totals={}
     for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
     conn=get_db_connection()
-    try: closed=bool(conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?',(month,)).fetchone())
+    try:
+        closed=bool(teacher and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month, teacher)).fetchone())
+        claim_sql = 'SELECT * FROM "TeacherPayrollClaims" WHERE "PayrollMonth"=?'
+        claim_params = [month]
+        if teacher:
+            claim_sql += ' AND "TeacherUsername"=?'; claim_params.append(teacher)
+        claims = [dict(r) for r in conn.execute(claim_sql, claim_params).fetchall()]
     finally: conn.close()
-    return {"month":month,"closed":closed,"lines":rows,"totals":totals}
+    for claim in claims:
+        totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
+    return {"month":month,"closed":closed,"lines":rows,"claims":claims,"totals":totals}
 
-@app.post("/api/user/payroll/{month}/close")
-def close_payroll(month: str, current_user: Dict[str, Any] = Depends(get_current_staff)):
-    if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
-    rows=_payroll_rows(month)
+@app.post("/api/user/payroll/claims")
+def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    if not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0:
+        raise HTTPException(status_code=400, detail="청구월, 항목명, 금액을 확인해 주세요.")
     conn=get_db_connection()
     try:
-        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?',(month,)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 정산월입니다.")
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(payload.PayrollMonth,current_user['username'])).fetchone():
+            raise HTTPException(status_code=400, detail="마감된 정산월에는 청구할 수 없습니다.")
+        conn.execute('INSERT INTO "TeacherPayrollClaims"("PayrollMonth","TeacherUsername","ItemName","Amount","Description") VALUES(?,?,?,?,?)',(payload.PayrollMonth,current_user['username'],payload.ItemName.strip(),payload.Amount,(payload.Description or '').strip()))
+        conn.commit(); return {"status":"success","message":"추가 청구를 등록했습니다. 승인 후 정산에 반영됩니다."}
+    finally: conn.close()
+
+@app.post("/api/user/payroll/{month}/close")
+def close_payroll(month: str, teacher_username: str = Query(...), current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
+    if not get_user_by_username(teacher_username): raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
+    rows=_payroll_rows(month, teacher_username)
+    conn=get_db_connection()
+    try:
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month,teacher_username)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 선생님 정산입니다.")
         for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason") VALUES(?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason']))
-        conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","ClosedBy") VALUES(?,?)',(month,current_user['username'])); conn.commit()
-        return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}
+        conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","TeacherUsername","ClosedBy") VALUES(?,?,?)',(month,teacher_username,current_user['username'])); conn.commit()
+        return {"status":"success","message":f"{teacher_username} 선생님의 {month} 급여 정산을 마감했습니다."}
     except HTTPException: raise
     finally: conn.close()
 
@@ -1765,7 +1795,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
     """마감 전에는 해당 일자에 유효한 단가를, 마감 후에는 확정 단가를 반환한다."""
     conn = get_db_connection()
     try:
-        closed = conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,)).fetchone()
+        closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
             sql = '''SELECT pl.*, sl."StudiedDay", s."Name" AS "StudentName", c."ClassName"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
