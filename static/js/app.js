@@ -552,6 +552,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadClassOptionsForBatch();
         } else if (targetView === 'monthly-report') {
             initMonthlyReportView();
+        } else if (targetView === 'teacher-payroll') {
+            initTeacherPayrollView();
         } else if (targetView === 'tuition-payment') {
             loadTuitionPaymentView();
         } else if (targetView === 'tuition-payment-search') {
@@ -5989,6 +5991,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCloseAuditDetail) {
         btnCloseAuditDetail.addEventListener('click', () => modalAuditDetail.classList.add('hidden'));
     }
+    async function initTeacherPayrollView() {
+        const month = document.getElementById('payroll-month');
+        if (!month.value) month.value = new Date().toISOString().slice(0, 7);
+        document.getElementById('payroll-teacher-group').classList.toggle('hidden', !isStaff());
+        document.getElementById('payroll-claim-card').classList.toggle('hidden', isStaff());
+        await loadTeacherPayroll();
+    }
+    async function loadTeacherPayroll() {
+        const month = document.getElementById('payroll-month').value;
+        const teacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : '';
+        if (!month) return;
+        const data = await apiFetch(`/api/user/payroll?month=${encodeURIComponent(month)}${teacher ? `&teacher_username=${encodeURIComponent(teacher)}` : ''}`);
+        const lines = [...data.lines.map(x => ({ date:x.StudiedDay, type:'수업', name:x.StudentName || '-', reason:x.Reason, amount:x.Amount })), ...data.claims.map(x => ({ date:x.ClaimDate || '-', type:'추가 청구', name:x.ItemName, reason:x.Description || '-', amount:x.Amount }))];
+        document.getElementById('payroll-lines-body').innerHTML = lines.length ? lines.map(x => `<tr><td>${escapeHtml(x.date)}</td><td>${x.type}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.reason)}</td><td>${Number(x.amount).toLocaleString()}원</td></tr>`).join('') : '<tr><td colspan="5" class="text-center p-4">정산 내역이 없습니다.</td></tr>';
+        const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
+        document.getElementById('payroll-summary').textContent = `${month} 정산 합계: ${total.toLocaleString()}원${data.closed ? ' (마감됨)' : ''}`;
+        document.getElementById('payroll-close-wrap').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
+    }
+    document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
+    document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
+    document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => { e.preventDefault(); const month=document.getElementById('payroll-month').value; await apiFetch('/api/user/payroll/claims', {method:'POST', body:JSON.stringify({PayrollMonth:month, ClaimDate:document.getElementById('payroll-claim-date').value, ItemName:document.getElementById('payroll-claim-name').value, Amount:Number(document.getElementById('payroll-claim-amount').value), Description:document.getElementById('payroll-claim-description').value})}); e.target.reset(); await loadTeacherPayroll(); showToast('추가 청구를 등록했습니다.', 'success'); });
+
     if (modalAuditDetail) {
         modalAuditDetail.addEventListener('click', (e) => {
             if (e.target === modalAuditDetail) modalAuditDetail.classList.add('hidden');

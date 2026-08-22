@@ -87,6 +87,10 @@
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
                     </div>
+                    <div class="menu-nav-item" data-view="teacher-payroll">
+                        <i class="fa-solid fa-money-check-dollar nav-icon"></i>
+                        <span>월급 정산</span>
+                    </div>
 
                     <div class="menu-section-label staff-only hidden">수업료 관리</div>
                     <div class="menu-nav-item staff-only hidden" data-view="tuition-payment">
@@ -942,6 +946,23 @@
                 </section>
 
                 <!-- View: Monthly Report Text Generator -->
+                <section id="view-teacher-payroll" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="card-header-styled"><h3><i class="fa-solid fa-money-check-dollar"></i> 월급 정산</h3></div>
+                            <div class="form-grid">
+                                <div class="form-group"><label for="payroll-month">정산월</label><input id="payroll-month" class="form-control" type="month"></div>
+                                <div id="payroll-teacher-group" class="form-group hidden"><label for="payroll-teacher">선생님 아이디</label><input id="payroll-teacher" class="form-control" placeholder="전체 조회 또는 아이디 입력"></div>
+                                <div class="form-group"><label>&nbsp;</label><button id="btn-load-payroll" class="btn btn-primary">조회</button></div>
+                            </div>
+                            <div id="payroll-summary" class="alert alert-info">정산월을 선택해 조회하세요.</div>
+                            <div id="payroll-close-wrap" class="hidden"><button id="btn-close-payroll" class="btn btn-danger">선택 선생님 정산 마감</button></div>
+                        </div>
+                        <div class="card table-card"><div class="card-header-styled"><h3>수업분 및 추가 청구</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>일자</th><th>구분</th><th>학생/항목</th><th>사유</th><th>금액</th></tr></thead><tbody id="payroll-lines-body"></tbody></table></div></div>
+                        <div id="payroll-claim-card" class="card form-card"><div class="card-header-styled"><h3>추가 청구 등록</h3></div><form id="form-payroll-claim" class="form-grid"><div class="form-group"><label>청구일</label><input id="payroll-claim-date" class="form-control" type="date" required></div><div class="form-group"><label>항목명</label><input id="payroll-claim-name" class="form-control" required></div><div class="form-group"><label>금액</label><input id="payroll-claim-amount" class="form-control" type="number" min="0" required></div><div class="form-group"><label>사유</label><input id="payroll-claim-description" class="form-control"></div><div class="form-group"><label>&nbsp;</label><button class="btn btn-success">청구 등록</button></div></form></div>
+                    </div>
+                </section>
+
                 <section id="view-monthly-report" class="workspace-view">
                     <div class="page-title-box">
                         <h2><i class="fa-solid fa-comment-sms"></i> 월말보고 문자 양식 자동 생성</h2>
