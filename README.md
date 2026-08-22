@@ -94,5 +94,27 @@ python server_daemon.py
 
 ---
 
+## 수업 내용 CSV 일괄 반영
+
+`import_lessoncontent_csv.py`는 기존 `StudyLogs`의 `LessonContent`만 수정하는 일회성 반영 도구입니다. DB 파일은 Git에 포함하지 않습니다.
+
+1. 운영 서버에서 코드 반영 전후로 웹 서버를 중지합니다.
+2. 기본 반영 CSV인 `imports/jiyoonju_lessoncontent_exact_matches.csv`는 저장소에 포함되어 함께 배포됩니다. 다른 CSV를 사용할 경우에만 같은 폴더에 SFTP로 업로드합니다.
+3. 먼저 검증 모드를 실행합니다. 이 명령은 DB를 변경하지 않습니다.
+
+   ```powershell
+   .\.venv\Scripts\python.exe import_lessoncontent_csv.py --csv .\imports\jiyoonju_lessoncontent_exact_matches.csv
+   ```
+
+4. 오류가 없고 변경 예정 건수가 맞으면 실제 반영합니다. 실행 전 DB 백업이 `backups/`에 자동 생성되고, 각 변경은 감사 이력에 남습니다.
+
+   ```powershell
+   .\.venv\Scripts\python.exe import_lessoncontent_csv.py --csv .\imports\jiyoonju_lessoncontent_exact_matches.csv --apply --operator admin
+   ```
+
+기본값은 `ImportStatus=ready`만 반영합니다. `review` 행은 검토를 마친 뒤에만 `--include-review` 옵션을 추가해 반영하세요.
+
+---
+
 ## 📄 라이선스 & 문의
 본 프로젝트는 **꿈꾸는봄결** 내부 관리용으로 제작된 전용 애플리케이션입니다.

@@ -26,6 +26,10 @@ wallet/
 # SQLite DB 백업 (민감 - 커밋 금지)
 *.bak*
 *.bak-*
+backups/
+imports/
+!imports/
+!imports/jiyoonju_lessoncontent_exact_matches.csv
 
 # IDE & System Files
 .vscode/
