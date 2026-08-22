@@ -117,6 +117,15 @@
                         <i class="fa-solid fa-magnifying-glass nav-icon"></i>
                         <span>도서 검색 & 상세 조회</span>
                     </div>
+                    <div class="menu-nav-item" data-view="book-material-request">
+                        <i class="fa-solid fa-file-circle-plus nav-icon"></i><span>도서·자료 등록 요청</span>
+                    </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="book-material-review">
+                        <i class="fa-solid fa-list-check nav-icon"></i><span>도서·자료 요청 승인</span>
+                    </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="book-material-rates">
+                        <i class="fa-solid fa-won-sign nav-icon"></i><span>자료 제작 단가 설정</span>
+                    </div>
                     <div class="menu-nav-item staff-only hidden" data-view="book-reg">
                         <i class="fa-solid fa-book-medical nav-icon"></i>
                         <span>새 도서 등록</span>
@@ -193,6 +202,13 @@
                         </button>
                     </div>
                 </div>
+
+                <section id="view-book-material-request" class="workspace-view"><div class="book-search-layout">
+                    <div class="card form-card"><div class="card-header-styled"><div><h3><i class="fa-solid fa-file-circle-plus"></i> 도서·자료 등록 요청</h3><p class="subtitle">승인되면 도서에 반영되고 승인일 기준 월의 자료 제작 정산에 포함됩니다.</p></div></div>
+                    <form id="form-book-material-request" class="book-form"><div class="form-section"><div class="form-grid"><div class="form-group"><label>요청 유형</label><select id="material-request-type" class="form-control"><option value="material_add">기존 도서 자료 추가</option><option value="new_book">새 도서 등록</option></select></div><div class="form-group"><label>도서 분류</label><select id="material-book-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div></div></div><div id="material-existing-book-fields" class="form-section"><div class="form-group"><label>대상 도서 번호</label><input id="material-book-id" type="number" min="1" class="form-control" placeholder="도서 검색 목록의 번호"></div></div><div id="material-new-book-fields" class="form-section hidden"><div class="form-grid"><div class="form-group"><label>도서명</label><input id="material-new-title" class="form-control"></div><div class="form-group"><label>저자</label><input id="material-new-author" class="form-control"></div><div class="form-group"><label>출판사</label><input id="material-new-publisher" class="form-control"></div></div></div><div class="form-section"><h4 class="section-title">추가할 자료 종류</h4><div class="checkbox-grid"><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasQuiz"><span>어휘 퀴즈</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingQuestion"><span>독서 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingAnswer"><span>독서 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingQuestion"><span>글쓰기 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingAnswer"><span>글쓰기 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasAdvancedMaterial"><span>심화 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasDebateMaterial"><span>토론 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="IsPdfExist"><span>PDF 파일</span></label></div></div><div id="book-material-request-msg" class="alert hidden"></div><div class="form-submit-actions"><button class="btn btn-success btn-lg" type="submit">승인 요청 등록</button></div></form></div>
+                    <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리 내용</th></tr></thead><tbody id="book-material-request-body"></tbody></table></div></div></div></section>
+                <section id="view-book-material-review" class="workspace-view"><div class="book-search-layout"><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>요청자</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리</th></tr></thead><tbody id="book-material-review-body"></tbody></table></div></div></div></section>
+                <section id="view-book-material-rates" class="workspace-view"><div class="book-search-layout"><div class="card form-card"><form id="form-book-material-rate" class="book-form"><div class="form-grid"><div class="form-group"><label>도서 분류</label><select id="material-rate-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div><div class="form-group"><label>단가</label><input id="material-rate-amount" type="number" min="0" class="form-control" required></div><div class="form-group"><label>적용 시작일</label><input id="material-rate-date" type="date" class="form-control" required></div></div><div id="book-material-rate-msg" class="alert hidden"></div><div class="form-submit-actions"><button class="btn btn-primary" type="submit">단가 저장</button></div></form></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>분류</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="book-material-rate-body"></tbody></table></div></div></div></section>
 
                 <!-- View 1: User Book Registration Form -->
                 <section id="view-book-reg" class="workspace-view">

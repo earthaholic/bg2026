@@ -135,6 +135,22 @@ class UserBookRegisterRequest(BaseModel):
     IsMillieExist: Optional[int] = 0
     Desc: Optional[str] = ""
 
+class BookMaterialRequestCreate(BaseModel):
+    RequestType: str
+    BookId: Optional[int] = None
+    BookData: Optional[UserBookRegisterRequest] = None
+    BookCategory: str
+    MaterialFields: List[str]
+
+class BookMaterialRequestReview(BaseModel):
+    Status: str
+    RejectReason: Optional[str] = ""
+
+class BookMaterialPayRateRequest(BaseModel):
+    BookCategory: str
+    UnitAmount: int
+    EffectiveFrom: str
+
 class UserStudentRegisterRequest(BaseModel):
     Name: str
     Sex: Optional[str] = ""
@@ -289,6 +305,136 @@ def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
         "username": current_user["username"],
         "role": current_user["role"]
     }
+
+# --- 도서·자료 제작 요청 / 승인 APIs ---
+BOOK_MATERIAL_FIELDS = {
+    "HasQuiz", "HasReadingQuestion", "HasReadingAnswer", "HasWritingQuestion",
+    "HasWritingAnswer", "HasAdvancedMaterial", "HasDebateMaterial", "IsPdfExist"
+}
+BOOK_MATERIAL_CATEGORIES = {"picture": "그림책", "general": "일반 도서"}
+
+def _book_material_request_dict(row: Any) -> Dict[str, Any]:
+    data = dict(row)
+    for key, default in (("BookData", {}), ("MaterialFields", [])):
+        try:
+            data[key] = json.loads(data.get(key) or json.dumps(default))
+        except (TypeError, json.JSONDecodeError):
+            data[key] = default
+    data["BookCategoryLabel"] = BOOK_MATERIAL_CATEGORIES.get(data.get("BookCategory"), data.get("BookCategory", ""))
+    return data
+
+@app.get("/api/user/book-material-rates")
+def get_book_material_rates(current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        return {"rates": [dict(r) for r in conn.execute('SELECT * FROM "BookMaterialPayRates" ORDER BY "BookCategory", "EffectiveFrom" DESC').fetchall()]}
+    finally:
+        conn.close()
+
+@app.post("/api/user/book-material-rates")
+def save_book_material_rate(payload: BookMaterialPayRateRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.BookCategory not in BOOK_MATERIAL_CATEGORIES or payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom):
+        raise HTTPException(status_code=400, detail="자료 제작 단가 정보를 확인해 주세요.")
+    conn = get_db_connection()
+    try:
+        conn.execute('INSERT OR REPLACE INTO "BookMaterialPayRates"("BookCategory","UnitAmount","EffectiveFrom") VALUES(?,?,?)', (payload.BookCategory, payload.UnitAmount, payload.EffectiveFrom))
+        conn.commit()
+        return {"status": "success", "message": "자료 제작 단가를 저장했습니다."}
+    finally:
+        conn.close()
+
+@app.post("/api/user/book-material-requests")
+def create_book_material_request(payload: BookMaterialRequestCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
+    if current_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="도서·자료 요청은 일반 선생님 계정으로 등록해 주세요.")
+    if payload.RequestType not in ("new_book", "material_add") or payload.BookCategory not in BOOK_MATERIAL_CATEGORIES:
+        raise HTTPException(status_code=400, detail="요청 유형 또는 도서 분류를 확인해 주세요.")
+    fields = sorted(set(payload.MaterialFields))
+    if not fields or any(field not in BOOK_MATERIAL_FIELDS for field in fields):
+        raise HTTPException(status_code=400, detail="추가할 자료 종류를 한 개 이상 선택해 주세요.")
+    book_data: Dict[str, Any] = {}
+    book_id = None
+    if payload.RequestType == "new_book":
+        if not payload.BookData or not payload.BookData.Title.strip():
+            raise HTTPException(status_code=400, detail="새 도서 요청에는 도서명을 입력해 주세요.")
+        book_data = payload.BookData.dict()
+    else:
+        if not payload.BookId or _resolve_domain_pk("Books", payload.BookId) is None:
+            raise HTTPException(status_code=404, detail="자료를 추가할 도서를 찾을 수 없습니다.")
+        book_id = _resolve_domain_pk("Books", payload.BookId)
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute('''INSERT INTO "BookMaterialRequests"("RequestType","BookId","BookData","BookCategory","MaterialFields","RequestedBy")
+                                 VALUES(?,?,?,?,?,?)''', (payload.RequestType, book_id, json.dumps(book_data, ensure_ascii=False), payload.BookCategory, json.dumps(fields), current_user["username"]))
+        conn.commit()
+        return {"status": "success", "id": cursor.lastrowid, "message": "도서·자료 요청을 등록했습니다. 승인 후 도서와 정산에 반영됩니다."}
+    finally:
+        conn.close()
+
+@app.get("/api/user/book-material-requests")
+def list_book_material_requests(status_filter: Optional[str] = Query(None, alias="status"), current_user: Dict[str, Any] = Depends(get_current_user)):
+    if status_filter and status_filter not in ("pending", "approved", "rejected"):
+        raise HTTPException(status_code=400, detail="요청 상태를 확인해 주세요.")
+    conn = get_db_connection()
+    try:
+        sql = '''SELECT r.*, b."Title" AS "BookTitle" FROM "BookMaterialRequests" r
+                 LEFT JOIN "Books" b ON r."BookId"=b.rowid OR r."BookId"=b."Id"'''
+        conditions, params = [], []
+        if current_user["role"] == "teacher":
+            conditions.append('r."RequestedBy"=?'); params.append(current_user["username"])
+        if status_filter:
+            conditions.append('r."Status"=?'); params.append(status_filter)
+        if conditions: sql += " WHERE " + " AND ".join(conditions)
+        sql += ' ORDER BY CASE r."Status" WHEN \'pending\' THEN 0 ELSE 1 END, r."CreatedAt" DESC'
+        return {"requests": [_book_material_request_dict(row) for row in conn.execute(sql, params).fetchall()]}
+    finally:
+        conn.close()
+
+@app.post("/api/user/book-material-requests/{request_id}/review")
+def review_book_material_request(request_id: int, payload: BookMaterialRequestReview, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.Status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="승인 또는 반려 상태를 선택해 주세요.")
+    if payload.Status == "rejected" and not (payload.RejectReason or "").strip():
+        raise HTTPException(status_code=400, detail="반려 사유를 입력해 주세요.")
+    conn = get_db_connection()
+    try:
+        request_row = conn.execute('SELECT * FROM "BookMaterialRequests" WHERE "Id"=?', (request_id,)).fetchone()
+        if not request_row: raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
+        request_data = _book_material_request_dict(request_row)
+        if request_data["Status"] != "pending": raise HTTPException(status_code=400, detail="이미 처리된 요청입니다.")
+        now = datetime.now()
+        reviewed_at, payroll_month = now.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m")
+        if payload.Status == "rejected":
+            conn.execute('UPDATE "BookMaterialRequests" SET "Status"=?,"ReviewedBy"=?,"ReviewedAt"=?,"RejectReason"=? WHERE "Id"=?', ("rejected", current_user["username"], reviewed_at, payload.RejectReason.strip(), request_id))
+            conn.commit(); return {"status": "success", "message": "요청을 반려했습니다."}
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (payroll_month, request_data["RequestedBy"])).fetchone():
+            raise HTTPException(status_code=400, detail="요청자의 승인월 정산이 이미 마감되어 승인할 수 없습니다.")
+        rate = conn.execute('SELECT "UnitAmount" FROM "BookMaterialPayRates" WHERE "BookCategory"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1', (request_data["BookCategory"], now.strftime("%Y-%m-%d"))).fetchone()
+        if not rate: raise HTTPException(status_code=400, detail="승인일 기준 자료 제작 단가가 설정되어 있지 않습니다.")
+        fields = request_data["MaterialFields"]
+        if request_data["RequestType"] == "new_book":
+            book_data = request_data["BookData"]
+            book_data.update({field: 1 for field in fields})
+            book_data["CreatedBy"] = request_data["RequestedBy"]
+            columns = list(book_data.keys()); placeholders = ", ".join("?" for _ in columns)
+            cursor = conn.execute(f'INSERT INTO "Books" ({", ".join(chr(34)+c+chr(34) for c in columns)}) VALUES ({placeholders})', [book_data[c] for c in columns])
+            book_id = cursor.lastrowid
+            new_snapshot = None
+        else:
+            book_id = request_data["BookId"]
+            old_snapshot = dict(conn.execute('SELECT rowid AS row_id, * FROM "Books" WHERE rowid=?', (book_id,)).fetchone() or {})
+            if not old_snapshot: raise HTTPException(status_code=404, detail="자료를 추가할 도서를 찾을 수 없습니다.")
+            assignments = ", ".join(f'"{field}"=1' for field in fields) + ', "UpdatedBy"=?, "UpdatedAt"=?'
+            conn.execute(f'UPDATE "Books" SET {assignments} WHERE rowid=?', [current_user["username"], reviewed_at, book_id])
+            new_snapshot = None
+        conn.execute('''UPDATE "BookMaterialRequests" SET "BookId"=?,"Status"='approved',"ReviewedBy"=?,"ReviewedAt"=?,"ApprovedAmount"=?,"PayrollMonth"=? WHERE "Id"=?''', (book_id, current_user["username"], reviewed_at, rate[0], payroll_month, request_id))
+        conn.commit()
+    finally:
+        conn.close()
+    snapshot = get_record_snapshot("Books", book_id)
+    if request_data["RequestType"] == "new_book": _audit_insert("Books", book_id, snapshot, current_user["username"], current_user["role"])
+    else: _audit_update("Books", book_id, old_snapshot, snapshot, current_user["username"], current_user["role"])
+    return {"status": "success", "message": f"요청을 승인했습니다. {payroll_month} 정산에 {rate[0]:,}원이 반영됩니다."}
 
 # --- User Book Registration & Search APIs ---
 # 등록/수정/삭제: 관리 선생님(manager) 이상만 가능 / 조회: 모든 로그인 사용자 가능
@@ -1736,10 +1882,18 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         if teacher:
             claim_sql += ' AND "TeacherUsername"=?'; claim_params.append(teacher)
         claims = [dict(r) for r in conn.execute(claim_sql, claim_params).fetchall()]
+        material_sql = 'SELECT r.*, b."Title" AS "BookTitle" FROM "BookMaterialRequests" r LEFT JOIN "Books" b ON r."BookId"=b.rowid OR r."BookId"=b."Id" WHERE r."Status"=\'approved\' AND r."PayrollMonth"=?'
+        material_params = [month]
+        if teacher:
+            material_sql += ' AND r."RequestedBy"=?'; material_params.append(teacher)
+        material_requests = [_book_material_request_dict(r) for r in conn.execute(material_sql, material_params).fetchall()]
     finally: conn.close()
     for claim in claims:
-        totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
-    return {"month":month,"closed":closed,"lines":rows,"claims":claims,"totals":totals}
+        if claim["Status"] == "approved":
+            totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
+    for item in material_requests:
+        totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
+    return {"month":month,"closed":closed,"lines":rows,"claims":claims,"material_requests":material_requests,"totals":totals}
 
 @app.post("/api/user/payroll/claims")
 def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, Any] = Depends(get_current_user)):

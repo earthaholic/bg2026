@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings'];
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
@@ -500,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const staffOnlyItems = document.querySelectorAll('.staff-only');
         adminOnlyItems.forEach(el => el.classList.toggle('hidden', !isAdmin()));
         staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
+        document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', currentUser.role !== 'teacher'));
 
         // 선생님(조회 전용)은 검색/상세 조회 뷰로 이동
         if (!isStaff()) {
@@ -557,6 +558,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loadTuitionPaymentSearch();
         } else if (targetView === 'tuition-fee-settings') {
             loadTuitionFeeSettings();
+        } else if (targetView === 'book-material-request') {
+            loadBookMaterialRequests();
+        } else if (targetView === 'book-material-review') {
+            loadBookMaterialRequests(true);
+        } else if (targetView === 'book-material-rates') {
+            loadBookMaterialRates();
         }
     }
 
@@ -644,6 +651,13 @@ document.addEventListener('DOMContentLoaded', () => {
             clearBookSimilar();
         });
         btnRefreshRecent.addEventListener('click', loadRecentBooks);
+
+        const materialType = document.getElementById('material-request-type');
+        const materialForm = document.getElementById('form-book-material-request');
+        const materialRateForm = document.getElementById('form-book-material-rate');
+        if (materialType) materialType.addEventListener('change', toggleMaterialRequestType);
+        if (materialForm) materialForm.addEventListener('submit', submitBookMaterialRequest);
+        if (materialRateForm) materialRateForm.addEventListener('submit', submitBookMaterialRate);
 
         // User Student Registration Form Submit
         formUserStudentReg.addEventListener('submit', handleUserStudentSubmit);
@@ -1096,6 +1110,73 @@ document.addEventListener('DOMContentLoaded', () => {
             userBookMsg.textContent = err.message;
             userBookMsg.classList.remove('hidden');
         }
+    }
+
+    const MATERIAL_FIELD_LABELS = { HasQuiz: '어휘 퀴즈', HasReadingQuestion: '독서 문제', HasReadingAnswer: '독서 답안', HasWritingQuestion: '글쓰기 문제', HasWritingAnswer: '글쓰기 답안', HasAdvancedMaterial: '심화 자료', HasDebateMaterial: '토론 자료', IsPdfExist: 'PDF 파일' };
+
+    function toggleMaterialRequestType() {
+        const isNew = document.getElementById('material-request-type').value === 'new_book';
+        document.getElementById('material-existing-book-fields').classList.toggle('hidden', isNew);
+        document.getElementById('material-new-book-fields').classList.toggle('hidden', !isNew);
+    }
+
+    function requestBookTitle(item) {
+        return item.BookTitle || (item.BookData && item.BookData.Title) || '-';
+    }
+
+    async function submitBookMaterialRequest(e) {
+        e.preventDefault();
+        const msg = document.getElementById('book-material-request-msg');
+        const requestType = document.getElementById('material-request-type').value;
+        const fields = [...document.querySelectorAll('input[name="material-field"]:checked')].map(el => el.value);
+        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields };
+        if (requestType === 'new_book') {
+            payload.BookData = { Title: document.getElementById('material-new-title').value.trim(), Author: document.getElementById('material-new-author').value.trim(), Publisher: document.getElementById('material-new-publisher').value.trim() };
+        } else payload.BookId = Number(document.getElementById('material-book-id').value);
+        try {
+            const result = await apiFetch('/api/user/book-material-requests', { method: 'POST', body: JSON.stringify(payload) });
+            msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden');
+            e.target.reset(); toggleMaterialRequestType(); await loadBookMaterialRequests();
+        } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
+    }
+
+    async function loadBookMaterialRequests(forReview = false) {
+        const body = document.getElementById(forReview ? 'book-material-review-body' : 'book-material-request-body');
+        if (!body) return;
+        try {
+            const data = await apiFetch('/api/user/book-material-requests');
+            if (!data.requests.length) { body.innerHTML = `<tr><td colspan="${forReview ? 7 : 6}" class="text-center p-4">등록된 요청이 없습니다.</td></tr>`; return; }
+            body.innerHTML = data.requests.map(item => {
+                const fields = (item.MaterialFields || []).map(field => MATERIAL_FIELD_LABELS[field] || field).join(', ');
+                const status = item.Status === 'pending' ? '대기' : item.Status === 'approved' ? '승인' : '반려';
+                const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
+                const review = item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : details;
+                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(item.RequestedBy)}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}</td></tr>`;
+            }).join('');
+            if (forReview) {
+                body.querySelectorAll('.btn-material-approve').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'approved')));
+                body.querySelectorAll('.btn-material-reject').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'rejected')));
+            }
+        } catch (err) { body.innerHTML = `<tr><td colspan="7" class="text-center">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    async function reviewBookMaterialRequest(id, status) {
+        const RejectReason = status === 'rejected' ? window.prompt('반려 사유를 입력해 주세요.') : '';
+        if (status === 'rejected' && !RejectReason) return;
+        try { const result = await apiFetch(`/api/user/book-material-requests/${id}/review`, { method: 'POST', body: JSON.stringify({ Status: status, RejectReason }) }); showToast(result.message, 'success'); await loadBookMaterialRequests(true); }
+        catch (err) { alert(err.message); }
+    }
+
+    async function submitBookMaterialRate(e) {
+        e.preventDefault(); const msg = document.getElementById('book-material-rate-msg');
+        try { const result = await apiFetch('/api/user/book-material-rates', { method: 'POST', body: JSON.stringify({ BookCategory: document.getElementById('material-rate-category').value, UnitAmount: Number(document.getElementById('material-rate-amount').value), EffectiveFrom: document.getElementById('material-rate-date').value }) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadBookMaterialRates(); }
+        catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
+    }
+
+    async function loadBookMaterialRates() {
+        const body = document.getElementById('book-material-rate-body'); if (!body) return;
+        try { const data = await apiFetch('/api/user/book-material-rates'); body.innerHTML = data.rates.length ? data.rates.map(rate => `<tr><td>${rate.BookCategory === 'picture' ? '그림책' : '일반 도서'}</td><td>${Number(rate.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(rate.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="3" class="text-center p-4">설정된 단가가 없습니다.</td></tr>'; }
+        catch (err) { body.innerHTML = `<tr><td colspan="3">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     // User Student Registration Handler

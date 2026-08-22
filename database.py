@@ -207,6 +207,24 @@ def init_system_tables():
     cursor.execute('PRAGMA table_info("TeacherPayrollClaims")')
     if "ClaimDate" not in [r["name"] for r in cursor.fetchall()]:
         cursor.execute('ALTER TABLE "TeacherPayrollClaims" ADD COLUMN "ClaimDate" TEXT DEFAULT \'\'')
+
+    # 도서·자료 제작 요청 및 정산 기준. 자료 종류는 Books 반영용이며 단가는 도서 분류별 요청 1건 기준이다.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "BookMaterialPayRates" (
+        "Id" INTEGER PRIMARY KEY, "BookCategory" TEXT NOT NULL CHECK("BookCategory" IN ('picture','general')),
+        "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0), "EffectiveFrom" TEXT NOT NULL,
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime')), UNIQUE("BookCategory", "EffectiveFrom")
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "BookMaterialRequests" (
+        "Id" INTEGER PRIMARY KEY, "RequestType" TEXT NOT NULL CHECK("RequestType" IN ('new_book','material_add')),
+        "BookId" INTEGER, "BookData" TEXT NOT NULL DEFAULT '{}', "BookCategory" TEXT NOT NULL CHECK("BookCategory" IN ('picture','general')),
+        "MaterialFields" TEXT NOT NULL DEFAULT '[]', "RequestedBy" TEXT NOT NULL,
+        "Status" TEXT NOT NULL DEFAULT 'pending' CHECK("Status" IN ('pending','approved','rejected')),
+        "ReviewedBy" TEXT DEFAULT '', "ReviewedAt" TEXT DEFAULT '', "RejectReason" TEXT DEFAULT '',
+        "ApprovedAmount" INTEGER, "PayrollMonth" TEXT DEFAULT '',
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_book_material_requests_status ON "BookMaterialRequests"("Status", "CreatedAt" DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_book_material_requests_payroll ON "BookMaterialRequests"("PayrollMonth", "RequestedBy")')
     try:
         cursor.execute('PRAGMA table_info("Classes")')
         if "CategoryId" not in [r["name"] for r in cursor.fetchall()]:
