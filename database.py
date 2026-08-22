@@ -161,6 +161,44 @@ def init_system_tables():
     except Exception:
         pass
 
+    # 선생님 급여 정산용 기준 정보. 금액은 모두 '학생 1명당 수업 1회' 단가이다.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "ClassCategories" (
+        "Id" INTEGER PRIMARY KEY, "Name" TEXT NOT NULL UNIQUE, "IsActive" INTEGER DEFAULT 1,
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayRates" (
+        "Id" INTEGER PRIMARY KEY, "CategoryId" INTEGER NOT NULL, "GradeGroup" TEXT NOT NULL,
+        "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0), "EffectiveFrom" TEXT NOT NULL,
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime')), UNIQUE("CategoryId", "GradeGroup", "EffectiveFrom")
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "SpecialLessonTypes" (
+        "Id" INTEGER PRIMARY KEY, "Name" TEXT NOT NULL UNIQUE, "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0),
+        "EffectiveFrom" TEXT NOT NULL, "IsActive" INTEGER DEFAULT 1,
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClosures" (
+        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL UNIQUE, "ClosedAt" TEXT DEFAULT (datetime('now','localtime')),
+        "ClosedBy" TEXT NOT NULL
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollLines" (
+        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "StudyLogId" INTEGER NOT NULL,
+        "TeacherUsername" TEXT NOT NULL, "UnitAmount" INTEGER NOT NULL, "Amount" INTEGER NOT NULL,
+        "Reason" TEXT DEFAULT '', UNIQUE("PayrollMonth", "StudyLogId")
+    )''')
+    try:
+        cursor.execute('PRAGMA table_info("Classes")')
+        if "CategoryId" not in [r["name"] for r in cursor.fetchall()]:
+            cursor.execute('ALTER TABLE "Classes" ADD COLUMN "CategoryId" INTEGER')
+        cursor.execute('PRAGMA table_info("StudyLogs")')
+        cols = [r["name"] for r in cursor.fetchall()]
+        for col, ddl in [("ClassId", "INTEGER"), ("GradeSnapshot", "TEXT DEFAULT ''"),
+                         ("SpecialLessonTypeId", "INTEGER"), ("ActualTeacherUsername", "TEXT DEFAULT ''"),
+                         ("SubstituteStatus", "TEXT DEFAULT ''")]:
+            if col not in cols:
+                cursor.execute(f'ALTER TABLE "StudyLogs" ADD COLUMN "{col}" {ddl}')
+    except Exception:
+        pass
+
     # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description)·특강 여부(IsSpecial)·감사 추적 컬럼 추가
     # (StudyLogs는 oracle_sync.py가 만들므로, 재생성 후에도 시작 시점에 보완한다)
     # IsSpecial: 특강 여부 플래그. 기본값 0(FALSE), 일괄 등록 시 학생별로 기록된다.
@@ -579,9 +617,10 @@ def create_class(class_data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO "Classes" ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "CreatedBy") VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO "Classes" ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "CategoryId", "CreatedBy") VALUES (?, ?, ?, ?, ?, ?)',
         (class_data.get("ClassName", ""), class_data.get("TeacherUsername", ""),
          class_data.get("DayOfWeek", ""), class_data.get("StartTime", "") or "",
+         class_data.get("CategoryId"),
          class_data.get("CreatedBy", ""))
     )
     conn.commit()
@@ -595,7 +634,7 @@ def update_class(class_id: int, class_data: Dict[str, Any]) -> Dict[str, Any]:
     fields = []
     values = []
     for k, v in class_data.items():
-        if k in ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "IsEnded", "UpdatedBy", "UpdatedAt"):
+        if k in ("ClassName", "TeacherUsername", "DayOfWeek", "StartTime", "CategoryId", "IsEnded", "UpdatedBy", "UpdatedAt"):
             fields.append(f'"{k}" = ?')
             values.append(v)
     if not fields:
@@ -696,6 +735,43 @@ def set_class_students(class_id: int, student_items: List) -> None:
         )
     conn.commit()
     conn.close()
+
+def validate_class_student_assignments(class_id: Optional[int], student_items: List) -> None:
+    """학생별 정규 수업 1개, 특강 1개 배정 제한을 확인한다.
+
+    수정 중인 수업은 검사 대상에서 제외하므로, 같은 수업 안에서 정규/특강
+    구분을 변경하는 것은 허용한다. 기존 중복 데이터는 보존하며 새 배정만 막는다.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        conflicts = []
+        seen = set()
+        for item in student_items:
+            sid = item["StudentId"] if isinstance(item, dict) else item
+            is_special = 1 if isinstance(item, dict) and item.get("IsSpecial") else 0
+            key = (sid, is_special)
+            if key in seen:
+                continue
+            seen.add(key)
+            cursor.execute('''
+                SELECT s."Name", c."ClassName"
+                FROM "ClassStudents" cs
+                JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
+                JOIN "Classes" c ON c."Id" = cs."ClassId"
+                WHERE (s.rowid = ? OR s."Id" = ?)
+                  AND cs."IsSpecial" = ?
+                  AND (? IS NULL OR cs."ClassId" != ?)
+                LIMIT 1
+            ''', (sid, sid, is_special, class_id, class_id))
+            row = cursor.fetchone()
+            if row:
+                class_type = "특강" if is_special else "정규 수업"
+                conflicts.append(f'{row["Name"]} 학생은 이미 {class_type}(「{row["ClassName"]}」)에 등록되어 있습니다.')
+        if conflicts:
+            raise ValueError(" ".join(conflicts))
+    finally:
+        conn.close()
 
 def get_class_students(class_id: int) -> List[Dict[str, Any]]:
     """수업에 배정된 학생 목록을 이름 순으로 반환한다. (IsSpecial: 해당 학생의 이 수업 특강 여부)"""

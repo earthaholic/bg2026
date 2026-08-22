@@ -39,6 +39,7 @@ from database import (
     get_class_by_id,
     search_classes,
     set_class_students,
+    validate_class_student_assignments,
     get_class_students,
     get_class_student_ids,
     get_teacher_options,
@@ -163,6 +164,7 @@ class ClassRequest(BaseModel):
     StartTime: Optional[str] = ""
     StudentIds: List[int] = []
     StudentIsSpecial: Optional[Dict[int, bool]] = {}
+    CategoryId: Optional[int] = None
 
 class ClassStudyLogItem(BaseModel):
     StudentId: int
@@ -175,6 +177,19 @@ class ClassStudyLogBatchRequest(BaseModel):
     StudiedDay: str
     LessonContent: Optional[str] = ""
     logs: List[ClassStudyLogItem]
+    SpecialLessonTypeId: Optional[int] = None
+    ActualTeacherUsername: Optional[str] = ""
+
+class PayRateRequest(BaseModel):
+    CategoryId: int
+    GradeGroup: str
+    UnitAmount: int
+    EffectiveFrom: str
+
+class SpecialLessonTypeRequest(BaseModel):
+    Name: str
+    UnitAmount: int
+    EffectiveFrom: str
 
 class TuitionFeeSettingRequest(BaseModel):
     ClassType: str
@@ -1427,6 +1442,10 @@ def user_register_class(
 ):
     _validate_class_payload(payload)
     try:
+        validate_class_student_assignments(None, _class_student_items(payload))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
         payload_data = payload.dict()
         payload_data["CreatedBy"] = current_user["username"]
         res = create_class(payload_data)
@@ -1452,6 +1471,10 @@ def user_update_class(
     if not get_class_by_id(class_id):
         raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
     _validate_class_payload(payload)
+    try:
+        validate_class_student_assignments(class_id, _class_student_items(payload))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     try:
         old_snapshot = get_record_snapshot("Classes", class_id)
         payload_data = payload.dict()
@@ -1502,7 +1525,7 @@ def user_get_class_studylog_calendar(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """수업 배정 학생의 월별 학습 이력을 일괄 등록 달력에 제공한다."""
-    _get_accessible_class(class_id, current_user)
+    class_row = _get_accessible_class(class_id, current_user)
     if not re.match(r"^\d{4}-\d{2}$", month):
         raise HTTPException(status_code=400, detail="조회할 월은 YYYY-MM 형식이어야 합니다.")
     students = get_class_students(class_id)
@@ -1550,7 +1573,7 @@ def user_batch_register_class_studylogs(
     payload: ClassStudyLogBatchRequest,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    _get_accessible_class(class_id, current_user)
+    class_row = _get_accessible_class(class_id, current_user)
 
     if not payload.BookId or payload.BookId <= 0:
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
@@ -1561,6 +1584,21 @@ def user_batch_register_class_studylogs(
     if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
     lesson_content = (payload.LessonContent or "").strip()
+    actual_teacher = (payload.ActualTeacherUsername or "").strip()
+    if actual_teacher and actual_teacher != class_row["TeacherUsername"]:
+        teacher = get_user_by_username(actual_teacher)
+        if not teacher or teacher["role"] not in ("teacher", "manager"):
+            raise HTTPException(status_code=400, detail="대체 진행 선생님 계정을 확인해 주세요.")
+    else:
+        actual_teacher = class_row["TeacherUsername"]
+    if payload.SpecialLessonTypeId:
+        conn = get_db_connection()
+        try:
+            exists = conn.execute('SELECT 1 FROM "SpecialLessonTypes" WHERE "Id" = ? AND "IsActive" = 1', (payload.SpecialLessonTypeId,)).fetchone()
+            if not exists:
+                raise HTTPException(status_code=400, detail="사용 가능한 특강 유형을 선택해 주세요.")
+        finally:
+            conn.close()
 
     book_row = _resolve_domain_pk("Books", payload.BookId)
     if book_row is None:
@@ -1576,7 +1614,7 @@ def user_batch_register_class_studylogs(
             conn = get_db_connection()
             try:
                 cursor = conn.cursor()
-                cursor.execute('SELECT "Name" FROM "Students" WHERE rowid = ? OR "Id" = ?', (sid, sid))
+                cursor.execute('SELECT "Name", "Grade" FROM "Students" WHERE rowid = ? OR "Id" = ?', (sid, sid))
                 row = cursor.fetchone()
                 name_cache[sid] = row[0] if row else f"학생 #{sid}"
             finally:
@@ -1617,7 +1655,11 @@ def user_batch_register_class_studylogs(
             res = insert_table_row("StudyLogs", {
                 "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
                 "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
-                "IsSpecial": 1 if item.is_special else 0,
+                "IsSpecial": 1 if item.is_special else 0, "ClassId": class_id,
+                "SpecialLessonTypeId": payload.SpecialLessonTypeId if item.is_special else None,
+                "ActualTeacherUsername": actual_teacher,
+                "SubstituteStatus": "pending" if actual_teacher != class_row["TeacherUsername"] else "approved",
+                "GradeSnapshot": _student_grade(sid),
                 "CreatedBy": current_user["username"]
             })
             new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
@@ -1636,6 +1678,64 @@ def user_batch_register_class_studylogs(
         "results": results
     }
 
+# --- 선생님 급여 정산 API ---
+@app.get("/api/user/payroll/categories")
+def payroll_categories(current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn=get_db_connection()
+    try: return {"categories":[dict(r) for r in conn.execute('SELECT * FROM "ClassCategories" WHERE "IsActive"=1 ORDER BY "Name"').fetchall()]}
+    finally: conn.close()
+
+@app.post("/api/user/payroll/categories")
+def create_payroll_category(name: str, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if not name.strip(): raise HTTPException(status_code=400, detail="카테고리명을 입력해 주세요.")
+    conn=get_db_connection()
+    try:
+        conn.execute('INSERT INTO "ClassCategories"("Name") VALUES(?)',(name.strip(),)); conn.commit()
+        return {"status":"success"}
+    except Exception: raise HTTPException(status_code=400, detail="이미 등록된 카테고리입니다.")
+    finally: conn.close()
+
+@app.post("/api/user/payroll/rates")
+def create_payroll_rate(payload: PayRateRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.GradeGroup not in ("초등", "중등", "기타") or payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom): raise HTTPException(status_code=400, detail="단가 정보를 확인해 주세요.")
+    conn=get_db_connection()
+    try:
+        conn.execute('INSERT OR REPLACE INTO "TeacherPayRates"("CategoryId","GradeGroup","UnitAmount","EffectiveFrom") VALUES(?,?,?,?)',(payload.CategoryId,payload.GradeGroup,payload.UnitAmount,payload.EffectiveFrom)); conn.commit(); return {"status":"success"}
+    finally: conn.close()
+
+@app.post("/api/user/payroll/special-types")
+def create_special_type(payload: SpecialLessonTypeRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if not payload.Name.strip() or payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom): raise HTTPException(status_code=400, detail="특강 유형 정보를 확인해 주세요.")
+    conn=get_db_connection()
+    try:
+        conn.execute('INSERT OR REPLACE INTO "SpecialLessonTypes"("Name","UnitAmount","EffectiveFrom") VALUES(?,?,?)',(payload.Name.strip(),payload.UnitAmount,payload.EffectiveFrom)); conn.commit(); return {"status":"success"}
+    finally: conn.close()
+
+@app.get("/api/user/payroll")
+def get_payroll(month: str = Query(...), current_user: Dict[str, Any] = Depends(get_current_user)):
+    if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
+    teacher = current_user["username"] if current_user["role"] == "teacher" else None
+    rows=_payroll_rows(month, teacher)
+    totals={}
+    for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
+    conn=get_db_connection()
+    try: closed=bool(conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?',(month,)).fetchone())
+    finally: conn.close()
+    return {"month":month,"closed":closed,"lines":rows,"totals":totals}
+
+@app.post("/api/user/payroll/{month}/close")
+def close_payroll(month: str, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
+    rows=_payroll_rows(month)
+    conn=get_db_connection()
+    try:
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?',(month,)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 정산월입니다.")
+        for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason") VALUES(?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason']))
+        conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","ClosedBy") VALUES(?,?)',(month,current_user['username'])); conn.commit()
+        return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}
+    except HTTPException: raise
+    finally: conn.close()
+
 # --- Domain Data Update/Delete APIs (관리 선생님 이상 전용) ---
 def _resolve_domain_pk(table_name: str, id_val: Any) -> Optional[int]:
     """rowid 또는 Id 중 실제 행의 rowid를 찾는다. 없으면 None.
@@ -1647,6 +1747,53 @@ def _resolve_domain_pk(table_name: str, id_val: Any) -> Optional[int]:
         cursor.execute(f'SELECT rowid FROM "{table_name}" WHERE rowid = ? OR "Id" = ?', (id_val, id_val))
         row = cursor.fetchone()
         return row[0] if row else None
+    finally:
+        conn.close()
+
+def _student_grade(student_id: int) -> str:
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT "Grade" FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id)).fetchone()
+        return (row[0] or "") if row else ""
+    finally:
+        conn.close()
+
+def _grade_group(grade: str) -> str:
+    return "초등" if (grade or "").startswith("초") else "중등" if (grade or "").startswith("중") else "기타"
+
+def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Dict[str, Any]]:
+    """마감 전에는 해당 일자에 유효한 단가를, 마감 후에는 확정 단가를 반환한다."""
+    conn = get_db_connection()
+    try:
+        closed = conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,)).fetchone()
+        if closed:
+            sql = '''SELECT pl.*, sl."StudiedDay", s."Name" AS "StudentName", c."ClassName"
+                     FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
+                     LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
+                     LEFT JOIN "Classes" c ON sl."ClassId"=c."Id" WHERE pl."PayrollMonth"=?'''
+            params = [month]
+            if teacher_username: sql += ' AND pl."TeacherUsername"=?'; params.append(teacher_username)
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+        sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."IsSpecial", sl."GradeSnapshot",
+                        sl."ActualTeacherUsername", sl."SubstituteStatus", sl."SpecialLessonTypeId",
+                        s."Name" AS "StudentName", c."ClassName", c."CategoryId", c."TeacherUsername"
+                 FROM "StudyLogs" sl JOIN "Classes" c ON sl."ClassId"=c."Id"
+                 LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
+                 WHERE substr(sl."StudiedDay",1,7)=? AND (sl."SubstituteStatus" IN ('','approved') OR sl."SubstituteStatus" IS NULL)'''
+        rows=[]
+        for row in conn.execute(sql, (month,)).fetchall():
+            r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
+            if teacher_username and teacher != teacher_username: continue
+            if r["IsSpecial"]:
+                rate=conn.execute('SELECT "UnitAmount" FROM "SpecialLessonTypes" WHERE "Id"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["SpecialLessonTypeId"],r["StudiedDay"])).fetchone()
+                reason="특강"
+            else:
+                rate=conn.execute('SELECT "UnitAmount" FROM "TeacherPayRates" WHERE "CategoryId"=? AND "GradeGroup"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["CategoryId"],_grade_group(r["GradeSnapshot"]),r["StudiedDay"])).fetchone()
+                reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업'
+            if rate:
+                r.update({"TeacherUsername":teacher,"UnitAmount":rate[0],"Amount":rate[0],"Reason":reason})
+                rows.append(r)
+        return rows
     finally:
         conn.close()
 
