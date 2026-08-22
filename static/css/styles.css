@@ -1011,6 +1011,52 @@ body {
     min-width: 0;
 }
 
+/* 도서 검색 상세 필터는 기본 접힘으로 목록 영역을 우선 확보한다. */
+#view-book-search .book-filter-details {
+    border-top: 1px solid var(--border-color);
+}
+
+#view-book-search .book-filter-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+    color: var(--text-main);
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+}
+
+#view-book-search .book-filter-summary::-webkit-details-marker {
+    display: none;
+}
+
+#view-book-search .book-filter-summary-hint {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    font-weight: 400;
+}
+
+#view-book-search .book-filter-chevron {
+    margin-left: auto;
+    color: var(--text-dim);
+    transition: transform 0.2s ease;
+}
+
+#view-book-search .book-filter-details[open] .book-filter-chevron {
+    transform: rotate(180deg);
+}
+
+#view-book-search .book-filter-details .filter-options-grid {
+    padding-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    #view-book-search .book-filter-summary-hint {
+        display: none;
+    }
+}
+
 /* Difficulty Checkbox & Radio Group Styles */
 .checkbox-group-inline,
 .radio-group-inline {
