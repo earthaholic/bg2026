@@ -418,6 +418,17 @@
                                     </div>
                                 </div>
 
+                                <div class="filter-group span-full">
+                                    <label for="book-study-student-q"><i class="fa-solid fa-users"></i> 미학습 학생</label>
+                                    <p class="filter-help-text">선택한 학생 모두가 아직 학습하지 않은 도서만 표시합니다.</p>
+                                    <select id="book-study-class-select" class="form-control">
+                                        <option value="">수업을 선택해 수강생 전체 추가</option>
+                                    </select>
+                                    <input type="search" id="book-study-student-q" class="form-control" placeholder="학생 이름을 입력해 추가하세요" autocomplete="off">
+                                    <div id="book-study-student-results" class="book-study-student-results hidden"></div>
+                                    <div id="book-study-student-chips" class="book-study-student-chips hidden"></div>
+                                </div>
+
                                 <div class="filter-group">
                                     <label><i class="fa-solid fa-spell-check"></i> 어휘 단계 범위: <strong id="filter-voca-val" style="color: var(--primary);">0 ~ 10단계 (전체)</strong></label>
                                     <div class="dual-range-wrapper">

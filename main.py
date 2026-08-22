@@ -318,6 +318,7 @@ def user_search_books(
     has_paperbook: Optional[int] = Query(None),
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
+    unstudied_student_ids: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -383,6 +384,31 @@ def user_search_books(
         conditions.append('"IsYes24Exist" = 1')
     if has_millie == 1:
         conditions.append('"IsMillieExist" = 1')
+
+    # 선택된 학생 중 한 명이라도 학습한 도서는 제외한다. Students/StudyLogs가
+    # rowid 또는 원본 Id를 참조하는 기존 데이터 모두를 지원한다.
+    if unstudied_student_ids and unstudied_student_ids.strip():
+        selected_rowids = [value.strip() for value in unstudied_student_ids.split(',') if value.strip().isdigit()]
+        if selected_rowids:
+            placeholders = ','.join('?' for _ in selected_rowids)
+            cursor.execute(
+                f'SELECT rowid AS row_id, "Id" FROM "Students" WHERE rowid IN ({placeholders})',
+                selected_rowids
+            )
+            student_identity_values = []
+            for student in cursor.fetchall():
+                student_identity_values.extend([str(student['row_id']), str(student['Id'])])
+            student_identity_values = list(dict.fromkeys(student_identity_values))
+            if student_identity_values:
+                identity_placeholders = ','.join('?' for _ in student_identity_values)
+                conditions.append(
+                    f'''NOT EXISTS (
+                        SELECT 1 FROM "StudyLogs" sl
+                        WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")
+                          AND CAST(sl."StudentId" AS TEXT) IN ({identity_placeholders})
+                    )'''
+                )
+                params.extend(student_identity_values)
 
     where_str = ""
     if conditions:

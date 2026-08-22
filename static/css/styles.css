@@ -2086,6 +2086,44 @@ body {
     color: #ffffff;
 }
 
+#view-book-search .filter-help-text {
+    margin: 0 0 0.45rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+#view-book-search .book-study-student-results {
+    margin-top: 0.35rem;
+    max-height: 11rem;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+#view-book-search .book-study-student-result {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+}
+
+#view-book-search .book-study-student-result:hover {
+    background: var(--primary-light, #eff6ff);
+}
+
+#view-book-search .book-study-student-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
 .picker-modal-footer {
     display: flex;
     justify-content: space-between;

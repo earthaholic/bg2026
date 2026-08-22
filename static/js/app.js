@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentSearchLimit = 30;
     let studentSearchTotalPages = 1;
 
+    // 도서 검색의 "미학습 학생" 필터: key는 Students.rowid
+    const bookUnstudiedStudents = new Map();
+    let bookStudentSearchTimer = null;
+
     // Class Search State
     let classSearchPage = 1;
     let classSearchLimit = 30;
@@ -141,6 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterChkYes24 = document.getElementById('filter-chk-yes24');
     const filterChkMillie = document.getElementById('filter-chk-millie');
     const btnResetFilters = document.getElementById('btn-reset-filters');
+    const bookStudyStudentQ = document.getElementById('book-study-student-q');
+    const bookStudyClassSelect = document.getElementById('book-study-class-select');
+    const bookStudyStudentResults = document.getElementById('book-study-student-results');
+    const bookStudyStudentChips = document.getElementById('book-study-student-chips');
 
     const searchTotalCount = document.getElementById('search-total-count');
     const bookCardsGrid = document.getElementById('book-cards-grid');
@@ -459,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadTables();
                 await loadRecentBooks();
                 await loadRecentStudents();
+                await loadBookStudyClassOptions();
                 await loadBookSearchResults();
                 await loadStudentSearchResults();
             } catch (err) {
@@ -596,6 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadTables();
                 await loadRecentBooks();
                 await loadRecentStudents();
+                await loadBookStudyClassOptions();
                 await loadBookSearchResults();
                 await loadStudentSearchResults();
             } catch (err) {
@@ -720,6 +730,48 @@ document.addEventListener('DOMContentLoaded', () => {
         filterChkPdf.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); }));
 
+        bookStudyStudentQ.addEventListener('input', () => {
+            clearTimeout(bookStudentSearchTimer);
+            bookStudentSearchTimer = setTimeout(loadBookStudyStudentCandidates, 200);
+        });
+        bookStudyClassSelect.addEventListener('change', async () => {
+            const classId = bookStudyClassSelect.value;
+            if (!classId) return;
+            try {
+                const data = await apiFetch(`/api/user/classes/${classId}`);
+                (data.students || []).forEach(student => {
+                    const id = String(student.row_id);
+                    bookUnstudiedStudents.set(id, { id, name: student.Name || '', grade: student.Grade || '' });
+                });
+                renderBookUnstudiedStudents();
+                searchPage = 1;
+                await loadBookSearchResults();
+            } catch (err) {
+                alert(`수업 학생을 추가하지 못했습니다: ${err.message}`);
+            } finally {
+                bookStudyClassSelect.value = '';
+            }
+        });
+        bookStudyStudentResults.addEventListener('click', (e) => {
+            const button = e.target.closest('.book-study-student-result');
+            if (!button) return;
+            bookUnstudiedStudents.set(button.dataset.id, { id: button.dataset.id, name: button.dataset.name, grade: button.dataset.grade });
+            bookStudyStudentQ.value = '';
+            bookStudyStudentResults.innerHTML = '';
+            bookStudyStudentResults.classList.add('hidden');
+            renderBookUnstudiedStudents();
+            searchPage = 1;
+            loadBookSearchResults();
+        });
+        bookStudyStudentChips.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-remove-book-study-student]');
+            if (!button) return;
+            bookUnstudiedStudents.delete(button.dataset.removeBookStudyStudent);
+            renderBookUnstudiedStudents();
+            searchPage = 1;
+            loadBookSearchResults();
+        });
+
         btnResetFilters.addEventListener('click', () => {
             bookSearchQ.value = '';
             document.querySelectorAll('.filter-target-chk').forEach(chk => { chk.checked = false; });
@@ -738,6 +790,11 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkWriting.checked = false;
             filterChkPdf.checked = false;
             [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
+            bookUnstudiedStudents.clear();
+            bookStudyStudentQ.value = '';
+            bookStudyStudentResults.innerHTML = '';
+            bookStudyStudentResults.classList.add('hidden');
+            renderBookUnstudiedStudents();
             searchPage = 1;
             loadBookSearchResults();
         });
@@ -2193,6 +2250,49 @@ document.addEventListener('DOMContentLoaded', () => {
         return Array.from(chks).map(c => c.value.trim()).filter(Boolean).join(',');
     }
 
+    async function loadBookStudyStudentCandidates() {
+        const query = bookStudyStudentQ.value.trim();
+        if (!query) {
+            bookStudyStudentResults.innerHTML = '';
+            bookStudyStudentResults.classList.add('hidden');
+            return;
+        }
+        try {
+            const data = await apiFetch(`/api/user/picker/students?include_ended=true&q=${encodeURIComponent(query)}`);
+            const candidates = data.students.filter(student => !bookUnstudiedStudents.has(String(student.row_id)));
+            bookStudyStudentResults.innerHTML = candidates.length
+                ? candidates.map(student => `<button type="button" class="book-study-student-result" data-id="${student.row_id}" data-name="${escapeHtml(student.Name || '')}" data-grade="${escapeHtml(student.Grade || '')}"><strong>${escapeHtml(student.Name || '이름 없음')}</strong>${student.Grade ? ` <span>(${escapeHtml(student.Grade)})</span>` : ''}</button>`).join('')
+                : '<div class="empty-state-sm">추가할 학생이 없습니다.</div>';
+            bookStudyStudentResults.classList.remove('hidden');
+        } catch (err) {
+            bookStudyStudentResults.innerHTML = `<div class="empty-state-sm">${escapeHtml(err.message)}</div>`;
+            bookStudyStudentResults.classList.remove('hidden');
+        }
+    }
+
+    async function loadBookStudyClassOptions() {
+        if (!token) return;
+        try {
+            const data = await apiFetch('/api/user/classes?limit=100');
+            const classes = data.classes || [];
+            bookStudyClassSelect.innerHTML = '<option value="">수업을 선택해 수강생 전체 추가</option>' + classes.map(cls =>
+                `<option value="${cls.Id || cls.row_id}">${escapeHtml(cls.ClassName || '이름 없는 수업')}${cls.DayOfWeek ? ` (${escapeHtml(cls.DayOfWeek)}${cls.StartTime ? ' ' + escapeHtml(cls.StartTime) : ''})` : ''}</option>`
+            ).join('');
+        } catch (err) {
+            // 수업 목록을 사용할 수 없더라도 개별 학생 필터는 정상적으로 제공한다.
+            bookStudyClassSelect.innerHTML = '<option value="">수업 목록을 불러오지 못했습니다</option>';
+        }
+    }
+
+    function renderBookUnstudiedStudents() {
+        const students = Array.from(bookUnstudiedStudents.values());
+        bookStudyStudentChips.innerHTML = students.map(student => `
+            <span class="student-chip"><i class="fa-solid fa-user"></i> ${escapeHtml(student.name)}${student.grade ? ` (${escapeHtml(student.grade)})` : ''}
+                <button type="button" class="btn-remove-chip" data-remove-book-study-student="${student.id}" aria-label="${escapeHtml(student.name)} 학생 제거"><i class="fa-solid fa-xmark"></i></button>
+            </span>`).join('');
+        bookStudyStudentChips.classList.toggle('hidden', students.length === 0);
+    }
+
     // Book Search Handler
     async function loadBookSearchResults() {
         if (!token) return;
@@ -2238,6 +2338,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasPaperbook) queryParams.append('has_paperbook', 1);
             if (hasYes24) queryParams.append('has_yes24', 1);
             if (hasMillie) queryParams.append('has_millie', 1);
+            if (bookUnstudiedStudents.size) queryParams.append('unstudied_student_ids', Array.from(bookUnstudiedStudents.keys()).join(','));
 
             const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`);
             searchTotalPages = data.total_pages;
