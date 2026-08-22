@@ -193,6 +193,7 @@ class SpecialLessonTypeRequest(BaseModel):
 
 class PayrollClaimRequest(BaseModel):
     PayrollMonth: str
+    ClaimDate: str
     ItemName: str
     Amount: int
     Description: Optional[str] = ""
@@ -1742,13 +1743,14 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
 
 @app.post("/api/user/payroll/claims")
 def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
-    if not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0:
-        raise HTTPException(status_code=400, detail="청구월, 항목명, 금액을 확인해 주세요.")
+    if (not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.ClaimDate)
+            or not payload.ClaimDate.startswith(payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0):
+        raise HTTPException(status_code=400, detail="청구월에 맞는 청구일, 항목명, 금액을 확인해 주세요.")
     conn=get_db_connection()
     try:
         if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(payload.PayrollMonth,current_user['username'])).fetchone():
             raise HTTPException(status_code=400, detail="마감된 정산월에는 청구할 수 없습니다.")
-        conn.execute('INSERT INTO "TeacherPayrollClaims"("PayrollMonth","TeacherUsername","ItemName","Amount","Description") VALUES(?,?,?,?,?)',(payload.PayrollMonth,current_user['username'],payload.ItemName.strip(),payload.Amount,(payload.Description or '').strip()))
+        conn.execute('INSERT INTO "TeacherPayrollClaims"("PayrollMonth","TeacherUsername","ClaimDate","ItemName","Amount","Description") VALUES(?,?,?,?,?,?)',(payload.PayrollMonth,current_user['username'],payload.ClaimDate,payload.ItemName.strip(),payload.Amount,(payload.Description or '').strip()))
         conn.commit(); return {"status":"success","message":"추가 청구를 등록했습니다. 승인 후 정산에 반영됩니다."}
     finally: conn.close()
 

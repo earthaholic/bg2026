@@ -199,11 +199,14 @@ def init_system_tables():
     )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClaims" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
-        "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',
+        "ClaimDate" TEXT DEFAULT '', "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',
         "Status" TEXT NOT NULL DEFAULT 'pending' CHECK("Status" IN ('pending','approved','rejected')),
         "ReviewedBy" TEXT DEFAULT '', "ReviewedAt" TEXT DEFAULT '',
         "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
     )''')
+    cursor.execute('PRAGMA table_info("TeacherPayrollClaims")')
+    if "ClaimDate" not in [r["name"] for r in cursor.fetchall()]:
+        cursor.execute('ALTER TABLE "TeacherPayrollClaims" ADD COLUMN "ClaimDate" TEXT DEFAULT \'\'')
     try:
         cursor.execute('PRAGMA table_info("Classes")')
         if "CategoryId" not in [r["name"] for r in cursor.fetchall()]:
