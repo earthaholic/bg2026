@@ -2776,6 +2776,12 @@ body {
     align-items: start;
 }
 
+.report-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
 .monthly-report-log-filter {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
