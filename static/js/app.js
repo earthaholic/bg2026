@@ -5532,6 +5532,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function setMonthlyReportDefaultLogPeriod() {
+        const dateFromInput = document.getElementById('monthly-report-log-date-from');
+        const dateToInput = document.getElementById('monthly-report-log-date-to');
+        if (!dateFromInput || !dateToInput || dateFromInput.value || dateToInput.value) return;
+
+        try {
+            const data = await apiFetch('/api/user/monthly-report/default-period');
+            dateFromInput.value = data.date_from || '';
+            dateToInput.value = data.date_to || '';
+        } catch (err) {
+            console.warn('월말보고 기본 조회 기간을 불러오지 못했습니다.', err);
+        }
+    }
+
     async function initMonthlyReportView(preselectStudentId) {
         const periodLabelInput = document.getElementById('monthly-report-period-label');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
@@ -5551,7 +5565,10 @@ document.addEventListener('DOMContentLoaded', () => {
             startLectureInput.value = '1';
         }
 
-        await loadMonthlyReportStudentOptions(preselectStudentId);
+        await Promise.all([
+            loadMonthlyReportStudentOptions(preselectStudentId),
+            setMonthlyReportDefaultLogPeriod()
+        ]);
 
         // 수업 종료 학생은 students-options(기본 exclude)에 없으므로,
         // 상세 모달에서 넘어온 preselectStudentId가 셀렉트에 없으면

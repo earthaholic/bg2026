@@ -1484,6 +1484,28 @@ def build_monthly_report_text(
 
     return "\n".join(lines)
 
+@app.get("/api/user/monthly-report/default-period")
+def user_get_monthly_report_default_period(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """서버 날짜에 따라 월말에는 이번 달, 그 외에는 지난달 기간을 반환한다."""
+    today = datetime.now().date()
+    first_day_of_this_month = today.replace(day=1)
+    last_day_of_this_month = (first_day_of_this_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    is_month_end = today >= last_day_of_this_month - timedelta(days=3)
+
+    if is_month_end:
+        date_from = first_day_of_this_month
+        date_to = last_day_of_this_month
+    else:
+        date_to = first_day_of_this_month - timedelta(days=1)
+        date_from = date_to.replace(day=1)
+
+    return {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat()
+    }
+
 @app.get("/api/user/monthly-report/studylogs")
 def user_get_monthly_report_studylogs(
     student_id: int = Query(...),
