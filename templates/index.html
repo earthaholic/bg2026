@@ -1553,14 +1553,21 @@
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>카테고리</th><th>학교급</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="class-pay-rate-body"></tbody></table></div>
                         </div>
                         <div class="card search-filter-card">
-                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-star"></i> 특강 유형·단가</h3><p class="subtitle">일괄 학습 이력 등록에서 선택할 특강 유형입니다.</p></div></div>
-                            <form id="form-special-lesson-type" class="settings-grid-form">
+                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-star"></i> 특강 유형</h3><p class="subtitle">일괄 학습 이력 등록에서 구분용으로 선택하며 단가에는 영향을 주지 않습니다.</p></div></div>
+                            <form id="form-special-lesson-type" class="settings-inline-form">
                                 <div class="form-group"><label for="special-type-name">특강 유형</label><input id="special-type-name" class="form-control" required placeholder="예: 방학 글쓰기 특강"></div>
-                                <div class="form-group"><label for="special-type-amount">단가</label><input id="special-type-amount" type="number" min="0" class="form-control" required></div>
-                                <div class="form-group"><label for="special-type-date">적용 시작일</label><input id="special-type-date" type="date" class="form-control" required></div>
-                                <button class="btn btn-primary" type="submit">유형·단가 저장</button>
+                                <button class="btn btn-primary" type="submit">유형 등록</button>
                             </form>
-                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>특강 유형</th><th>단가</th><th>적용 시작일</th><th>상태</th></tr></thead><tbody id="special-lesson-type-body"></tbody></table></div>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>특강 유형</th><th>상태</th></tr></thead><tbody id="special-lesson-type-body"></tbody></table></div>
+                        </div>
+                        <div class="card search-filter-card">
+                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-users"></i> 특강 학생수당 단가</h3><p class="subtitle">특강 유형과 관계없이 참석 학생 1명당 수업 1회에 적용되는 공통 단가입니다.</p></div></div>
+                            <form id="form-special-pay-rate" class="settings-grid-form">
+                                <div class="form-group"><label for="special-rate-amount">학생 1명당 단가</label><input id="special-rate-amount" type="number" min="0" class="form-control" required></div>
+                                <div class="form-group"><label for="special-rate-date">적용 시작일</label><input id="special-rate-date" type="date" class="form-control" required></div>
+                                <button class="btn btn-primary" type="submit">학생수당 단가 저장</button>
+                            </form>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>학생 1명당 단가</th><th>적용 시작일</th></tr></thead><tbody id="special-pay-rate-body"></tbody></table></div>
                         </div>
                     </div>
                 </section>

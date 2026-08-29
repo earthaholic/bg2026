@@ -190,6 +190,14 @@ def init_system_tables():
         "EffectiveFrom" TEXT NOT NULL, "IsActive" INTEGER DEFAULT 1,
         "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
     )''')
+    # 특강 수당은 유형과 무관하게 학생 1명당 수업 1회 공통 단가를 적용한다.
+    # SpecialLessonTypes의 UnitAmount/EffectiveFrom은 기존 DB 호환을 위해 남겨 두되 정산에는 사용하지 않는다.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "SpecialLessonPayRates" (
+        "Id" INTEGER PRIMARY KEY,
+        "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0),
+        "EffectiveFrom" TEXT NOT NULL UNIQUE,
+        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+    )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClosures" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
         "ClosedAt" TEXT DEFAULT (datetime('now','localtime')), "ClosedBy" TEXT NOT NULL,

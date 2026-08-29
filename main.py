@@ -206,6 +206,8 @@ class PayRateRequest(BaseModel):
 
 class SpecialLessonTypeRequest(BaseModel):
     Name: str
+
+class SpecialLessonPayRateRequest(BaseModel):
     UnitAmount: int
     EffectiveFrom: str
 
@@ -2077,10 +2079,12 @@ def get_payroll_rates(current_user: Dict[str, Any] = Depends(get_current_user)):
 
 @app.post("/api/user/payroll/special-types")
 def create_special_type(payload: SpecialLessonTypeRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
-    if not payload.Name.strip() or payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom): raise HTTPException(status_code=400, detail="특강 유형 정보를 확인해 주세요.")
+    if not payload.Name.strip(): raise HTTPException(status_code=400, detail="특강 유형명을 입력해 주세요.")
     conn=get_db_connection()
     try:
-        conn.execute('INSERT OR REPLACE INTO "SpecialLessonTypes"("Name","UnitAmount","EffectiveFrom") VALUES(?,?,?)',(payload.Name.strip(),payload.UnitAmount,payload.EffectiveFrom)); conn.commit(); return {"status":"success"}
+        # UnitAmount/EffectiveFrom은 구버전 테이블의 NOT NULL 호환값이며 실제 정산 단가는 별도 공통 단가표를 사용한다.
+        conn.execute('INSERT INTO "SpecialLessonTypes"("Name","UnitAmount","EffectiveFrom") VALUES(?,?,?)',(payload.Name.strip(),0,datetime.now().strftime("%Y-%m-%d"))); conn.commit(); return {"status":"success"}
+    except Exception: raise HTTPException(status_code=400, detail="이미 등록된 특강 유형입니다.")
     finally: conn.close()
 
 @app.get("/api/user/payroll/special-types")
@@ -2090,6 +2094,24 @@ def get_special_types(active_only: bool = Query(False), current_user: Dict[str, 
         where=' WHERE "IsActive"=1' if active_only else ''
         rows=conn.execute(f'SELECT * FROM "SpecialLessonTypes"{where} ORDER BY "EffectiveFrom" DESC, "Name"').fetchall()
         return {"special_types":[dict(r) for r in rows]}
+    finally: conn.close()
+
+@app.post("/api/user/payroll/special-rates")
+def create_special_pay_rate(payload: SpecialLessonPayRateRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom):
+        raise HTTPException(status_code=400, detail="특강 학생수당 단가 정보를 확인해 주세요.")
+    conn=get_db_connection()
+    try:
+        conn.execute('INSERT OR REPLACE INTO "SpecialLessonPayRates"("UnitAmount","EffectiveFrom") VALUES(?,?)',(payload.UnitAmount,payload.EffectiveFrom)); conn.commit()
+        return {"status":"success"}
+    finally: conn.close()
+
+@app.get("/api/user/payroll/special-rates")
+def get_special_pay_rates(current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn=get_db_connection()
+    try:
+        rows=conn.execute('SELECT * FROM "SpecialLessonPayRates" ORDER BY "EffectiveFrom" DESC').fetchall()
+        return {"rates":[dict(r) for r in rows]}
     finally: conn.close()
 
 @app.get("/api/user/payroll")
@@ -2263,8 +2285,8 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
             r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
             if teacher_username and teacher != teacher_username: continue
             if r["IsSpecial"]:
-                rate=conn.execute('SELECT "UnitAmount" FROM "SpecialLessonTypes" WHERE "Id"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["SpecialLessonTypeId"],r["StudiedDay"])).fetchone()
-                reason="특강" if rate else "특강 단가 미설정"
+                rate=conn.execute('SELECT "UnitAmount" FROM "SpecialLessonPayRates" WHERE "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["StudiedDay"],)).fetchone()
+                reason="특강 학생수당" if rate else "특강 학생수당 단가 미설정"
             else:
                 rate=conn.execute('SELECT "UnitAmount" FROM "TeacherPayRates" WHERE "CategoryId"=? AND "GradeGroup"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["CategoryId"],_grade_group(r["GradeSnapshot"]),r["StudiedDay"])).fetchone()
                 if r["CategoryId"] is None:

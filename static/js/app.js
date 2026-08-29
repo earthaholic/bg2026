@@ -1054,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('form-class-category')?.addEventListener('submit', submitClassCategory);
         document.getElementById('form-class-pay-rate')?.addEventListener('submit', submitClassPayRate);
         document.getElementById('form-special-lesson-type')?.addEventListener('submit', submitSpecialLessonType);
+        document.getElementById('form-special-pay-rate')?.addEventListener('submit', submitSpecialPayRate);
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
         }
@@ -5019,7 +5020,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('batch-special-lesson-type');
         if (!select) return;
         const data = await apiFetch('/api/user/payroll/special-types?active_only=true');
-        select.innerHTML = '<option value="">-- 일반 수업 또는 특강 유형 미지정 --</option>' + (data.special_types || []).map(t => `<option value="${t.Id}">${escapeHtml(t.Name)} · ${Number(t.UnitAmount).toLocaleString()}원</option>`).join('');
+        select.innerHTML = '<option value="">-- 일반 수업 또는 특강 유형 미지정 --</option>' + (data.special_types || []).map(t => `<option value="${t.Id}">${escapeHtml(t.Name)}</option>`).join('');
     }
 
     function showClassRateMessage(message, isError = false) {
@@ -5032,8 +5033,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadClassRateSettings() {
         try {
-            const [categoriesData, ratesData, specialData] = await Promise.all([
-                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-types')
+            const [categoriesData, ratesData, specialData, specialRatesData] = await Promise.all([
+                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-types'), apiFetch('/api/user/payroll/special-rates')
             ]);
             const categories = categoriesData.categories || [];
             document.getElementById('class-category-list').innerHTML = categories.length ? categories.map(c => `<span class="badge"><i class="fa-solid fa-tag"></i> ${escapeHtml(c.Name)}</span>`).join('') : '<span class="text-muted">등록된 카테고리가 없습니다.</span>';
@@ -5041,10 +5042,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const rates = ratesData.rates || [];
             document.getElementById('class-pay-rate-body').innerHTML = rates.length ? rates.map(r => `<tr><td>${escapeHtml(r.CategoryName)}</td><td>${escapeHtml(r.GradeGroup)}</td><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">등록된 일반 수업 단가가 없습니다.</td></tr>';
             const types = specialData.special_types || [];
-            document.getElementById('special-lesson-type-body').innerHTML = types.length ? types.map(t => `<tr><td>${escapeHtml(t.Name)}</td><td>${Number(t.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(t.EffectiveFrom)}</td><td>${t.IsActive ? '사용' : '중지'}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">등록된 특강 유형이 없습니다.</td></tr>';
+            document.getElementById('special-lesson-type-body').innerHTML = types.length ? types.map(t => `<tr><td>${escapeHtml(t.Name)}</td><td>${t.IsActive ? '사용' : '중지'}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">등록된 특강 유형이 없습니다.</td></tr>';
+            const specialRates = specialRatesData.rates || [];
+            document.getElementById('special-pay-rate-body').innerHTML = specialRates.length ? specialRates.map(r => `<tr><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">등록된 특강 학생수당 단가가 없습니다.</td></tr>';
             const today = new Date().toISOString().slice(0, 10);
             if (!document.getElementById('rate-effective-from').value) document.getElementById('rate-effective-from').value = today;
-            if (!document.getElementById('special-type-date').value) document.getElementById('special-type-date').value = today;
+            if (!document.getElementById('special-rate-date').value) document.getElementById('special-rate-date').value = today;
         } catch (err) { showClassRateMessage(err.message, true); }
     }
 
@@ -5064,8 +5067,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function submitSpecialLessonType(e) {
         e.preventDefault();
-        const payload = { Name: document.getElementById('special-type-name').value.trim(), UnitAmount: Number(document.getElementById('special-type-amount').value), EffectiveFrom: document.getElementById('special-type-date').value };
-        try { await apiFetch('/api/user/payroll/special-types', { method: 'POST', body: JSON.stringify(payload) }); e.target.reset(); showClassRateMessage('특강 유형과 단가를 저장했습니다.'); await loadClassRateSettings(); }
+        const payload = { Name: document.getElementById('special-type-name').value.trim() };
+        try { await apiFetch('/api/user/payroll/special-types', { method: 'POST', body: JSON.stringify(payload) }); e.target.reset(); showClassRateMessage('특강 유형을 등록했습니다.'); await loadClassRateSettings(); }
+        catch (err) { showClassRateMessage(err.message, true); }
+    }
+
+    async function submitSpecialPayRate(e) {
+        e.preventDefault();
+        const payload = { UnitAmount: Number(document.getElementById('special-rate-amount').value), EffectiveFrom: document.getElementById('special-rate-date').value };
+        try { await apiFetch('/api/user/payroll/special-rates', { method: 'POST', body: JSON.stringify(payload) }); showClassRateMessage('특강 학생수당 단가를 저장했습니다.'); await loadClassRateSettings(); }
         catch (err) { showClassRateMessage(err.message, true); }
     }
 
