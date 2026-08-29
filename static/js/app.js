@@ -291,6 +291,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalClassDetailBody = document.getElementById('modal-class-detail-body');
     const btnCloseClassDetail = document.getElementById('btn-close-class-detail');
 
+    // Tuition Payment Detail Modal Elements
+    const modalTuitionDetail = document.getElementById('modal-tuition-detail');
+    const modalTuitionDetailTitle = document.getElementById('modal-tuition-detail-title');
+    const modalTuitionDetailActions = document.getElementById('modal-tuition-detail-actions');
+    const modalTuitionDetailBody = document.getElementById('modal-tuition-detail-body');
+    const btnCloseTuitionDetail = document.getElementById('btn-close-tuition-detail');
+
     // Class Delete Confirm Modal Elements
     const modalClassDeleteConfirm = document.getElementById('modal-class-delete-confirm');
     const targetClassDeleteNameDisplay = document.getElementById('target-class-delete-name-display');
@@ -2204,10 +2211,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isStaff()) {
                 modalStudyLogDetailActions.innerHTML = `
+                    <button id="btn-modal-edit-studylog" class="btn btn-sm btn-primary">
+                        <i class="fa-solid fa-pen-to-square"></i> 수정
+                    </button>
                     <button id="btn-modal-delete-studylog" class="btn btn-sm btn-danger">
                         <i class="fa-solid fa-trash-can"></i> 학습 기록 삭제
                     </button>
                 `;
+                document.getElementById('btn-modal-edit-studylog').addEventListener('click', () => {
+                    renderStudyLogDetailEditForm(l, logId);
+                });
                 document.getElementById('btn-modal-delete-studylog').addEventListener('click', () => {
                     openAdminStudyLogDeleteSafetyModal(l, logId);
                 });
@@ -2318,6 +2331,56 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
+    }
+
+    function renderStudyLogDetailEditForm(log, logId) {
+        const studiedDay = String(log.StudiedDay || '').trim().split('T')[0].split(' ')[0];
+        modalStudyLogDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 학습 기록 수정';
+        modalStudyLogDetailActions.innerHTML = '';
+        modalStudyLogDetailBody.innerHTML = `
+            <form id="form-edit-studylog-detail" class="modal-edit-form">
+                <div class="detail-header-block">
+                    <div class="detail-title">${escapeHtml(log.StudentName || '학생 미상')} · ${escapeHtml(log.BookTitle || '도서 미상')}</div>
+                    <div class="detail-meta-row"><span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${log.row_id || log.Id}</strong></span></div>
+                </div>
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-calendar-check"></i> 수업 기본 정보</h4>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="edit-studylog-studied-day">학습 수행 일자 <span class="required">*</span></label><input id="edit-studylog-studied-day" class="form-control" type="date" value="${escapeHtml(studiedDay)}" required></div>
+                        <div class="form-group"><label>수업 구분</label><label class="checkbox-pill"><input id="edit-studylog-is-special" type="checkbox" ${log.IsSpecial ? 'checked' : ''}><span><i class="fa-solid fa-star"></i> 특강 수업</span></label></div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 수업 내용</h4>
+                    <div class="form-group"><textarea id="edit-studylog-lesson-content" class="form-control" rows="5" placeholder="수업에서 진행한 내용을 입력하세요.">${escapeHtml(log.LessonContent || '')}</textarea></div>
+                </div>
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 수업 내용 메모</h4>
+                    <div class="form-group"><textarea id="edit-studylog-description" class="form-control" rows="5" placeholder="학생별 메모나 전달 사항을 입력하세요.">${escapeHtml(log.Description || '')}</textarea></div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="btn-cancel-edit-studylog" class="btn btn-outline">취소</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 변경사항 저장</button>
+                </div>
+            </form>
+        `;
+        document.getElementById('btn-cancel-edit-studylog').addEventListener('click', () => openStudyLogDetailModal(logId));
+        document.getElementById('form-edit-studylog-detail').addEventListener('submit', async event => {
+            event.preventDefault();
+            const data = {
+                StudiedDay: document.getElementById('edit-studylog-studied-day').value,
+                LessonContent: document.getElementById('edit-studylog-lesson-content').value.trim(),
+                Description: document.getElementById('edit-studylog-description').value.trim(),
+                IsSpecial: document.getElementById('edit-studylog-is-special').checked ? 1 : 0
+            };
+            try {
+                await apiFetch(`/api/user/studylogs/${log.row_id || log.Id}`, { method: 'PUT', body: JSON.stringify({ data }) });
+                showToast('학습 기록을 수정했습니다.', 'success');
+                await Promise.all([openStudyLogDetailModal(logId), loadStudyLogSearchResults(), loadRecentStudyLogs()]);
+            } catch (err) {
+                showToast(err.message, 'danger');
+            }
+        });
     }
 
     // Admin StudyLog Delete Safety Confirmation Handler
@@ -6120,16 +6183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function editTuitionPayment(id) {
-        const p = tuitionPaymentsCache.find(row => String(row.row_id || row.Id) === String(id));
-        if (!p) return;
-        const fee = prompt('수정할 수업료(KRW)를 입력해 주세요.', p.FeeAmount);
-        if (fee === null) return;
-        const service = prompt('서비스차시(0~10)를 입력해 주세요.', p.ServiceLessons);
-        if (service === null) return;
-        try {
-            await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify({ StudentId: p.StudentId, ClassType: p.ClassType, PaidLessons: p.PaidLessons, ServiceLessons: Number(service), StartDate: p.StartDate, PaidDate: p.PaidDate, FeeAmount: parseCurrency(fee), Memo: p.Memo || '' }) });
-            await loadTuitionPayments(); showToast('결제 정보가 수정되었습니다.', 'success');
-        } catch (err) { alert(err.message); }
+        await showTuitionPaymentDetail(id, true);
     }
 
     async function loadTuitionFeeSettings() {
@@ -6179,15 +6233,101 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
 
-    async function showTuitionPaymentDetail(id) {
-        const panel = document.getElementById('tuition-detail-panel');
-        panel.classList.remove('hidden');
-        panel.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 상세 정보를 불러오는 중입니다.</div>';
+    function renderTuitionPaymentDetail(payment, id) {
+        modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-receipt"></i> 결제 상세 정보';
+        modalTuitionDetailActions.innerHTML = isStaff()
+            ? '<button id="btn-modal-edit-tuition" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>'
+            : '';
+        modalTuitionDetailBody.innerHTML = `
+            <div class="detail-header-block">
+                <div class="detail-title">${escapeHtml(payment.StudentName || '학생 미상')}</div>
+                <div class="detail-meta-row">
+                    ${payment.StudentGrade ? `<span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${escapeHtml(payment.StudentGrade)}</strong></span>` : ''}
+                    <span><i class="fa-solid fa-users"></i> 반: <strong>${escapeHtml(payment.ClassType)}</strong></span>
+                    <span><i class="fa-solid fa-calendar-day"></i> 차시 시작일: <strong>${escapeHtml(payment.StartDate)}</strong></span>
+                    <span><i class="fa-solid fa-money-check-dollar"></i> 납부일: <strong>${escapeHtml(payment.PaidDate || '-')}</strong></span>
+                </div>
+            </div>
+            <div class="tuition-detail-summary-grid">
+                <div class="detail-info-item"><div class="label">결제 차시</div><div class="val">${Number(payment.PaidLessons || 0)}회</div></div>
+                <div class="detail-info-item"><div class="label">서비스 차시</div><div class="val">${Number(payment.ServiceLessons || 0)}회</div></div>
+                <div class="detail-info-item"><div class="label">총 제공 차시</div><div class="val">${Number(payment.PaidLessons || 0) + Number(payment.ServiceLessons || 0)}회</div></div>
+                <div class="detail-info-item"><div class="label">수업료</div><div class="val tuition-detail-fee">${formatWon(payment.FeeAmount)}</div></div>
+            </div>
+            <div class="detail-desc-box"><strong><i class="fa-solid fa-note-sticky"></i> 비고</strong><p>${escapeHtml(payment.Memo || '입력된 비고가 없습니다.')}</p></div>
+        `;
+        document.getElementById('btn-modal-edit-tuition')?.addEventListener('click', () => renderTuitionPaymentEditForm(payment, id));
+    }
+
+    function renderTuitionPaymentEditForm(payment, id) {
+        modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 결제 정보 수정';
+        modalTuitionDetailActions.innerHTML = '';
+        modalTuitionDetailBody.innerHTML = `
+            <form id="form-edit-tuition-payment" class="modal-edit-form">
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 학생 및 반 정보</h4>
+                    <div class="form-grid">
+                        <div class="form-group"><label>학생</label><input class="form-control" value="${escapeHtml(payment.StudentName || '학생 미상')}" disabled></div>
+                        <div class="form-group"><label for="edit-tuition-class-type">반 정보 <span class="required">*</span></label><select id="edit-tuition-class-type" class="form-control" required>${TUITION_CLASS_TYPES.map(type => `<option value="${escapeHtml(type)}" ${type === payment.ClassType ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}</select></div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-receipt"></i> 결제 정보</h4>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="edit-tuition-paid-lessons">결제차시 <span class="required">*</span></label><select id="edit-tuition-paid-lessons" class="form-control">${[10, 20, 30].map(value => `<option value="${value}" ${Number(payment.PaidLessons) === value ? 'selected' : ''}>${value}차시</option>`).join('')}</select></div>
+                        <div class="form-group"><label for="edit-tuition-service-lessons">서비스차시</label><input id="edit-tuition-service-lessons" class="form-control" type="number" min="0" max="10" value="${Number(payment.ServiceLessons || 0)}"></div>
+                        <div class="form-group"><label for="edit-tuition-start-date">차시 시작일 <span class="required">*</span></label><input id="edit-tuition-start-date" class="form-control" type="date" value="${escapeHtml(payment.StartDate || '')}" required></div>
+                        <div class="form-group"><label for="edit-tuition-paid-date">납부일 <span class="required">*</span></label><input id="edit-tuition-paid-date" class="form-control" type="date" value="${escapeHtml(payment.PaidDate || '')}" required></div>
+                        <div class="form-group span-2"><label for="edit-tuition-fee-amount">수업료 <span class="required">*</span></label><div class="currency-input-wrap"><input id="edit-tuition-fee-amount" class="form-control currency-input" type="text" inputmode="numeric" value="${Number(payment.FeeAmount || 0).toLocaleString('ko-KR')}" required><span>원</span></div></div>
+                        <div class="form-group span-2"><label for="edit-tuition-memo">비고</label><textarea id="edit-tuition-memo" class="form-control" rows="4">${escapeHtml(payment.Memo || '')}</textarea></div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="btn-cancel-edit-tuition" class="btn btn-outline">취소</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 변경사항 저장</button>
+                </div>
+            </form>
+        `;
+        document.getElementById('btn-cancel-edit-tuition').addEventListener('click', () => renderTuitionPaymentDetail(payment, id));
+        document.getElementById('form-edit-tuition-payment').addEventListener('submit', async event => {
+            event.preventDefault();
+            const payload = {
+                StudentId: Number(payment.StudentId),
+                ClassType: document.getElementById('edit-tuition-class-type').value,
+                PaidLessons: Number(document.getElementById('edit-tuition-paid-lessons').value),
+                ServiceLessons: Number(document.getElementById('edit-tuition-service-lessons').value),
+                StartDate: document.getElementById('edit-tuition-start-date').value,
+                PaidDate: document.getElementById('edit-tuition-paid-date').value,
+                FeeAmount: parseCurrency(document.getElementById('edit-tuition-fee-amount').value),
+                Memo: document.getElementById('edit-tuition-memo').value.trim()
+            };
+            try {
+                await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                showToast('결제 정보가 수정되었습니다.', 'success');
+                await Promise.all([loadTuitionPayments(), loadTuitionPaymentSearch()]);
+                await showTuitionPaymentDetail(id);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+    }
+
+    async function showTuitionPaymentDetail(id, openEdit = false) {
+        modalTuitionDetail.classList.remove('hidden');
+        modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-receipt"></i> 결제 상세 정보';
+        modalTuitionDetailActions.innerHTML = '';
+        modalTuitionDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 상세 정보를 불러오는 중입니다.</div>';
         try {
             const p = (await apiFetch(`/api/user/tuition-payments/${id}`)).payment;
-            panel.innerHTML = `<div class="card-header-styled"><h3><i class="fa-solid fa-receipt"></i> 결제 상세 정보</h3></div><div class="detail-meta-row"><span>학생: <strong>${escapeHtml(p.StudentName || '-')}</strong>${p.StudentGrade ? ` (${escapeHtml(p.StudentGrade)})` : ''}</span><span>반: <strong>${escapeHtml(p.ClassType)}</strong></span><span>차시 시작일: <strong>${escapeHtml(p.StartDate)}</strong></span><span>납부일: <strong>${escapeHtml(p.PaidDate || '-')}</strong></span><span>결제/서비스: <strong>${p.PaidLessons}회 / ${p.ServiceLessons}회</strong></span><span>수업료: <strong>${formatWon(p.FeeAmount)}</strong></span></div><div class="detail-desc-box"><strong><i class="fa-solid fa-note-sticky"></i> 비고</strong><p>${escapeHtml(p.Memo || '입력된 비고가 없습니다.')}</p></div>`;
-        } catch (err) { panel.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
+            if (openEdit && isStaff()) renderTuitionPaymentEditForm(p, id);
+            else renderTuitionPaymentDetail(p, id);
+        } catch (err) { modalTuitionDetailBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
     }
+
+    btnCloseTuitionDetail?.addEventListener('click', () => modalTuitionDetail.classList.add('hidden'));
+    modalTuitionDetail?.addEventListener('click', event => {
+        if (event.target === modalTuitionDetail) modalTuitionDetail.classList.add('hidden');
+    });
 
     document.getElementById('btn-tuition-search')?.addEventListener('click', loadTuitionPaymentSearch);
     document.getElementById('tuition-search-q')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); loadTuitionPaymentSearch(); } });

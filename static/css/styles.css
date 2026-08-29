@@ -2655,6 +2655,46 @@ body {
     min-height: 20rem;
 }
 
+.tuition-detail-modal-card {
+    width: min(760px, 94vw);
+}
+
+.tuition-detail-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.tuition-detail-summary-grid .detail-info-item {
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+}
+
+.tuition-detail-summary-grid .label {
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.tuition-detail-summary-grid .val {
+    color: var(--text-main);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.tuition-detail-summary-grid .tuition-detail-fee {
+    color: var(--success);
+}
+
+@media (max-width: 700px) {
+    .tuition-detail-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .batch-calendar-panel {
     margin-top: 1rem;
     padding: 1rem;

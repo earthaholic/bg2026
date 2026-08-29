@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-tuition-history-layout">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-detail-dialogs-2">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1597,7 +1597,7 @@
                 </section>
 
                 <section id="view-tuition-payment-search" class="workspace-view">
-                    <div class="book-search-layout"><div class="card search-filter-card"><div class="filter-options-grid"><div class="filter-group"><label for="tuition-search-q">학생명 검색</label><input id="tuition-search-q" class="form-control" placeholder="학생 이름 입력"></div><div class="filter-group"><label for="tuition-search-class">반 정보</label><select id="tuition-search-class" class="form-control"><option value="">전체 반</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select></div><div class="filter-group"><label>&nbsp;</label><button id="btn-tuition-search" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 검색</button></div></div></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>상세</th></tr></thead><tbody id="tuition-search-body"></tbody></table></div></div><div id="tuition-detail-panel" class="card hidden"></div></div>
+                    <div class="book-search-layout"><div class="card search-filter-card"><div class="filter-options-grid"><div class="filter-group"><label for="tuition-search-q">학생명 검색</label><input id="tuition-search-q" class="form-control" placeholder="학생 이름 입력"></div><div class="filter-group"><label for="tuition-search-class">반 정보</label><select id="tuition-search-class" class="form-control"><option value="">전체 반</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select></div><div class="filter-group"><label>&nbsp;</label><button id="btn-tuition-search" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 검색</button></div></div></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>상세</th></tr></thead><tbody id="tuition-search-body"></tbody></table></div></div></div>
                 </section>
 
                 <section id="view-tuition-fee-settings" class="workspace-view">
@@ -2098,6 +2098,22 @@
         </div>
     </div>
 
+    <!-- 수업료 결제 상세 모달 -->
+    <div id="modal-tuition-detail" class="modal-backdrop hidden">
+        <div class="modal-card detail-card tuition-detail-modal-card">
+            <div class="modal-header">
+                <h3 id="modal-tuition-detail-title"><i class="fa-solid fa-receipt"></i> 결제 상세 정보</h3>
+                <div class="detail-header-actions">
+                    <div id="modal-tuition-detail-actions"></div>
+                    <button id="btn-close-tuition-detail" class="btn-close">&times;</button>
+                </div>
+            </div>
+            <div id="modal-tuition-detail-body" class="modal-body detail-modal-body">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 상세 정보를 불러오는 중입니다.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- 변경 이력 상세 모달 (Admin Only) -->
     <div id="modal-audit-detail" class="modal-backdrop hidden">
         <div class="modal-card detail-card audit-detail-card">
@@ -2154,6 +2170,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260830-tuition-history-layout"></script>
+    <script src="/static/js/app.js?v=20260830-detail-dialogs-2"></script>
 </body>
 </html>
