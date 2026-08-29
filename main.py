@@ -2309,7 +2309,8 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
     try:
         closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
-            sql = '''SELECT pl.*, sl."StudiedDay", s."Name" AS "StudentName", c."ClassName"
+            sql = '''SELECT pl.*, sl."StudiedDay", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
+                            sl."GradeSnapshot", c."ClassName"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
                      LEFT JOIN "Classes" c ON sl."ClassId"=c."Id" WHERE pl."PayrollMonth"=?'''

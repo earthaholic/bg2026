@@ -6238,12 +6238,52 @@ document.addEventListener('DOMContentLoaded', () => {
         const teacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : '';
         if (!month) return;
         const data = await apiFetch(`/api/user/payroll?month=${encodeURIComponent(month)}${teacher ? `&teacher_username=${encodeURIComponent(teacher)}` : ''}`);
-        const lines = [...data.lines.map(x => ({ date:x.StudiedDay, type:'수업', name:x.StudentName || '-', reason:x.Reason, amount:x.Amount })), ...data.claims.map(x => ({ date:x.ClaimDate || '-', type:'추가 청구', name:x.ItemName, reason:x.Description || '-', amount:x.Amount }))];
-        document.getElementById('payroll-lines-body').innerHTML = lines.length ? lines.map(x => `<tr><td>${escapeHtml(x.date)}</td><td>${x.type}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.reason)}</td><td>${Number(x.amount).toLocaleString()}원</td></tr>`).join('') : '<tr><td colspan="5" class="text-center p-4">정산 내역이 없습니다.</td></tr>';
+        renderPayrollTeamCards(data.lines || []);
+        renderPayrollClaims(data.claims || []);
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
-        document.getElementById('payroll-summary').textContent = `${month} 정산 합계: ${total.toLocaleString()}원${data.closed ? ' (마감됨)' : ''}`;
-        document.getElementById('payroll-backfill-wrap').classList.toggle('hidden', !isStaff() || data.closed);
-        document.getElementById('payroll-close-wrap').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
+        document.getElementById('payroll-summary').innerHTML = `<span class="payroll-summary-label">${escapeHtml(month)} 정산 합계</span><strong>${total.toLocaleString()}원</strong>${data.closed ? '<em><i class="fa-solid fa-lock"></i> 마감 완료</em>' : '<em class="is-open"><i class="fa-solid fa-lock-open"></i> 정산 진행 중</em>'}`;
+        document.getElementById('btn-backfill-payroll-class-links').classList.toggle('hidden', !isStaff() || data.closed);
+        document.getElementById('btn-close-payroll').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
+    }
+
+    function renderPayrollTeamCards(lines) {
+        const container = document.getElementById('payroll-team-cards');
+        const teams = new Map();
+        lines.forEach(line => {
+            const teamName = line.ClassName || '수업 정보 미연결';
+            if (!teams.has(teamName)) teams.set(teamName, []);
+            teams.get(teamName).push(line);
+        });
+        if (!teams.size) {
+            container.innerHTML = '<div class="card payroll-empty-state"><i class="fa-solid fa-calendar-xmark"></i><p>해당 월에 정산할 수업 내역이 없습니다.</p></div>';
+            return;
+        }
+        container.innerHTML = [...teams.entries()].map(([teamName, teamLines]) => {
+            const dates = [...new Set(teamLines.map(line => line.StudiedDay).filter(Boolean))].sort();
+            const students = new Map();
+            teamLines.forEach(line => {
+                const key = `${line.StudentName || '-'}|${line.GradeSnapshot || line.CurrentGrade || '-'}`;
+                if (!students.has(key)) students.set(key, { name: line.StudentName || '-', grade: line.GradeSnapshot || line.CurrentGrade || '-', lines: [] });
+                students.get(key).lines.push(line);
+            });
+            const teamTotal = teamLines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
+            const headerCells = dates.map((date, index) => `<th><span>${index + 1}차시</span><small>${escapeHtml(date.slice(5).replace('-', '/'))}</small></th>`).join('');
+            const rows = [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(student => {
+                const attendedDates = new Set(student.lines.map(line => line.StudiedDay));
+                const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
+                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td>${dates.map(date => `<td class="${attendedDates.has(date) ? 'is-attended' : ''}">${attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
+            }).join('');
+            return `<article class="card payroll-team-card"><header><div><span class="payroll-team-eyebrow">수업 팀</span><h3>${escapeHtml(teamName)}</h3></div><div class="payroll-team-total"><span>팀 정산액</span><strong>${teamTotal.toLocaleString()}원</strong></div></header><div class="table-responsive"><table class="modern-table payroll-session-table"><thead><tr><th>학년</th><th>이름</th>${headerCells}<th>총 차시</th><th>정산액</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
+        }).join('');
+    }
+
+    function renderPayrollClaims(claims) {
+        const card = document.getElementById('payroll-claim-list-card');
+        card.classList.toggle('hidden', !claims.length);
+        document.getElementById('payroll-claims-body').innerHTML = claims.map(claim => {
+            const status = { pending: '승인 대기', approved: '승인됨', rejected: '반려됨' }[claim.Status] || claim.Status;
+            return `<tr><td>${escapeHtml(claim.ClaimDate || '-')}</td><td>${escapeHtml(claim.ItemName)}</td><td>${escapeHtml(claim.Description || '-')}</td><td>${escapeHtml(status)}</td><td class="payroll-amount">${Number(claim.Amount || 0).toLocaleString()}원</td></tr>`;
+        }).join('');
     }
     document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
     document.getElementById('payroll-teacher')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
