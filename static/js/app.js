@@ -6298,7 +6298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const unconfiguredLines = payrollLines.filter(line => line.IsRateConfigured === false);
         const canTransfer = Boolean(isStaff() && teacher && !data.closed);
         renderPayrollTransferPanel(canTransfer, teacher);
-        renderPayrollUnconfiguredLines(unconfiguredLines, canTransfer);
+        renderPayrollUnconfiguredLines(unconfiguredLines);
         renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer);
         renderPayrollClaims(data.claims || []);
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
@@ -6375,17 +6375,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    function renderPayrollUnconfiguredLines(lines, canTransfer = false) {
+    function renderPayrollUnconfiguredLines(lines) {
         const card = document.getElementById('payroll-unconfigured-card');
         card.classList.toggle('hidden', !lines.length);
-        document.getElementById('payroll-unconfigured-transfer-head').classList.toggle('hidden', !canTransfer);
         if (!lines.length) return;
         document.getElementById('payroll-unconfigured-count').textContent = `${lines.length}건`;
         document.getElementById('payroll-unconfigured-body').innerHTML = lines.map(line => {
             const grade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
             const lessonType = line.IsSpecial ? '특강' : '일반 수업';
-            const transferCell = canTransfer ? `<td>${payrollTransferCheckbox(line, true)}</td>` : '';
-            return `<tr>${transferCell}<td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
+            return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
         }).join('');
     }
 
