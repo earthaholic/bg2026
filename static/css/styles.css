@@ -2495,6 +2495,16 @@ body {
     overflow-y: auto;
 }
 
+/* 수업 단가 설정은 카테고리·일반 단가·특강 단가 카드가 세로로 이어지므로 전체 스크롤을 허용한다. */
+#view-class-rate-settings {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#view-class-rate-settings .book-search-layout {
+    overflow-y: auto;
+}
+
 .settings-inline-form,
 .settings-grid-form {
     display: grid;
