@@ -2086,6 +2086,71 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
     return {"month":month,"closed":closed,"lines":rows,"claims":claims,"material_requests":material_requests,"totals":totals}
 
+@app.post("/api/user/payroll/backfill-class-links")
+def backfill_payroll_class_links(
+    month: str = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    """수업 연결이 누락된 과거 일괄 등록 이력을 현재 배정 규칙으로 보정한다.
+
+    학생에게 같은 특강 여부의 수업이 정확히 하나일 때만 연결하므로, 기존 연결값이나
+    여러 수업 후보가 있는 기록은 절대 변경하지 않는다.
+    """
+    if not re.match(r'^\d{4}-\d{2}$', month):
+        raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
+
+    conn = get_db_connection()
+    try:
+        candidates = conn.execute('''
+            SELECT sl.rowid AS "StudyLogId", cs."ClassId", c."TeacherUsername", s."Grade"
+            FROM "StudyLogs" sl
+            JOIN "ClassStudents" cs
+              ON cs."StudentId" = sl."StudentId"
+             AND COALESCE(cs."IsSpecial", 0) = COALESCE(sl."IsSpecial", 0)
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            LEFT JOIN "Students" s ON s.rowid = sl."StudentId" OR s."Id" = sl."StudentId"
+            WHERE sl."ClassId" IS NULL
+              AND substr(sl."StudiedDay", 1, 7) = ?
+              AND 1 = (
+                  SELECT COUNT(*)
+                  FROM "ClassStudents" cs2
+                  WHERE cs2."StudentId" = sl."StudentId"
+                    AND COALESCE(cs2."IsSpecial", 0) = COALESCE(sl."IsSpecial", 0)
+              )
+        ''', (month,)).fetchall()
+        unmatched = conn.execute('''
+            SELECT COUNT(*)
+            FROM "StudyLogs" sl
+            WHERE sl."ClassId" IS NULL AND substr(sl."StudiedDay", 1, 7) = ?
+        ''', (month,)).fetchone()[0] - len(candidates)
+
+        if not candidates:
+            return {"status": "success", "linked_count": 0, "unmatched_count": unmatched,
+                    "message": "자동 연결할 수 있는 누락 학습 이력이 없습니다."}
+
+        before_snapshots = {
+            row["StudyLogId"]: get_record_snapshot("StudyLogs", row["StudyLogId"])
+            for row in candidates
+        }
+        for row in candidates:
+            conn.execute('''
+                UPDATE "StudyLogs"
+                SET "ClassId" = ?, "ActualTeacherUsername" = ?, "SubstituteStatus" = 'approved',
+                    "GradeSnapshot" = CASE WHEN COALESCE("GradeSnapshot", '') = '' THEN COALESCE(?, '') ELSE "GradeSnapshot" END,
+                    "UpdatedBy" = ?, "UpdatedAt" = datetime('now', 'localtime')
+                WHERE rowid = ? AND "ClassId" IS NULL
+            ''', (row["ClassId"], row["TeacherUsername"], row["Grade"], current_user["username"], row["StudyLogId"]))
+        conn.commit()
+    finally:
+        conn.close()
+
+    for row in candidates:
+        log_id = row["StudyLogId"]
+        _audit_update("StudyLogs", log_id, before_snapshots[log_id], get_record_snapshot("StudyLogs", log_id),
+                      current_user["username"], current_user["role"])
+    return {"status": "success", "linked_count": len(candidates), "unmatched_count": unmatched,
+            "message": f"{len(candidates)}건의 누락 학습 이력을 수업에 연결했습니다."}
+
 @app.post("/api/user/payroll/claims")
 def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     if (not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.ClaimDate)
