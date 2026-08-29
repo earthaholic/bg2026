@@ -6101,10 +6101,28 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initTeacherPayrollView() {
         const month = document.getElementById('payroll-month');
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
-        document.getElementById('payroll-teacher-group').classList.toggle('hidden', !isStaff());
+        const teacherGroup = document.getElementById('payroll-teacher-group');
+        teacherGroup.classList.toggle('hidden', !isStaff());
         document.getElementById('payroll-claim-card').classList.toggle('hidden', isStaff());
+        if (isStaff()) {
+            await loadPayrollTeacherOptions();
+        }
         await loadTeacherPayroll();
     }
+
+    async function loadPayrollTeacherOptions() {
+        const teacherSelect = document.getElementById('payroll-teacher');
+        const selectedTeacher = teacherSelect.value;
+        const data = await apiFetch('/api/user/teachers-options');
+        let options = '<option value="">전체 선생님</option>';
+        (data.teachers || []).forEach(teacher => {
+            const roleLabel = teacher.role === 'manager' ? '관리 선생님' : '선생님';
+            options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)} (${roleLabel})</option>`;
+        });
+        teacherSelect.innerHTML = options;
+        teacherSelect.value = selectedTeacher;
+    }
+
     async function loadTeacherPayroll() {
         const month = document.getElementById('payroll-month').value;
         const teacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : '';
@@ -6117,6 +6135,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('payroll-close-wrap').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
     }
     document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
+    document.getElementById('payroll-teacher')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
+    document.getElementById('payroll-month')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
     document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
     document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => { e.preventDefault(); const month=document.getElementById('payroll-month').value; await apiFetch('/api/user/payroll/claims', {method:'POST', body:JSON.stringify({PayrollMonth:month, ClaimDate:document.getElementById('payroll-claim-date').value, ItemName:document.getElementById('payroll-claim-name').value, Amount:Number(document.getElementById('payroll-claim-amount').value), Description:document.getElementById('payroll-claim-description').value})}); e.target.reset(); await loadTeacherPayroll(); showToast('추가 청구를 등록했습니다.', 'success'); });
 
