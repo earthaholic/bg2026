@@ -5033,12 +5033,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadClassRateSettings() {
         try {
-            const [categoriesData, ratesData, specialData, specialRatesData] = await Promise.all([
-                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-types'), apiFetch('/api/user/payroll/special-rates')
+            const [categoriesData, ratesData, specialData, specialRatesData, classesData] = await Promise.all([
+                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-types'), apiFetch('/api/user/payroll/special-rates'), apiFetch('/api/user/classes?limit=100')
             ]);
             const categories = categoriesData.categories || [];
             document.getElementById('class-category-list').innerHTML = categories.length ? categories.map(c => `<span class="badge"><i class="fa-solid fa-tag"></i> ${escapeHtml(c.Name)}</span>`).join('') : '<span class="text-muted">등록된 카테고리가 없습니다.</span>';
             document.getElementById('rate-category').innerHTML = '<option value="">-- 카테고리 선택 --</option>' + categories.map(c => `<option value="${c.Id}">${escapeHtml(c.Name)}</option>`).join('');
+            const classes = classesData.classes || [];
+            const assignmentBody = document.getElementById('class-category-assignment-body');
+            assignmentBody.innerHTML = classes.length ? classes.map(cls => {
+                const options = '<option value="">-- 카테고리 선택 --</option>' + categories.map(c => `<option value="${c.Id}" ${Number(cls.CategoryId) === Number(c.Id) ? 'selected' : ''}>${escapeHtml(c.Name)}</option>`).join('');
+                return `<tr><td><strong>${escapeHtml(cls.ClassName)}</strong></td><td>${escapeHtml(cls.TeacherUsername || '-')}</td><td><select class="form-control class-category-assignment" data-class-id="${cls.Id}">${options}</select></td><td><button type="button" class="btn btn-xs btn-primary btn-save-class-category" data-class-id="${cls.Id}"><i class="fa-solid fa-floppy-disk"></i> 저장</button></td></tr>`;
+            }).join('') : '<tr><td colspan="4" class="empty-state">등록된 수업이 없습니다.</td></tr>';
+            assignmentBody.querySelectorAll('.btn-save-class-category').forEach(button => button.addEventListener('click', () => saveClassCategoryAssignment(button.dataset.classId)));
             const rates = ratesData.rates || [];
             document.getElementById('class-pay-rate-body').innerHTML = rates.length ? rates.map(r => `<tr><td>${escapeHtml(r.CategoryName)}</td><td>${escapeHtml(r.GradeGroup)}</td><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">등록된 일반 수업 단가가 없습니다.</td></tr>';
             const types = specialData.special_types || [];
@@ -5056,6 +5063,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = document.getElementById('rate-category-name').value.trim();
         try { await apiFetch(`/api/user/payroll/categories?name=${encodeURIComponent(name)}`, { method: 'POST' }); e.target.reset(); showClassRateMessage('수업 카테고리를 등록했습니다.'); await loadClassRateSettings(); }
         catch (err) { showClassRateMessage(err.message, true); }
+    }
+
+    async function saveClassCategoryAssignment(classId) {
+        const select = document.querySelector(`.class-category-assignment[data-class-id="${classId}"]`);
+        const categoryId = Number(select?.value || 0);
+        if (!categoryId) { showClassRateMessage('저장할 수업 카테고리를 선택해 주세요.', true); return; }
+        try {
+            const result = await apiFetch(`/api/user/classes/${classId}/category`, { method: 'PUT', body: JSON.stringify({ CategoryId: categoryId }) });
+            showClassRateMessage(result.message);
+            await loadClassRateSettings();
+        } catch (err) { showClassRateMessage(err.message, true); }
     }
 
     async function submitClassPayRate(e) {

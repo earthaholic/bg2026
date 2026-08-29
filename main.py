@@ -182,6 +182,9 @@ class ClassRequest(BaseModel):
     StudentIsSpecial: Optional[Dict[int, bool]] = {}
     CategoryId: Optional[int] = None
 
+class ClassCategoryRequest(BaseModel):
+    CategoryId: int
+
 class ClassStudyLogItem(BaseModel):
     StudentId: int
     include: bool = True
@@ -1725,6 +1728,36 @@ def user_update_class(
         return {"status": "success", "message": "수업 정보가 성공적으로 수정되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"수업 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.put("/api/user/classes/{class_id}/category")
+def user_update_class_category(
+    class_id: int,
+    payload: ClassCategoryRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    class_row = get_class_by_id(class_id)
+    if not class_row:
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    conn = get_db_connection()
+    try:
+        category = conn.execute(
+            'SELECT "Name" FROM "ClassCategories" WHERE "Id" = ? AND "IsActive" = 1',
+            (payload.CategoryId,)
+        ).fetchone()
+        if not category:
+            raise HTTPException(status_code=400, detail="사용 가능한 수업 카테고리를 선택해 주세요.")
+    finally:
+        conn.close()
+    old_snapshot = get_record_snapshot("Classes", class_id)
+    update_class(class_id, {
+        "CategoryId": payload.CategoryId,
+        "UpdatedBy": current_user["username"],
+        "UpdatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+    new_snapshot = get_record_snapshot("Classes", class_id)
+    _audit_update("Classes", class_id, old_snapshot, new_snapshot,
+                  current_user["username"], current_user["role"])
+    return {"status": "success", "message": f"'{class_row['ClassName']}' 수업의 카테고리를 '{category['Name']}'(으)로 저장했습니다."}
 
 @app.delete("/api/user/classes/{class_id}")
 def user_delete_class(
