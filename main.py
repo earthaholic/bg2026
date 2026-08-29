@@ -2292,7 +2292,16 @@ def _student_grade(student_id: int) -> str:
         conn.close()
 
 def _grade_group(grade: str) -> str:
-    return "초등" if (grade or "").startswith("초") else "중등" if (grade or "").startswith("중") else "기타"
+    normalized = (grade or "").strip()
+    if normalized.startswith("초"):
+        return "초등"
+    if normalized.startswith("중"):
+        return "중등"
+    if re.fullmatch(r"[1-6]", normalized):
+        return "초등"
+    if re.fullmatch(r"[7-9]", normalized):
+        return "중등"
+    return "기타"
 
 def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Dict[str, Any]]:
     """마감 전에는 해당 일자에 유효한 단가를, 마감 후에는 확정 단가를 반환한다."""
@@ -2309,7 +2318,8 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
         sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus", sl."SpecialLessonTypeId",
-                        s."Name" AS "StudentName", c."ClassName", c."CategoryId", c."TeacherUsername"
+                        s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
+                        c."ClassName", c."CategoryId", c."TeacherUsername"
                  FROM "StudyLogs" sl JOIN "Classes" c ON sl."ClassId"=c."Id"
                  LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
                  WHERE substr(sl."StudiedDay",1,7)=? AND (sl."SubstituteStatus" IN ('','approved') OR sl."SubstituteStatus" IS NULL)'''
@@ -2317,17 +2327,20 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
         for row in conn.execute(sql, (month,)).fetchall():
             r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
             if teacher_username and teacher != teacher_username: continue
+            # 과거 학습 이력에 학년 스냅샷이 없으면 현재 학생 학년을 사용한다.
+            payroll_grade = (r["GradeSnapshot"] or "").strip() or (r["CurrentGrade"] or "").strip()
             if r["IsSpecial"]:
                 rate=conn.execute('SELECT "UnitAmount" FROM "SpecialLessonPayRates" WHERE "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["StudiedDay"],)).fetchone()
                 reason="특강 학생수당" if rate else "특강 학생수당 단가 미설정"
             else:
-                rate=conn.execute('SELECT "UnitAmount" FROM "TeacherPayRates" WHERE "CategoryId"=? AND "GradeGroup"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["CategoryId"],_grade_group(r["GradeSnapshot"]),r["StudiedDay"])).fetchone()
+                grade_group = _grade_group(payroll_grade)
+                rate=conn.execute('SELECT "UnitAmount" FROM "TeacherPayRates" WHERE "CategoryId"=? AND "GradeGroup"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["CategoryId"],grade_group,r["StudiedDay"])).fetchone()
                 if r["CategoryId"] is None:
                     reason="수업 카테고리 미설정"
                 elif not rate:
-                    reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업 단가 미설정'
+                    reason=f'{grade_group} 일반 수업 단가 미설정'
                 else:
-                    reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업'
+                    reason=f'{grade_group} 일반 수업'
             r.update({
                 "TeacherUsername": teacher,
                 "UnitAmount": rate[0] if rate else 0,
