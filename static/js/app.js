@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeBatchClassId = null;  // 일괄 등록 중인 수업 Id
     let batchCalendarMonth = ''; // YYYY-MM
     let batchCalendarDays = {}; // 월(YYYY-MM)별 날짜 학습 이력
+    let batchCalendarCancellations = {}; // 월(YYYY-MM)별 휴강 일정
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
@@ -314,6 +315,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnBatchCalendarNext = document.getElementById('btn-batch-calendar-next');
     const classBatchStudentsBody = document.getElementById('class-batch-students-body');
     const classBatchResult = document.getElementById('class-batch-result');
+    const batchIsCancelled = document.getElementById('batch-is-cancelled');
+    const batchCancellationSection = document.getElementById('batch-cancellation-section');
+    const btnSubmitClassBatch = document.getElementById('btn-submit-class-batch');
 
     let pendingUserPwId = null;
     let pendingUserDeleteId = null;
@@ -1048,6 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
         }
+        if (batchIsCancelled) batchIsCancelled.addEventListener('change', updateBatchRegistrationMode);
         if (batchStudiedDay) {
             batchStudiedDay.addEventListener('change', handleBatchDateChange);
         }
@@ -4994,6 +4999,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeBatchClassId || !batchCalendarStatus) return;
         batchCalendarMonth = month;
         batchCalendarDays = {};
+        batchCalendarCancellations = {};
         batchCalendarStatus.textContent = '기존 학습 이력을 불러오는 중입니다...';
         batchCalendarStatus.className = 'batch-calendar-status loading';
         if (batchCalendarGrid) batchCalendarGrid.classList.add('hidden');
@@ -5007,6 +5013,10 @@ document.addEventListener('DOMContentLoaded', () => {
             batchCalendarDays = results.reduce((daysByMonth, data, index) => {
                 daysByMonth[months[index]] = data.days || {};
                 return daysByMonth;
+            }, {});
+            batchCalendarCancellations = results.reduce((cancellationsByMonth, data, index) => {
+                cancellationsByMonth[months[index]] = data.cancellations || {};
+                return cancellationsByMonth;
             }, {});
             renderBatchStudylogCalendar();
             showBatchExistingRecords(batchStudiedDay?.value || '');
@@ -5026,15 +5036,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const firstWeekday = new Date(year, month - 1, 1).getDay();
             const lastDay = new Date(year, month, 0).getDate();
             const days = batchCalendarDays[calendarMonth] || {};
+            const cancellations = batchCalendarCancellations[calendarMonth] || {};
             let calendarHtml = labels.map(label => `<div class="batch-calendar-weekday">${label}</div>`).join('');
             calendarHtml += '<div class="batch-calendar-blank"></div>'.repeat(firstWeekday);
             for (let day = 1; day <= lastDay; day++) {
                 const date = `${calendarMonth}-${String(day).padStart(2, '0')}`;
                 const count = (days[date] || []).length;
+                const isCancelled = !!cancellations[date];
                 const classes = ['batch-calendar-day'];
                 if (count) classes.push('has-records');
+                if (isCancelled) classes.push('has-cancellation');
                 if (date === selectedDay) classes.push('selected');
-                calendarHtml += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${date}${count ? `, 기존 기록 ${count}건` : ''}"><span>${day}</span>${count ? `<b>${count}</b>` : ''}</button>`;
+                const marker = isCancelled ? '<b>휴</b>' : (count ? `<b>${count}</b>` : '');
+                const label = `${date}${isCancelled ? ', 휴강' : ''}${count ? `, 기존 기록 ${count}건` : ''}`;
+                calendarHtml += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${label}"><span>${day}</span>${marker}</button>`;
             }
             return `<section class="batch-calendar-month" aria-label="${year}년 ${month}월"><h5>${year}년 ${month}월</h5><div class="batch-calendar-grid">${calendarHtml}</div></section>`;
         }).join('');
@@ -5046,7 +5061,10 @@ document.addEventListener('DOMContentLoaded', () => {
         batchCalendarGrid.classList.remove('hidden');
         batchCalendarGrid.querySelectorAll('[data-batch-date]').forEach(button => button.addEventListener('click', () => selectBatchCalendarDate(button.dataset.batchDate)));
         const total = Object.values(batchCalendarDays).reduce((sum, days) => sum + Object.values(days).reduce((daySum, records) => daySum + records.length, 0), 0);
-        batchCalendarStatus.textContent = total ? `이전·선택·다음 달의 기존 학습 기록 ${total}건을 표시했습니다.` : '표시 중인 세 달에는 기존 학습 기록이 없습니다.';
+        const cancellationCount = Object.values(batchCalendarCancellations).reduce((sum, cancellations) => sum + Object.keys(cancellations).length, 0);
+        batchCalendarStatus.textContent = (total || cancellationCount)
+            ? `이전·선택·다음 달의 학습 기록 ${total}건과 휴강 ${cancellationCount}건을 표시했습니다.`
+            : '표시 중인 세 달에는 학습 기록 또는 휴강 일정이 없습니다.';
         batchCalendarStatus.className = 'batch-calendar-status';
     }
 
@@ -5059,9 +5077,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function showBatchExistingRecords(date) {
         if (!batchExistingRecords) return;
         const records = batchCalendarDays[date.slice(0, 7)]?.[date] || [];
-        if (!date || !records.length) {
+        const cancellation = batchCalendarCancellations[date.slice(0, 7)]?.[date];
+        if (!date || (!records.length && !cancellation)) {
             batchExistingRecords.classList.add('hidden');
             batchExistingRecords.innerHTML = '';
+            return;
+        }
+        if (cancellation) {
+            const reason = cancellation.Reason || '사유 미입력';
+            batchExistingRecords.innerHTML = `
+                <div><strong><i class="fa-solid fa-ban"></i> ${date} 휴강 등록됨</strong><p>사유: ${escapeHtml(reason)}</p></div>
+                <div class="batch-record-summary">
+                    <div class="batch-record-representative"><strong>등록자 · ${escapeHtml(cancellation.CreatedBy || '정보 없음')}</strong><span>휴강은 도서·학생별 학습 이력을 만들지 않습니다.</span></div>
+                    <button type="button" class="btn btn-xs btn-danger" id="btn-delete-batch-cancellation" data-cancellation-id="${cancellation.Id}"><i class="fa-solid fa-rotate-left"></i> 휴강 해제</button>
+                </div>`;
+            batchExistingRecords.classList.remove('hidden');
+            document.getElementById('btn-delete-batch-cancellation')?.addEventListener('click', () => deleteBatchCancellation(cancellation.Id, date));
             return;
         }
         const representative = records[0];
@@ -5077,6 +5108,17 @@ document.addEventListener('DOMContentLoaded', () => {
         batchExistingRecords.classList.remove('hidden');
     }
 
+    async function deleteBatchCancellation(cancellationId, date) {
+        if (!activeBatchClassId || !window.confirm(`${date} 휴강 등록을 해제하시겠습니까?`)) return;
+        try {
+            const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/cancellations/${cancellationId}`, { method: 'DELETE' });
+            alert(result.message);
+            loadBatchStudylogCalendar(getBatchMonth(date));
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
     function handleBatchDateChange() {
         const month = getBatchMonth(batchStudiedDay?.value);
         if (month !== batchCalendarMonth) loadBatchStudylogCalendar(month);
@@ -5087,6 +5129,19 @@ document.addEventListener('DOMContentLoaded', () => {
         loadBatchStudylogCalendar(getBatchMonthWithOffset(batchCalendarMonth || getBatchMonth(), offset));
     }
 
+    function updateBatchRegistrationMode() {
+        const isCancelled = !!batchIsCancelled?.checked;
+        document.querySelectorAll('.batch-studylog-section').forEach(section => section.classList.toggle('hidden', isCancelled));
+        if (batchCancellationSection) batchCancellationSection.classList.toggle('hidden', !isCancelled);
+        if (btnSubmitClassBatch) {
+            btnSubmitClassBatch.innerHTML = isCancelled
+                ? '<i class="fa-solid fa-ban"></i> 휴강 등록'
+                : '<i class="fa-solid fa-floppy-disk"></i> 선택 학생 학습 기록 일괄 등록';
+            btnSubmitClassBatch.classList.toggle('btn-danger', isCancelled);
+            btnSubmitClassBatch.classList.toggle('btn-success', !isCancelled);
+        }
+    }
+
     function resetBatchRegView() {
         activeBatchClassId = null;
         if (classBatchInfo) classBatchInfo.classList.add('hidden');
@@ -5095,6 +5150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classBatchStudentsBody) classBatchStudentsBody.innerHTML = '';
         if (formClassBatchStudyLog) formClassBatchStudyLog.reset();
         batchCalendarDays = {};
+        batchCalendarCancellations = {};
         batchCalendarMonth = '';
         if (batchCalendarGrid) { batchCalendarGrid.innerHTML = ''; batchCalendarGrid.classList.add('hidden'); }
         if (batchExistingRecords) { batchExistingRecords.innerHTML = ''; batchExistingRecords.classList.add('hidden'); }
@@ -5105,6 +5161,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bId) bId.value = '';
         if (bDisp) bDisp.value = '';
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+        updateBatchRegistrationMode();
+    }
+
+    async function confirmBatchStudylogDate(classId, date) {
+        const warning = await apiFetch(`/api/user/classes/${classId}/studylog-date-warning?studied_day=${encodeURIComponent(date)}`);
+        if (!warning.should_warn) return true;
+        return window.confirm(
+            `날짜를 다시 확인해 주세요.\n\n${warning.two_weeks_ago_day}에는 이 수업 학생의 학습 기록이 ${warning.two_weeks_ago_count}건 있지만, ` +
+            `${warning.previous_week_day}에는 기록이 없습니다.\n\n선택한 ${date}로 일괄 등록하시겠습니까?`
+        );
     }
 
     // 일괄 학습 기록 등록 제출 (공통 수업 내용, 학생별 참석·특강·메모)
@@ -5144,6 +5210,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
+            const shouldContinue = await confirmBatchStudylogDate(activeBatchClassId, dateVal);
+            if (!shouldContinue) return;
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
                 body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, logs: logs })

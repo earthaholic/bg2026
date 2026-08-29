@@ -3,7 +3,7 @@ import io
 import csv
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -189,12 +189,14 @@ class ClassStudyLogItem(BaseModel):
     Description: Optional[str] = ""
 
 class ClassStudyLogBatchRequest(BaseModel):
-    BookId: int
+    BookId: Optional[int] = None
     StudiedDay: str
     LessonContent: Optional[str] = ""
-    logs: List[ClassStudyLogItem]
+    logs: List[ClassStudyLogItem] = []
     SpecialLessonTypeId: Optional[int] = None
     ActualTeacherUsername: Optional[str] = ""
+    IsCancelled: bool = False
+    CancellationReason: Optional[str] = ""
 
 class PayRateRequest(BaseModel):
     CategoryId: int
@@ -1719,7 +1721,60 @@ def user_get_class_studylog_calendar(
                 "lesson_content": record.get("LessonContent") or "",
                 "description": record.get("Description") or ""
             })
-        return {"month": month, "days": days}
+        cancellation_rows = cursor.execute('''
+            SELECT "Id", "CancelledDay", "Reason", "CreatedAt", "CreatedBy"
+            FROM "ClassCancellations"
+            WHERE "ClassId" = ? AND substr("CancelledDay", 1, 7) = ?
+            ORDER BY "CancelledDay", "Id" DESC
+        ''', (class_id, month)).fetchall()
+        cancellations = {
+            row["CancelledDay"]: dict(row)
+            for row in cancellation_rows
+        }
+        return {"month": month, "days": days, "cancellations": cancellations}
+    finally:
+        conn.close()
+
+@app.get("/api/user/classes/{class_id}/studylog-date-warning")
+def user_get_class_studylog_date_warning(
+    class_id: int,
+    studied_day: str = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """일괄 등록일의 주차 오입력 가능성을 확인한다."""
+    _get_accessible_class(class_id, current_user)
+    try:
+        selected_day = datetime.strptime(studied_day, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+
+    student_ids = set(get_class_student_ids(class_id))
+    previous_week_day = (selected_day - timedelta(days=7)).isoformat()
+    two_weeks_ago_day = (selected_day - timedelta(days=14)).isoformat()
+    if not student_ids:
+        return {"should_warn": False}
+
+    conn = get_db_connection()
+    try:
+        placeholders = ", ".join("?" for _ in student_ids)
+        query = f'''
+            SELECT "StudiedDay", COUNT(*) AS count
+            FROM "StudyLogs"
+            WHERE "StudentId" IN ({placeholders})
+              AND "StudiedDay" IN (?, ?)
+            GROUP BY "StudiedDay"
+        '''
+        rows = conn.execute(query, [*student_ids, previous_week_day, two_weeks_ago_day]).fetchall()
+        counts = {row["StudiedDay"]: row["count"] for row in rows}
+        previous_week_count = counts.get(previous_week_day, 0)
+        two_weeks_ago_count = counts.get(two_weeks_ago_day, 0)
+        return {
+            "should_warn": two_weeks_ago_count > 0 and previous_week_count == 0,
+            "previous_week_day": previous_week_day,
+            "previous_week_count": previous_week_count,
+            "two_weeks_ago_day": two_weeks_ago_day,
+            "two_weeks_ago_count": two_weeks_ago_count
+        }
     finally:
         conn.close()
 
@@ -1731,14 +1786,45 @@ def user_batch_register_class_studylogs(
 ):
     class_row = _get_accessible_class(class_id, current_user)
 
+    day = (payload.StudiedDay or "").strip()
+    if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
+        raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+
+    if payload.IsCancelled:
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            existing = cursor.execute(
+                'SELECT "Id" FROM "ClassCancellations" WHERE "ClassId" = ? AND "CancelledDay" = ?',
+                (class_id, day)
+            ).fetchone()
+            if existing:
+                raise HTTPException(status_code=409, detail="해당 날짜는 이미 휴강으로 등록되어 있습니다.")
+            cursor.execute('''
+                INSERT INTO "ClassCancellations" ("ClassId", "CancelledDay", "Reason", "CreatedBy")
+                VALUES (?, ?, ?, ?)
+            ''', (class_id, day, (payload.CancellationReason or "").strip(), current_user["username"]))
+            cancellation_id = cursor.lastrowid
+            conn.commit()
+        finally:
+            conn.close()
+        _audit_insert("ClassCancellations", cancellation_id,
+                      get_record_snapshot("ClassCancellations", cancellation_id),
+                      current_user["username"], current_user["role"])
+        return {
+            "status": "success",
+            "message": f"{day} 휴강이 등록되었습니다.",
+            "is_cancelled": True,
+            "cancellation_id": cancellation_id,
+            "created_count": 0,
+            "skipped_count": 0,
+            "results": []
+        }
+
     if not payload.BookId or payload.BookId <= 0:
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
-
-    day = (payload.StudiedDay or "").strip()
-    if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
-        raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
     lesson_content = (payload.LessonContent or "").strip()
     actual_teacher = (payload.ActualTeacherUsername or "").strip()
     if actual_teacher and actual_teacher != class_row["TeacherUsername"]:
@@ -1833,6 +1919,31 @@ def user_batch_register_class_studylogs(
         "skipped_count": skipped_count,
         "results": results
     }
+
+@app.delete("/api/user/classes/{class_id}/cancellations/{cancellation_id}")
+def user_delete_class_cancellation(
+    class_id: int,
+    cancellation_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """잘못 등록한 휴강을 해제한다. 선생님은 본인 수업만 해제할 수 있다."""
+    _get_accessible_class(class_id, current_user)
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            'SELECT rowid FROM "ClassCancellations" WHERE "Id" = ? AND "ClassId" = ?',
+            (cancellation_id, class_id)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="해당 휴강 기록을 찾을 수 없습니다.")
+        old_snapshot = get_record_snapshot("ClassCancellations", row["rowid"])
+        conn.execute('DELETE FROM "ClassCancellations" WHERE rowid = ?', (row["rowid"],))
+        conn.commit()
+    finally:
+        conn.close()
+    _audit_delete("ClassCancellations", cancellation_id, old_snapshot,
+                  current_user["username"], current_user["role"])
+    return {"status": "success", "message": "휴강 등록이 해제되었습니다."}
 
 # --- 선생님 급여 정산 API ---
 @app.get("/api/user/payroll/categories")
