@@ -2870,7 +2870,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            const studylogs = data.studylogs || [];
+            const studylogs = [...(data.studylogs || [])].sort((left, right) => {
+                const leftDate = String(left.StudiedDay || left.CreatedDay || '');
+                const rightDate = String(right.StudiedDay || right.CreatedDay || '');
+                return rightDate.localeCompare(leftDate, 'ko');
+            });
             const totalLogs = data.total_studylogs || 0;
             const referredStudents = data.referred_students || [];
             const tuitionProgress = data.tuition_progress;
@@ -6457,6 +6461,114 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
     document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => { e.preventDefault(); const month=document.getElementById('payroll-month').value; await apiFetch('/api/user/payroll/claims', {method:'POST', body:JSON.stringify({PayrollMonth:month, ClaimDate:document.getElementById('payroll-claim-date').value, ItemName:document.getElementById('payroll-claim-name').value, Amount:Number(document.getElementById('payroll-claim-amount').value), Description:document.getElementById('payroll-claim-description').value})}); e.target.reset(); await loadTeacherPayroll(); showToast('추가 청구를 등록했습니다.', 'success'); });
+
+    /* 모든 목록 테이블 공통 정렬 */
+    const NON_SORTABLE_HEADER_PATTERN = /^(관리|작업|처리|상세|저장|선택|이전)$/;
+
+    function isSortableTableHeader(header) {
+        if (!header || header.dataset.sortable === 'false' || header.colSpan > 1) return false;
+        const label = header.textContent.replace(/\s+/g, ' ').trim();
+        if (!label || NON_SORTABLE_HEADER_PATTERN.test(label)) return false;
+        const table = header.closest('table');
+        const columnIndex = Array.from(header.parentElement.children).indexOf(header);
+        if (!table || columnIndex < 0 || header.querySelector('input, button, select, a')) return false;
+        return !Array.from(table.tBodies).some(body =>
+            Array.from(body.rows).some(row => row.cells[columnIndex]?.querySelector('input, button, select, a'))
+        );
+    }
+
+    function enhanceSortableTable(table) {
+        table.querySelectorAll('thead th').forEach(header => {
+            const sortable = isSortableTableHeader(header);
+            header.classList.toggle('sortable-header', sortable);
+            if (sortable) {
+                header.tabIndex = 0;
+                header.setAttribute('role', 'button');
+                header.setAttribute('title', '클릭하여 정렬');
+                if (!header.hasAttribute('aria-sort')) header.setAttribute('aria-sort', 'none');
+            } else {
+                header.removeAttribute('tabindex');
+                header.removeAttribute('role');
+                header.removeAttribute('title');
+                header.removeAttribute('aria-sort');
+            }
+        });
+    }
+
+    function getSortableCellValue(cell) {
+        const raw = (cell?.dataset.sortValue || cell?.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!raw || raw === '-') return { type: 'empty', value: '' };
+        const dateMatch = raw.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+        if (dateMatch) {
+            return { type: 'number', value: Number(`${dateMatch[1]}${dateMatch[2].padStart(2, '0')}${dateMatch[3].padStart(2, '0')}`) };
+        }
+        const numericText = raw.replace(/^#/, '').replace(/,/g, '').replace(/\s*(원|회|건|명|권|%|페이지)$/u, '');
+        if (/^-?\d+(?:\.\d+)?$/.test(numericText)) return { type: 'number', value: Number(numericText) };
+        return { type: 'text', value: raw };
+    }
+
+    function sortTableByHeader(header) {
+        if (!isSortableTableHeader(header)) return;
+        const table = header.closest('table');
+        const columnIndex = Array.from(header.parentElement.children).indexOf(header);
+        const previousColumn = Number(table.dataset.sortColumn);
+        const direction = previousColumn === columnIndex && table.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
+
+        table.querySelectorAll('thead th').forEach(item => {
+            item.classList.remove('sort-asc', 'sort-desc');
+            if (item.classList.contains('sortable-header')) item.setAttribute('aria-sort', 'none');
+        });
+        header.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        header.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
+        table.dataset.sortColumn = String(columnIndex);
+        table.dataset.sortDirection = direction;
+
+        Array.from(table.tBodies).forEach(body => {
+            const rows = Array.from(body.rows);
+            if (rows.length < 2 || rows.some(row => row.cells.length <= columnIndex || row.cells[0]?.colSpan > 1)) return;
+            rows.sort((leftRow, rightRow) => {
+                const left = getSortableCellValue(leftRow.cells[columnIndex]);
+                const right = getSortableCellValue(rightRow.cells[columnIndex]);
+                if (left.type === 'empty' && right.type !== 'empty') return 1;
+                if (right.type === 'empty' && left.type !== 'empty') return -1;
+                const result = left.type === 'number' && right.type === 'number'
+                    ? left.value - right.value
+                    : String(left.value).localeCompare(String(right.value), 'ko', { numeric: true, sensitivity: 'base' });
+                return direction === 'asc' ? result : -result;
+            });
+            rows.forEach(row => body.appendChild(row));
+        });
+    }
+
+    document.querySelectorAll('table.modern-table').forEach(enhanceSortableTable);
+    const sortableTableObserver = new MutationObserver(mutations => {
+        const tables = new Set();
+        mutations.forEach(mutation => {
+            const table = mutation.target.nodeType === Node.ELEMENT_NODE
+                ? mutation.target.closest?.('table.modern-table')
+                : mutation.target.parentElement?.closest('table.modern-table');
+            if (table) tables.add(table);
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
+                if (node.matches?.('table.modern-table')) tables.add(node);
+                node.querySelectorAll?.('table.modern-table').forEach(item => tables.add(item));
+            });
+        });
+        tables.forEach(enhanceSortableTable);
+    });
+    sortableTableObserver.observe(document.querySelector('main'), { childList: true, subtree: true });
+
+    document.addEventListener('click', event => {
+        const header = event.target.closest('table.modern-table thead th.sortable-header');
+        if (header) sortTableByHeader(header);
+    });
+    document.addEventListener('keydown', event => {
+        const header = event.target.closest('table.modern-table thead th.sortable-header');
+        if (header && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            sortTableByHeader(header);
+        }
+    });
 
     if (modalAuditDetail) {
         modalAuditDetail.addEventListener('click', (e) => {

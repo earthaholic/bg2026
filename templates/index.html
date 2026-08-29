@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-tuition-history-layout">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1549,7 +1549,7 @@
                                 <div class="form-actions"><button class="btn btn-success btn-lg" type="submit"><i class="fa-solid fa-floppy-disk"></i> 결제 정보 등록</button></div>
                             </form>
                         </div>
-                        <div class="card table-card"><div class="card-header-styled"><h3>결제 이력</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>관리</th></tr></thead><tbody id="tuition-payments-body"></tbody></table></div></div>
+                        <div class="card table-card tuition-payment-history-card"><div class="table-card-header"><h2><i class="fa-solid fa-clock-rotate-left"></i> 결제 이력</h2></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>관리</th></tr></thead><tbody id="tuition-payments-body"></tbody></table></div></div>
                     </div>
                 </section>
 
@@ -2154,6 +2154,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=20260830-tuition-history-layout"></script>
 </body>
 </html>
