@@ -996,8 +996,25 @@ def user_get_students_options(
     advance_student_grades()
     conn = get_db_connection()
     cursor = conn.cursor()
-    where_clause = '' if include_ended else ' WHERE (COALESCE("IsClassEnded", 0) = 0)'
-    cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_clause} ORDER BY "Name" ASC')
+    conditions = []
+    params = []
+    if not include_ended:
+        conditions.append('(COALESCE("IsClassEnded", 0) = 0)')
+    # 일반 선생님은 본인 수업에 배정된 학생만 선택할 수 있다.
+    if current_user.get("role") == "teacher":
+        conditions.append('''EXISTS (
+            SELECT 1
+            FROM "ClassStudents" cs
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            WHERE c."TeacherUsername" = ?
+              AND (cs."StudentId" = "Students".rowid OR cs."StudentId" = "Students"."Id")
+        )''')
+        params.append(current_user["username"])
+    where_clause = f' WHERE {" AND ".join(conditions)}' if conditions else ''
+    cursor.execute(
+        f'SELECT rowid as row_id, * FROM "Students"{where_clause} ORDER BY "Name" ASC',
+        params
+    )
     rows = cursor.fetchall()
     conn.close()
     return {"students": [dict(r) for r in rows]}
@@ -1027,7 +1044,18 @@ def picker_search_students(
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         conds.append('("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)')
-        params = [pattern] * 4
+        params.extend([pattern] * 4)
+
+    # 일반 선생님은 본인 수업에 배정된 학생만 검색할 수 있다.
+    if current_user.get("role") == "teacher":
+        conds.append('''EXISTS (
+            SELECT 1
+            FROM "ClassStudents" cs
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            WHERE c."TeacherUsername" = ?
+              AND (cs."StudentId" = "Students".rowid OR cs."StudentId" = "Students"."Id")
+        )''')
+        params.append(current_user["username"])
 
     where_str = f' WHERE {" AND ".join(conds)}' if conds else ''
     cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT 25', params)
@@ -1475,6 +1503,20 @@ def user_get_monthly_report_studylogs(
     s_row_id = student['row_id']
     s_id = student.get('Id', s_row_id)
     s_name = student.get('Name', '')
+
+    # 일반 선생님은 본인 수업에 배정된 학생의 월말보고만 조회할 수 있다.
+    if current_user.get("role") == "teacher":
+        cursor.execute('''
+            SELECT 1
+            FROM "ClassStudents" cs
+            JOIN "Classes" c ON c."Id" = cs."ClassId"
+            WHERE c."TeacherUsername" = ?
+              AND (cs."StudentId" = ? OR cs."StudentId" = ?)
+            LIMIT 1
+        ''', (current_user["username"], s_row_id, s_id))
+        if not cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=403, detail="본인 수업에 배정된 학생의 월말보고만 조회할 수 있습니다.")
 
     query = '''
         SELECT sl.rowid as row_id, sl.*, 
