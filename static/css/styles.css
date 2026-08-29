@@ -3536,6 +3536,24 @@ body {
 .payroll-summary-card em { font-size: .8rem; font-style: normal; color: #10b981; }
 .payroll-summary-card .is-open { color: #f59e0b; }
 
+.payroll-transfer-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: .75rem;
+    padding: .85rem 1rem;
+    border: 1px solid rgba(59, 130, 246, .3);
+    border-radius: var(--radius-md);
+    background: rgba(59, 130, 246, .08);
+}
+.payroll-transfer-copy strong, .payroll-transfer-copy span { display: block; }
+.payroll-transfer-copy span { margin-top: .2rem; color: var(--text-muted); font-size: .8rem; }
+.payroll-transfer-controls { display: flex; align-items: center; gap: .6rem; }
+.payroll-transfer-controls .form-control { min-width: 180px; }
+.payroll-transfer-check { display: inline-flex; align-items: center; gap: .25rem; margin-top: .35rem; color: var(--primary); font-size: .7rem; cursor: pointer; }
+.payroll-transfer-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+
 .payroll-team-cards { display: grid; gap: 1rem; }
 .payroll-team-card { overflow: hidden; }
 .payroll-unconfigured-card { overflow: hidden; border-color: rgba(245, 158, 11, .5); }
@@ -3562,10 +3580,11 @@ body {
 .payroll-claim-form .btn { flex: 0 0 auto; }
 
 @media (max-width: 640px) {
-    .payroll-filter-heading, .payroll-filter-fields, .payroll-filter-actions, .payroll-claim-form { align-items: stretch; flex-direction: column; }
+    .payroll-filter-heading, .payroll-filter-fields, .payroll-filter-actions, .payroll-claim-form, .payroll-transfer-panel, .payroll-transfer-controls { align-items: stretch; flex-direction: column; }
     .payroll-filter-fields .form-group { min-width: 0; }
     .payroll-filter-fields .btn, .payroll-filter-actions .btn, .payroll-claim-form .btn { width: 100%; }
     .payroll-team-card > header { align-items: flex-start; flex-direction: column; gap: .65rem; }
     .payroll-unconfigured-card > header { align-items: flex-start; gap: .65rem; }
     .payroll-team-total { text-align: left; }
+    .payroll-transfer-controls .form-control { min-width: 0; }
 }

@@ -47,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
+    let payrollTeacherOptions = [];
+    const payrollSelectedSessions = new Map();
 
     // DOM Elements
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
@@ -540,6 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStudentSearchResults();
         } else if (targetView === 'studylog-reg') {
             loadRecentStudyLogs();
+            loadStudyLogAssignmentOptions();
         } else if (targetView === 'studylog-search') {
             loadStudyLogSearchResults();
         } else if (targetView === 'user-manage') {
@@ -1907,6 +1910,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = contentEl ? contentEl.value.trim() : '';
         const specialEl = document.getElementById('studylog-special');
         const isSpecial = specialEl ? specialEl.checked : false;
+        const classId = parseInt(document.getElementById('studylog-class')?.value || '0') || null;
+        const actualTeacherUsername = document.getElementById('studylog-actual-teacher')?.value || '';
 
         const payload = {
             StudentIds: studentIds,
@@ -1915,7 +1920,9 @@ document.addEventListener('DOMContentLoaded', () => {
             StudiedDay: dateVal,
             IsSpecial: isSpecial,
             LessonContent: content,
-            Description: desc
+            Description: desc,
+            ClassId: classId,
+            ActualTeacherUsername: classId ? actualTeacherUsername : ''
         };
 
         try {
@@ -2343,6 +2350,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const chks = document.querySelectorAll('.filter-target-chk:checked');
         return Array.from(chks).map(c => c.value.trim()).filter(Boolean).join(',');
     }
+
+    async function loadStudyLogAssignmentOptions() {
+        const classSelect = document.getElementById('studylog-class');
+        if (!classSelect || !isStaff()) return;
+        const selectedClass = classSelect.value;
+        try {
+            const [classData, teacherData] = await Promise.all([
+                apiFetch('/api/user/classes?limit=100'),
+                apiFetch('/api/user/teachers-options')
+            ]);
+            classSelect.innerHTML = '<option value="">정산에 연결하지 않음</option>' + (classData.classes || []).map(cls =>
+                `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
+            ).join('');
+            classSelect.value = selectedClass;
+            const actualTeacherSelect = document.getElementById('studylog-actual-teacher');
+            actualTeacherSelect.dataset.options = JSON.stringify(teacherData.teachers || []);
+            updateStudyLogActualTeacherOptions();
+        } catch (err) {
+            classSelect.innerHTML = `<option value="">수업 목록 로딩 실패: ${escapeHtml(err.message)}</option>`;
+        }
+    }
+
+    function updateStudyLogActualTeacherOptions() {
+        const classSelect = document.getElementById('studylog-class');
+        const teacherSelect = document.getElementById('studylog-actual-teacher');
+        if (!classSelect || !teacherSelect) return;
+        const classId = classSelect.value;
+        const assignedTeacher = classSelect.selectedOptions[0]?.dataset.teacher || '';
+        let teachers = [];
+        try { teachers = JSON.parse(teacherSelect.dataset.options || '[]'); } catch (_) { teachers = []; }
+        teacherSelect.disabled = !classId;
+        teacherSelect.innerHTML = classId
+            ? teachers.map(teacher => `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`).join('')
+            : '<option value="">수업을 먼저 선택해 주세요</option>';
+    }
+
+    document.getElementById('studylog-class')?.addEventListener('change', updateStudyLogActualTeacherOptions);
 
     async function loadBookStudyStudentCandidates() {
         const query = bookStudyStudentQ.value.trim();
@@ -4935,6 +4979,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (classBatchInfo) classBatchInfo.classList.remove('hidden');
             if (classBatchRegCard) classBatchRegCard.classList.remove('hidden');
             if (!batchStudiedDay.value) batchStudiedDay.value = new Date().toISOString().split('T')[0];
+            if (isStaff()) await loadActualTeacherOptions('batch-actual-teacher', cls.TeacherUsername);
             renderBatchStudentsTable(students);
             await loadSpecialLessonTypeOptions();
             loadBatchStudylogCalendar(getBatchMonth(batchStudiedDay.value));
@@ -5014,6 +5059,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const [year, monthNumber] = month.split('-').map(Number);
         const date = new Date(year, monthNumber - 1 + offset, 1);
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    async function loadActualTeacherOptions(selectId, assignedTeacher) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        const data = await apiFetch('/api/user/teachers-options');
+        select.innerHTML = (data.teachers || []).map(teacher =>
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
+        ).join('');
     }
 
     async function loadSpecialLessonTypeOptions() {
@@ -5346,7 +5400,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!shouldContinue) return;
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, SpecialLessonTypeId: specialLessonTypeId, logs: logs })
+                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, SpecialLessonTypeId: specialLessonTypeId, ActualTeacherUsername: isStaff() ? (document.getElementById('batch-actual-teacher')?.value || '') : '', logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {
@@ -6225,7 +6279,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedTeacher = teacherSelect.value;
         const data = await apiFetch('/api/user/teachers-options');
         let options = '<option value="">전체 선생님</option>';
-        (data.teachers || []).forEach(teacher => {
+        payrollTeacherOptions = data.teachers || [];
+        payrollTeacherOptions.forEach(teacher => {
             const roleLabel = teacher.role === 'manager' ? '관리 선생님' : '선생님';
             options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)} (${roleLabel})</option>`;
         });
@@ -6237,11 +6292,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const month = document.getElementById('payroll-month').value;
         const teacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : '';
         if (!month) return;
+        payrollSelectedSessions.clear();
         const data = await apiFetch(`/api/user/payroll?month=${encodeURIComponent(month)}${teacher ? `&teacher_username=${encodeURIComponent(teacher)}` : ''}`);
         const payrollLines = data.lines || [];
         const unconfiguredLines = payrollLines.filter(line => line.IsRateConfigured === false);
-        renderPayrollUnconfiguredLines(unconfiguredLines);
-        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false));
+        const canTransfer = Boolean(isStaff() && teacher && !data.closed);
+        renderPayrollTransferPanel(canTransfer, teacher);
+        renderPayrollUnconfiguredLines(unconfiguredLines, canTransfer);
+        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer);
         renderPayrollClaims(data.claims || []);
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
         document.getElementById('payroll-summary').innerHTML = `<span class="payroll-summary-label">${escapeHtml(month)} 정산 합계</span><strong>${total.toLocaleString()}원</strong>${data.closed ? '<em><i class="fa-solid fa-lock"></i> 마감 완료</em>' : '<em class="is-open"><i class="fa-solid fa-lock-open"></i> 정산 진행 중</em>'}`;
@@ -6249,19 +6307,49 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-close-payroll').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
     }
 
-    function renderPayrollTeamCards(lines) {
+    function renderPayrollTransferPanel(canTransfer, sourceTeacher) {
+        const panel = document.getElementById('payroll-transfer-panel');
+        panel.classList.toggle('hidden', !canTransfer);
+        const targetSelect = document.getElementById('payroll-transfer-teacher');
+        targetSelect.innerHTML = '<option value="">이전할 선생님 선택</option>' + payrollTeacherOptions
+            .filter(teacher => teacher.username !== sourceTeacher)
+            .map(teacher => `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)}</option>`)
+            .join('');
+        updatePayrollTransferSelection();
+    }
+
+    function payrollSessionKey(classId, studiedDay) {
+        return `${classId}|${studiedDay}`;
+    }
+
+    function payrollTransferCheckbox(line, canTransfer) {
+        if (!canTransfer || !line.ClassId || !line.StudiedDay) return '';
+        const key = payrollSessionKey(line.ClassId, line.StudiedDay);
+        return `<label class="payroll-transfer-check" title="이 차시의 담당 선생님 이전"><input type="checkbox" class="payroll-session-transfer-checkbox" data-session-key="${escapeHtml(key)}" data-class-id="${Number(line.ClassId)}" data-studied-day="${escapeHtml(line.StudiedDay)}" data-class-name="${escapeHtml(line.ClassName || '수업 정보 미연결')}"><span>선택</span></label>`;
+    }
+
+    function updatePayrollTransferSelection() {
+        const count = payrollSelectedSessions.size;
+        const label = document.getElementById('payroll-transfer-selection');
+        const button = document.getElementById('btn-transfer-payroll-sessions');
+        if (label) label.textContent = count ? `${count}개 차시 선택됨` : '선택한 차시 없음';
+        if (button) button.disabled = !count || !document.getElementById('payroll-transfer-teacher')?.value;
+    }
+
+    function renderPayrollTeamCards(lines, canTransfer = false) {
         const container = document.getElementById('payroll-team-cards');
         const teams = new Map();
         lines.forEach(line => {
-            const teamName = line.ClassName || '수업 정보 미연결';
-            if (!teams.has(teamName)) teams.set(teamName, []);
-            teams.get(teamName).push(line);
+            const teamKey = `${line.ClassId || 'unlinked'}|${line.ClassName || '수업 정보 미연결'}`;
+            if (!teams.has(teamKey)) teams.set(teamKey, []);
+            teams.get(teamKey).push(line);
         });
         if (!teams.size) {
             container.innerHTML = '<div class="card payroll-empty-state"><i class="fa-solid fa-calendar-xmark"></i><p>해당 월에 정산할 수업 내역이 없습니다.</p></div>';
             return;
         }
-        container.innerHTML = [...teams.entries()].map(([teamName, teamLines]) => {
+        container.innerHTML = [...teams.values()].map(teamLines => {
+            const teamName = teamLines[0].ClassName || '수업 정보 미연결';
             const lessonDates = [...new Set(teamLines.map(line => line.StudiedDay).filter(Boolean))].sort();
             // 정산 표는 비교하기 쉽게 항상 1~5차시 칸을 유지한다.
             const dates = Array.from({ length: 5 }, (_, index) => lessonDates[index] || '');
@@ -6273,7 +6361,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 students.get(key).lines.push(line);
             });
             const teamTotal = teamLines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
-            const headerCells = dates.map((date, index) => `<th><span>${index + 1}차시</span><small>${date ? escapeHtml(date.slice(5).replace('-', '/')) : '&nbsp;'}</small></th>`).join('');
+            const headerCells = dates.map((date, index) => {
+                const sessionLine = date ? teamLines.find(line => line.StudiedDay === date) : null;
+                const checkbox = sessionLine ? payrollTransferCheckbox(sessionLine, canTransfer) : '';
+                return `<th><span>${index + 1}차시</span><small>${date ? escapeHtml(date.slice(5).replace('-', '/')) : '&nbsp;'}</small>${checkbox}</th>`;
+            }).join('');
             const rows = [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(student => {
                 const attendedDates = new Set(student.lines.map(line => line.StudiedDay));
                 const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
@@ -6283,15 +6375,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    function renderPayrollUnconfiguredLines(lines) {
+    function renderPayrollUnconfiguredLines(lines, canTransfer = false) {
         const card = document.getElementById('payroll-unconfigured-card');
         card.classList.toggle('hidden', !lines.length);
+        document.getElementById('payroll-unconfigured-transfer-head').classList.toggle('hidden', !canTransfer);
         if (!lines.length) return;
         document.getElementById('payroll-unconfigured-count').textContent = `${lines.length}건`;
         document.getElementById('payroll-unconfigured-body').innerHTML = lines.map(line => {
             const grade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
             const lessonType = line.IsSpecial ? '특강' : '일반 수업';
-            return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
+            const transferCell = canTransfer ? `<td>${payrollTransferCheckbox(line, true)}</td>` : '';
+            return `<tr>${transferCell}<td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
         }).join('');
     }
 
@@ -6317,6 +6411,45 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
     document.getElementById('payroll-teacher')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
     document.getElementById('payroll-month')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
+    document.getElementById('payroll-transfer-teacher')?.addEventListener('change', updatePayrollTransferSelection);
+    document.getElementById('view-teacher-payroll')?.addEventListener('change', event => {
+        const checkbox = event.target.closest('.payroll-session-transfer-checkbox');
+        if (!checkbox) return;
+        const key = checkbox.dataset.sessionKey;
+        if (checkbox.checked) {
+            payrollSelectedSessions.set(key, {
+                ClassId: Number(checkbox.dataset.classId),
+                StudiedDay: checkbox.dataset.studiedDay,
+                ClassName: checkbox.dataset.className
+            });
+        } else {
+            payrollSelectedSessions.delete(key);
+        }
+        document.querySelectorAll('.payroll-session-transfer-checkbox').forEach(item => {
+            if (item.dataset.sessionKey === key) item.checked = checkbox.checked;
+        });
+        updatePayrollTransferSelection();
+    });
+    document.getElementById('btn-transfer-payroll-sessions')?.addEventListener('click', async () => {
+        const month = document.getElementById('payroll-month').value;
+        const sourceTeacher = document.getElementById('payroll-teacher').value.trim();
+        const targetTeacher = document.getElementById('payroll-transfer-teacher').value.trim();
+        const sessions = [...payrollSelectedSessions.values()];
+        if (!month || !sourceTeacher || !targetTeacher || !sessions.length) return;
+        const sessionSummary = sessions.map(item => `${item.ClassName} ${item.StudiedDay}`).join('\n');
+        if (!confirm(`${sourceTeacher} 선생님의 아래 ${sessions.length}개 차시를 ${targetTeacher} 선생님에게 이전할까요?\n\n${sessionSummary}\n\n이전 즉시 두 선생님의 정산 금액이 다시 계산됩니다.`)) return;
+        const result = await apiFetch('/api/user/payroll/transfer-sessions', {
+            method: 'POST',
+            body: JSON.stringify({
+                PayrollMonth: month,
+                SourceTeacherUsername: sourceTeacher,
+                TargetTeacherUsername: targetTeacher,
+                Sessions: sessions.map(({ ClassId, StudiedDay }) => ({ ClassId, StudiedDay }))
+            })
+        });
+        showToast(result.message, 'success');
+        await loadTeacherPayroll();
+    });
     document.getElementById('btn-backfill-payroll-class-links')?.addEventListener('click', async () => {
         const month = document.getElementById('payroll-month').value;
         if (!month || !confirm(`${month}의 수업 연결이 비어 있는 학습 이력을 자동 연결할까요?\n\n학생별 일반/특강 수업이 각각 정확히 하나인 경우에만 처리하며, 기존 연결은 변경하지 않습니다.`)) return;
