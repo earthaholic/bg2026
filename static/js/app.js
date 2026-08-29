@@ -5039,12 +5039,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const categories = categoriesData.categories || [];
             document.getElementById('class-category-list').innerHTML = categories.length ? categories.map(c => `<span class="badge"><i class="fa-solid fa-tag"></i> ${escapeHtml(c.Name)}</span>`).join('') : '<span class="text-muted">등록된 카테고리가 없습니다.</span>';
             document.getElementById('rate-category').innerHTML = '<option value="">-- 카테고리 선택 --</option>' + categories.map(c => `<option value="${c.Id}">${escapeHtml(c.Name)}</option>`).join('');
-            const classes = classesData.classes || [];
+            const classes = (classesData.classes || []).filter(cls => !cls.CategoryId);
             const assignmentBody = document.getElementById('class-category-assignment-body');
             assignmentBody.innerHTML = classes.length ? classes.map(cls => {
                 const options = '<option value="">-- 카테고리 선택 --</option>' + categories.map(c => `<option value="${c.Id}" ${Number(cls.CategoryId) === Number(c.Id) ? 'selected' : ''}>${escapeHtml(c.Name)}</option>`).join('');
                 return `<tr><td><strong>${escapeHtml(cls.ClassName)}</strong></td><td>${escapeHtml(cls.TeacherUsername || '-')}</td><td><select class="form-control class-category-assignment" data-class-id="${cls.Id}">${options}</select></td><td><button type="button" class="btn btn-xs btn-primary btn-save-class-category" data-class-id="${cls.Id}"><i class="fa-solid fa-floppy-disk"></i> 저장</button></td></tr>`;
-            }).join('') : '<tr><td colspan="4" class="empty-state">등록된 수업이 없습니다.</td></tr>';
+            }).join('') : '<tr><td colspan="4" class="empty-state">카테고리가 미설정된 수업이 없습니다.</td></tr>';
             assignmentBody.querySelectorAll('.btn-save-class-category').forEach(button => button.addEventListener('click', () => saveClassCategoryAssignment(button.dataset.classId)));
             const rates = ratesData.rates || [];
             document.getElementById('class-pay-rate-body').innerHTML = rates.length ? rates.map(r => `<tr><td>${escapeHtml(r.CategoryName)}</td><td>${escapeHtml(r.GradeGroup)}</td><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">등록된 일반 수업 단가가 없습니다.</td></tr>';
