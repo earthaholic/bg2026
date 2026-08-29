@@ -6238,7 +6238,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const teacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : '';
         if (!month) return;
         const data = await apiFetch(`/api/user/payroll?month=${encodeURIComponent(month)}${teacher ? `&teacher_username=${encodeURIComponent(teacher)}` : ''}`);
-        renderPayrollTeamCards(data.lines || []);
+        const payrollLines = data.lines || [];
+        const unconfiguredLines = payrollLines.filter(line => line.IsRateConfigured === false);
+        renderPayrollUnconfiguredLines(unconfiguredLines);
+        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false));
         renderPayrollClaims(data.claims || []);
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
         document.getElementById('payroll-summary').innerHTML = `<span class="payroll-summary-label">${escapeHtml(month)} 정산 합계</span><strong>${total.toLocaleString()}원</strong>${data.closed ? '<em><i class="fa-solid fa-lock"></i> 마감 완료</em>' : '<em class="is-open"><i class="fa-solid fa-lock-open"></i> 정산 진행 중</em>'}`;
@@ -6259,22 +6262,48 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         container.innerHTML = [...teams.entries()].map(([teamName, teamLines]) => {
-            const dates = [...new Set(teamLines.map(line => line.StudiedDay).filter(Boolean))].sort();
+            const lessonDates = [...new Set(teamLines.map(line => line.StudiedDay).filter(Boolean))].sort();
+            // 정산 표는 비교하기 쉽게 항상 1~5차시 칸을 유지한다.
+            const dates = Array.from({ length: 5 }, (_, index) => lessonDates[index] || '');
             const students = new Map();
             teamLines.forEach(line => {
-                const key = `${line.StudentName || '-'}|${line.GradeSnapshot || line.CurrentGrade || '-'}`;
-                if (!students.has(key)) students.set(key, { name: line.StudentName || '-', grade: line.GradeSnapshot || line.CurrentGrade || '-', lines: [] });
+                const formattedGrade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
+                const key = `${line.StudentName || '-'}|${formattedGrade}`;
+                if (!students.has(key)) students.set(key, { name: line.StudentName || '-', grade: formattedGrade, lines: [] });
                 students.get(key).lines.push(line);
             });
             const teamTotal = teamLines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
-            const headerCells = dates.map((date, index) => `<th><span>${index + 1}차시</span><small>${escapeHtml(date.slice(5).replace('-', '/'))}</small></th>`).join('');
+            const headerCells = dates.map((date, index) => `<th><span>${index + 1}차시</span><small>${date ? escapeHtml(date.slice(5).replace('-', '/')) : '&nbsp;'}</small></th>`).join('');
             const rows = [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(student => {
                 const attendedDates = new Set(student.lines.map(line => line.StudiedDay));
                 const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
-                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td>${dates.map(date => `<td class="${attendedDates.has(date) ? 'is-attended' : ''}">${attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
+                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td>${dates.map(date => `<td class="${date && attendedDates.has(date) ? 'is-attended' : ''}">${date && attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
             }).join('');
             return `<article class="card payroll-team-card"><header><div><span class="payroll-team-eyebrow">수업 팀</span><h3>${escapeHtml(teamName)}</h3></div><div class="payroll-team-total"><span>팀 정산액</span><strong>${teamTotal.toLocaleString()}원</strong></div></header><div class="table-responsive"><table class="modern-table payroll-session-table"><thead><tr><th>학년</th><th>이름</th>${headerCells}<th>총 차시</th><th>정산액</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
         }).join('');
+    }
+
+    function renderPayrollUnconfiguredLines(lines) {
+        const card = document.getElementById('payroll-unconfigured-card');
+        card.classList.toggle('hidden', !lines.length);
+        if (!lines.length) return;
+        document.getElementById('payroll-unconfigured-count').textContent = `${lines.length}건`;
+        document.getElementById('payroll-unconfigured-body').innerHTML = lines.map(line => {
+            const grade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
+            const lessonType = line.IsSpecial ? '특강' : '일반 수업';
+            return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
+        }).join('');
+    }
+
+    function formatPayrollGrade(grade) {
+        const value = String(grade || '').replace(/\s+/g, '');
+        const elementary = value.match(/^초(?:등)?(?:학교)?([1-6])(?:학년)?$/) || value.match(/^([1-6])(?:학년)?$/);
+        if (elementary) return `초${elementary[1]}`;
+        const middle = value.match(/^중(?:등)?(?:학교)?([1-3])(?:학년)?$/);
+        if (middle) return `중${middle[1]}`;
+        const middleNumber = value.match(/^([7-9])(?:학년)?$/);
+        if (middleNumber) return `중${Number(middleNumber[1]) - 6}`;
+        return value || '-';
     }
 
     function renderPayrollClaims(claims) {

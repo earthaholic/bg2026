@@ -3538,6 +3538,11 @@ body {
 
 .payroll-team-cards { display: grid; gap: 1rem; }
 .payroll-team-card { overflow: hidden; }
+.payroll-unconfigured-card { overflow: hidden; border-color: rgba(245, 158, 11, .5); }
+.payroll-unconfigured-card > header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem .55rem; }
+.payroll-unconfigured-card h3 { margin: .2rem 0 0; color: #f59e0b; font-size: 1.05rem; }
+.payroll-unconfigured-card > p { margin: 0; padding: 0 1.25rem 1rem; color: var(--text-muted); font-size: .85rem; }
+.payroll-unconfigured-reason { color: #d97706; font-weight: 600; }
 .payroll-team-card > header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); }
 .payroll-team-card h3 { margin: .2rem 0 0; font-size: 1.05rem; }
 .payroll-team-eyebrow { color: var(--primary); font-size: .75rem; font-weight: 700; }
@@ -3561,5 +3566,6 @@ body {
     .payroll-filter-fields .form-group { min-width: 0; }
     .payroll-filter-fields .btn, .payroll-filter-actions .btn, .payroll-claim-form .btn { width: 100%; }
     .payroll-team-card > header { align-items: flex-start; flex-direction: column; gap: .65rem; }
+    .payroll-unconfigured-card > header { align-items: flex-start; gap: .65rem; }
     .payroll-team-total { text-align: left; }
 }

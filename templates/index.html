@@ -971,6 +971,11 @@
                             </div>
                             <div id="payroll-summary" class="payroll-summary-card"><span>정산월을 선택해 조회하세요.</span></div>
                         </div>
+                        <div id="payroll-unconfigured-card" class="card payroll-unconfigured-card hidden">
+                            <header><div><span class="payroll-team-eyebrow">정산 확인 필요</span><h3><i class="fa-solid fa-triangle-exclamation"></i> 정산 기준이 없는 학생</h3></div><span id="payroll-unconfigured-count" class="badge badge-warning">0건</span></header>
+                            <p>아래 학생은 수업 카테고리 또는 해당 학년의 단가가 설정되지 않아 정산액에 반영되지 않았습니다.</p>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>팀</th><th>학년</th><th>학생</th><th>수업일</th><th>구분</th><th>미정산 원인</th></tr></thead><tbody id="payroll-unconfigured-body"></tbody></table></div>
+                        </div>
                         <div id="payroll-team-cards" class="payroll-team-cards"></div>
                         <div id="payroll-claim-list-card" class="card table-card hidden"><div class="card-header-styled"><h3><i class="fa-solid fa-receipt"></i> 추가 청구</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>청구일</th><th>항목</th><th>사유</th><th>상태</th><th>금액</th></tr></thead><tbody id="payroll-claims-body"></tbody></table></div></div>
                         <div id="payroll-claim-card" class="card form-card"><div class="card-header-styled"><h3><i class="fa-solid fa-circle-plus"></i> 추가 청구 등록</h3></div><form id="form-payroll-claim" class="payroll-claim-form"><div class="form-group"><label>청구일</label><input id="payroll-claim-date" class="form-control" type="date" required></div><div class="form-group"><label>항목명</label><input id="payroll-claim-name" class="form-control" required></div><div class="form-group"><label>금액</label><input id="payroll-claim-amount" class="form-control" type="number" min="0" required></div><div class="form-group"><label>사유</label><input id="payroll-claim-description" class="form-control"></div><button class="btn btn-success"><i class="fa-solid fa-plus"></i> 청구 등록</button></form></div>
