@@ -2495,6 +2495,21 @@ body {
     overflow-y: auto;
 }
 
+.settings-inline-form,
+.settings-grid-form {
+    display: grid;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+.settings-inline-form { grid-template-columns: minmax(240px, 1fr) auto; }
+.settings-grid-form { grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; }
+.settings-chip-list { display: flex; flex-wrap: wrap; gap: .6rem; }
+.settings-chip-list .badge { padding: .55rem .8rem; }
+@media (max-width: 900px) {
+    .settings-inline-form, .settings-grid-form { grid-template-columns: 1fr; }
+}
+
 .consultation-modal-card {
     width: min(720px, 94vw);
 }

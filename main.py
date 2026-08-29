@@ -1611,6 +1611,19 @@ def _validate_class_payload(payload: ClassRequest) -> None:
     if payload.StartTime and not re.match(r'^\d{2}:\d{2}$', payload.StartTime):
         raise HTTPException(status_code=400, detail="시간은 HH:MM 형식으로 입력해 주세요.")
 
+    if payload.CategoryId is None:
+        raise HTTPException(status_code=400, detail="수업 카테고리를 선택해 주세요.")
+    conn = get_db_connection()
+    try:
+        category = conn.execute(
+            'SELECT 1 FROM "ClassCategories" WHERE "Id" = ? AND "IsActive" = 1',
+            (payload.CategoryId,)
+        ).fetchone()
+        if not category:
+            raise HTTPException(status_code=400, detail="사용 가능한 수업 카테고리를 선택해 주세요.")
+    finally:
+        conn.close()
+
 def _resolve_student_row_id(student_id: int) -> Optional[int]:
     """학생의 rowid 또는 Id 중 실제 행의 rowid를 반환한다. 없으면 None."""
     conn = get_db_connection()
@@ -1895,6 +1908,8 @@ def user_batch_register_class_studylogs(
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
+    if any(item.include and item.is_special for item in payload.logs) and not payload.SpecialLessonTypeId:
+        raise HTTPException(status_code=400, detail="특강으로 등록할 학생이 있으면 특강 유형을 선택해 주세요.")
     conn = get_db_connection()
     try:
         is_cancelled_day = conn.execute(
@@ -2050,12 +2065,31 @@ def create_payroll_rate(payload: PayRateRequest, current_user: Dict[str, Any] = 
         conn.execute('INSERT OR REPLACE INTO "TeacherPayRates"("CategoryId","GradeGroup","UnitAmount","EffectiveFrom") VALUES(?,?,?,?)',(payload.CategoryId,payload.GradeGroup,payload.UnitAmount,payload.EffectiveFrom)); conn.commit(); return {"status":"success"}
     finally: conn.close()
 
+@app.get("/api/user/payroll/rates")
+def get_payroll_rates(current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn=get_db_connection()
+    try:
+        rows=conn.execute('''SELECT r.*, c."Name" AS "CategoryName" FROM "TeacherPayRates" r
+                             JOIN "ClassCategories" c ON c."Id"=r."CategoryId"
+                             ORDER BY r."EffectiveFrom" DESC, c."Name", r."GradeGroup"''').fetchall()
+        return {"rates":[dict(r) for r in rows]}
+    finally: conn.close()
+
 @app.post("/api/user/payroll/special-types")
 def create_special_type(payload: SpecialLessonTypeRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
     if not payload.Name.strip() or payload.UnitAmount < 0 or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.EffectiveFrom): raise HTTPException(status_code=400, detail="특강 유형 정보를 확인해 주세요.")
     conn=get_db_connection()
     try:
         conn.execute('INSERT OR REPLACE INTO "SpecialLessonTypes"("Name","UnitAmount","EffectiveFrom") VALUES(?,?,?)',(payload.Name.strip(),payload.UnitAmount,payload.EffectiveFrom)); conn.commit(); return {"status":"success"}
+    finally: conn.close()
+
+@app.get("/api/user/payroll/special-types")
+def get_special_types(active_only: bool = Query(False), current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn=get_db_connection()
+    try:
+        where=' WHERE "IsActive"=1' if active_only else ''
+        rows=conn.execute(f'SELECT * FROM "SpecialLessonTypes"{where} ORDER BY "EffectiveFrom" DESC, "Name"').fetchall()
+        return {"special_types":[dict(r) for r in rows]}
     finally: conn.close()
 
 @app.get("/api/user/payroll")

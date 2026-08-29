@@ -716,7 +716,10 @@ def delete_class(class_id: int) -> int:
 def get_class_by_id(class_id: int) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM "Classes" WHERE "Id" = ?', (class_id,))
+    cursor.execute('''SELECT c.*, cc."Name" AS "CategoryName"
+                      FROM "Classes" c
+                      LEFT JOIN "ClassCategories" cc ON cc."Id" = c."CategoryId"
+                      WHERE c."Id" = ?''', (class_id,))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -755,9 +758,11 @@ def search_classes(
 
     offset = (page - 1) * limit
     data_query = f'''
-        SELECT c."Id", c."ClassName", c."TeacherUsername", c."DayOfWeek", c."StartTime", c."CreatedAt",
+        SELECT c."Id", c."ClassName", c."TeacherUsername", c."DayOfWeek", c."StartTime", c."CategoryId",
+               cc."Name" AS "CategoryName", c."CreatedAt",
                (SELECT COUNT(*) FROM "ClassStudents" cs WHERE cs."ClassId" = c."Id") AS StudentCount
         FROM "Classes" c
+        LEFT JOIN "ClassCategories" cc ON cc."Id" = c."CategoryId"
         {where_str}
         ORDER BY c."Id" DESC LIMIT {limit} OFFSET {offset}
     '''
