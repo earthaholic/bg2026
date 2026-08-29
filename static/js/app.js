@@ -5178,18 +5178,40 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         if (classBatchResult) classBatchResult.classList.add('hidden');
         if (!activeBatchClassId) { alert('먼저 수업을 선택해 주세요.'); return; }
+        const isCancelled = !!batchIsCancelled?.checked;
+        const dateVal = batchStudiedDay ? batchStudiedDay.value : '';
+        if (!dateVal) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = '수업 일자를 입력해 주세요.';
+            classBatchResult.classList.remove('hidden');
+            return;
+        }
+        if (isCancelled) {
+            const reason = document.getElementById('batch-cancellation-reason')?.value.trim() || '';
+            if (!window.confirm(`${dateVal} 수업을 휴강으로 등록하시겠습니까?\n휴강은 학생별 학습 이력이나 도서 기록을 만들지 않습니다.`)) return;
+            try {
+                const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
+                    method: 'POST',
+                    body: JSON.stringify({ StudiedDay: dateVal, IsCancelled: true, CancellationReason: reason })
+                });
+                classBatchResult.className = 'alert alert-success';
+                classBatchResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}`;
+                classBatchResult.classList.remove('hidden');
+                const reasonEl = document.getElementById('batch-cancellation-reason');
+                if (reasonEl) reasonEl.value = '';
+                loadBatchStudylogCalendar(getBatchMonth(dateVal));
+            } catch (err) {
+                classBatchResult.className = 'alert alert-danger';
+                classBatchResult.textContent = err.message;
+                classBatchResult.classList.remove('hidden');
+            }
+            return;
+        }
         const bookIdEl = document.getElementById('batch-book-id');
         const bookId = bookIdEl ? parseInt(bookIdEl.value || '0') : 0;
         if (!bookId || bookId <= 0) {
             classBatchResult.className = 'alert alert-danger';
             classBatchResult.textContent = '도서를 선택해 주세요.';
-            classBatchResult.classList.remove('hidden');
-            return;
-        }
-        const dateVal = batchStudiedDay ? batchStudiedDay.value : '';
-        if (!dateVal) {
-            classBatchResult.className = 'alert alert-danger';
-            classBatchResult.textContent = '학습 일자를 입력해 주세요.';
             classBatchResult.classList.remove('hidden');
             return;
         }

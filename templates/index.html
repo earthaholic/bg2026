@@ -1575,11 +1575,19 @@
                         <div id="class-batch-reg-card" class="card hidden">
                             <div class="card-header-styled">
                                 <h3><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</h3>
-                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 결석 학생은 참석 체크를 해제하세요. 특강은 수업 등록 시 설정한 값이 미리 체크되어 있습니다.</p>
+                                <p class="subtitle">도서와 학습 일자를 선택하면 모든 수강 학생의 학습 기록을 한 번에 등록할 수 있습니다. 휴강은 도서·학생 기록 없이 수업 일정으로 등록됩니다. 결석 학생은 참석 체크를 해제하세요.</p>
                             </div>
 
                             <form id="form-class-batch-studylog" class="book-form">
-                                <div class="form-section">
+                                <div class="form-section batch-registration-mode">
+                                    <label class="batch-cancellation-toggle" for="batch-is-cancelled">
+                                        <input type="checkbox" id="batch-is-cancelled">
+                                        <span><i class="fa-solid fa-ban"></i> 휴강으로 등록</span>
+                                    </label>
+                                    <p class="text-muted">휴강은 도서·학생별 학습 이력을 만들지 않고, 선택한 수업의 일정으로만 기록됩니다.</p>
+                                </div>
+
+                                <div id="batch-book-section" class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-book"></i> 1. 학습 도서 선택</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
@@ -1607,8 +1615,8 @@
                                     <div class="batch-calendar-panel" aria-live="polite">
                                         <div class="batch-calendar-header">
                                             <div>
-                                                <strong><i class="fa-solid fa-calendar-days"></i> 기존 학습 이력</strong>
-                                                <p>이전 달·선택 월·다음 달의 표시된 날짜에는 이 수업 학생의 학습 기록이 있습니다.</p>
+                                                <strong><i class="fa-solid fa-calendar-days"></i> 기존 학습 이력 · 휴강 일정</strong>
+                                                <p>이전 달·선택 월·다음 달의 표시된 날짜에는 이 수업의 학습 이력 또는 휴강 일정이 있습니다.</p>
                                             </div>
                                             <div class="batch-calendar-controls">
                                                 <button type="button" id="btn-batch-calendar-prev" class="btn btn-outline btn-xs" aria-label="이전 달"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1622,14 +1630,21 @@
                                     </div>
                                 </div>
 
-                                <div class="form-section">
+                                <div id="batch-cancellation-section" class="form-section hidden">
+                                    <h4 class="section-title"><i class="fa-solid fa-ban"></i> 휴강 사유 (선택)</h4>
+                                    <div class="form-group">
+                                        <textarea id="batch-cancellation-reason" class="form-control" rows="3" placeholder="휴강 사유를 입력하세요. 예: 공휴일, 선생님 일정, 천재지변"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 3. 수업 내용 (선택)</h4>
                                     <div class="form-group">
                                         <textarea id="batch-lesson-content" name="LessonContent" class="form-control" rows="3" placeholder="이번 수업에서 다룬 주요 내용, 진도, 다룬 문제 등을 입력하세요. 모든 학생의 학습 기록에 동일하게 저장됩니다. (선택사항)"></textarea>
                                     </div>
                                 </div>
 
-                                <div class="form-section">
+                                <div class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-users"></i> 4. 학생별 참석 여부 / 특강 여부</h4>
                                     <div id="class-batch-students" class="table-responsive">
                                         <table class="modern-table">
@@ -1651,7 +1666,7 @@
                                 <div id="class-batch-result" class="alert hidden"></div>
 
                                 <div class="form-submit-actions">
-                                    <button type="submit" class="btn btn-success btn-lg btn-glow">
+                                    <button type="submit" id="btn-submit-class-batch" class="btn btn-success btn-lg btn-glow">
                                         <i class="fa-solid fa-floppy-disk"></i> 선택 학생 학습 기록 일괄 등록
                                     </button>
                                 </div>

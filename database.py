@@ -140,6 +140,20 @@ def init_system_tables():
             UNIQUE("ClassId", "StudentId")
         )
     """)
+    # 휴강은 학습 이력과 달리 도서·학생에 귀속되지 않는 수업 단위 일정이다.
+    # StudyLogs에 가짜 도서/학생 행을 만들지 않고 별도 테이블에 보관한다.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "ClassCancellations" (
+            "Id" INTEGER PRIMARY KEY,
+            "ClassId" INTEGER NOT NULL,
+            "CancelledDay" TEXT NOT NULL,
+            "Reason" TEXT DEFAULT '',
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
+            "CreatedBy" TEXT DEFAULT '',
+            UNIQUE("ClassId", "CancelledDay")
+        )
+    """)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_class_cancellations_class_day ON "ClassCancellations"("ClassId", "CancelledDay")')
     # ClassStudents에 특강 여부(IsSpecial) 컬럼 보완 (기존 DB 대응)
     try:
         cursor.execute('PRAGMA table_info("ClassStudents")')

@@ -1800,6 +1800,12 @@ def user_batch_register_class_studylogs(
             ).fetchone()
             if existing:
                 raise HTTPException(status_code=409, detail="해당 날짜는 이미 휴강으로 등록되어 있습니다.")
+            studylog_exists = cursor.execute(
+                'SELECT 1 FROM "StudyLogs" WHERE "ClassId" = ? AND "StudiedDay" = ? LIMIT 1',
+                (class_id, day)
+            ).fetchone()
+            if studylog_exists:
+                raise HTTPException(status_code=409, detail="해당 날짜에 이미 학습 이력이 등록되어 있어 휴강으로 바꿀 수 없습니다.")
             cursor.execute('''
                 INSERT INTO "ClassCancellations" ("ClassId", "CancelledDay", "Reason", "CreatedBy")
                 VALUES (?, ?, ?, ?)
@@ -1825,6 +1831,16 @@ def user_batch_register_class_studylogs(
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
+    conn = get_db_connection()
+    try:
+        is_cancelled_day = conn.execute(
+            'SELECT 1 FROM "ClassCancellations" WHERE "ClassId" = ? AND "CancelledDay" = ?',
+            (class_id, day)
+        ).fetchone()
+        if is_cancelled_day:
+            raise HTTPException(status_code=409, detail="해당 날짜는 휴강으로 등록되어 있어 학습 이력을 추가할 수 없습니다.")
+    finally:
+        conn.close()
     lesson_content = (payload.LessonContent or "").strip()
     actual_teacher = (payload.ActualTeacherUsername or "").strip()
     if actual_teacher and actual_teacher != class_row["TeacherUsername"]:
