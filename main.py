@@ -2169,6 +2169,8 @@ def close_payroll(month: str, teacher_username: str = Query(...), current_user: 
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
     if not get_user_by_username(teacher_username): raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
     rows=_payroll_rows(month, teacher_username)
+    if any(not row.get("IsRateConfigured", True) for row in rows):
+        raise HTTPException(status_code=400, detail="단가가 설정되지 않은 수업 내역이 있어 정산을 마감할 수 없습니다.")
     conn=get_db_connection()
     try:
         if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month,teacher_username)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 선생님 정산입니다.")
@@ -2228,13 +2230,23 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
             if teacher_username and teacher != teacher_username: continue
             if r["IsSpecial"]:
                 rate=conn.execute('SELECT "UnitAmount" FROM "SpecialLessonTypes" WHERE "Id"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["SpecialLessonTypeId"],r["StudiedDay"])).fetchone()
-                reason="특강"
+                reason="특강" if rate else "특강 단가 미설정"
             else:
                 rate=conn.execute('SELECT "UnitAmount" FROM "TeacherPayRates" WHERE "CategoryId"=? AND "GradeGroup"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',(r["CategoryId"],_grade_group(r["GradeSnapshot"]),r["StudiedDay"])).fetchone()
-                reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업'
-            if rate:
-                r.update({"TeacherUsername":teacher,"UnitAmount":rate[0],"Amount":rate[0],"Reason":reason})
-                rows.append(r)
+                if r["CategoryId"] is None:
+                    reason="수업 카테고리 미설정"
+                elif not rate:
+                    reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업 단가 미설정'
+                else:
+                    reason=f'{_grade_group(r["GradeSnapshot"])} 일반 수업'
+            r.update({
+                "TeacherUsername": teacher,
+                "UnitAmount": rate[0] if rate else 0,
+                "Amount": rate[0] if rate else 0,
+                "Reason": reason,
+                "IsRateConfigured": bool(rate)
+            })
+            rows.append(r)
         return rows
     finally:
         conn.close()
