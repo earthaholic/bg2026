@@ -3479,10 +3479,19 @@ body {
 
 .payroll-layout {
     display: flex;
-    flex: 1;
+    flex: 0 0 auto;
     flex-direction: column;
     gap: 1rem;
-    min-height: 0;
+    min-height: 100%;
+    width: 100%;
+}
+
+/* 화면 높이가 부족해도 카드가 0px까지 압축되지 않고 뷰 전체가 스크롤을 담당한다. */
+.payroll-layout > .card,
+.payroll-layout > .payroll-team-cards,
+.payroll-team-cards > .payroll-team-card {
+    flex: 0 0 auto;
+    min-height: max-content;
 }
 
 .payroll-filter-card {
@@ -3556,7 +3565,9 @@ body {
 
 .payroll-team-cards { display: grid; gap: 1rem; }
 .payroll-team-card { overflow: hidden; }
-.payroll-unconfigured-card { overflow: hidden; border-color: rgba(245, 158, 11, .5); }
+.payroll-unconfigured-card { overflow: visible; border-color: rgba(245, 158, 11, .5); }
+.payroll-unconfigured-card > .table-responsive { flex: 0 0 auto; min-height: max-content; overflow-x: auto; overflow-y: visible; }
+.payroll-unconfigured-card .modern-table { min-height: max-content; }
 .payroll-unconfigured-card > header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem .55rem; }
 .payroll-unconfigured-card h3 { margin: .2rem 0 0; color: #f59e0b; font-size: 1.05rem; }
 .payroll-unconfigured-card > p { margin: 0; padding: 0 1.25rem 1rem; color: var(--text-muted); font-size: .85rem; }
