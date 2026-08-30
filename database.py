@@ -185,13 +185,8 @@ def init_system_tables():
         "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0), "EffectiveFrom" TEXT NOT NULL,
         "CreatedAt" TEXT DEFAULT (datetime('now','localtime')), UNIQUE("CategoryId", "GradeGroup", "EffectiveFrom")
     )''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS "SpecialLessonTypes" (
-        "Id" INTEGER PRIMARY KEY, "Name" TEXT NOT NULL UNIQUE, "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0),
-        "EffectiveFrom" TEXT NOT NULL, "IsActive" INTEGER DEFAULT 1,
-        "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
-    )''')
-    # 특강 수당은 유형과 무관하게 학생 1명당 수업 1회 공통 단가를 적용한다.
-    # SpecialLessonTypes의 UnitAmount/EffectiveFrom은 기존 DB 호환을 위해 남겨 두되 정산에는 사용하지 않는다.
+    # 특강은 별도 유형 없이 IsSpecial 플래그로만 구분한다.
+    # 특강 수당은 학생 1명당 수업 1회의 공통 단가를 적용한다.
     cursor.execute('''CREATE TABLE IF NOT EXISTS "SpecialLessonPayRates" (
         "Id" INTEGER PRIMARY KEY,
         "UnitAmount" INTEGER NOT NULL CHECK("UnitAmount" >= 0),
@@ -254,11 +249,21 @@ def init_system_tables():
         cursor.execute('PRAGMA table_info("StudyLogs")')
         cols = [r["name"] for r in cursor.fetchall()]
         for col, ddl in [("ClassId", "INTEGER"), ("GradeSnapshot", "TEXT DEFAULT ''"),
-                         ("SpecialLessonTypeId", "INTEGER"), ("ActualTeacherUsername", "TEXT DEFAULT ''"),
+                         ("ActualTeacherUsername", "TEXT DEFAULT ''"),
                          ("SubstituteStatus", "TEXT DEFAULT ''")]:
             if col not in cols:
                 cursor.execute(f'ALTER TABLE "StudyLogs" ADD COLUMN "{col}" {ddl}')
     except Exception:
+        pass
+
+    # 특강 유형을 사용하던 구버전 스키마를 정리한다. 구형 SQLite에서 DROP COLUMN을
+    # 지원하지 않는 경우에도 서비스 동작에는 영향이 없도록 레거시 컬럼만 남겨 둔다.
+    cursor.execute('DROP TABLE IF EXISTS "SpecialLessonTypes"')
+    try:
+        cursor.execute('PRAGMA table_info("StudyLogs")')
+        if "SpecialLessonTypeId" in [r["name"] for r in cursor.fetchall()]:
+            cursor.execute('ALTER TABLE "StudyLogs" DROP COLUMN "SpecialLessonTypeId"')
+    except sqlite3.OperationalError:
         pass
 
     # StudyLogs에 수업 내용(LessonContent)·수업 내용 메모(Description)·특강 여부(IsSpecial)·감사 추적 컬럼 추가

@@ -1063,7 +1063,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.getElementById('form-class-category')?.addEventListener('submit', submitClassCategory);
         document.getElementById('form-class-pay-rate')?.addEventListener('submit', submitClassPayRate);
-        document.getElementById('form-special-lesson-type')?.addEventListener('submit', submitSpecialLessonType);
         document.getElementById('form-special-pay-rate')?.addEventListener('submit', submitSpecialPayRate);
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
@@ -5048,7 +5047,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!batchStudiedDay.value) batchStudiedDay.value = new Date().toISOString().split('T')[0];
             if (isStaff()) await loadActualTeacherOptions('batch-actual-teacher', cls.TeacherUsername);
             renderBatchStudentsTable(students);
-            await loadSpecialLessonTypeOptions();
             loadBatchStudylogCalendar(getBatchMonth(batchStudiedDay.value));
         } catch (err) {
             resetBatchRegView();
@@ -5137,13 +5135,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ).join('');
     }
 
-    async function loadSpecialLessonTypeOptions() {
-        const select = document.getElementById('batch-special-lesson-type');
-        if (!select) return;
-        const data = await apiFetch('/api/user/payroll/special-types?active_only=true');
-        select.innerHTML = '<option value="">-- 일반 수업 또는 특강 유형 미지정 --</option>' + (data.special_types || []).map(t => `<option value="${t.Id}">${escapeHtml(t.Name)}</option>`).join('');
-    }
-
     function showClassRateMessage(message, isError = false) {
         const el = document.getElementById('class-rate-msg');
         if (!el) return;
@@ -5154,8 +5145,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadClassRateSettings() {
         try {
-            const [categoriesData, ratesData, specialData, specialRatesData, classesData] = await Promise.all([
-                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-types'), apiFetch('/api/user/payroll/special-rates'), apiFetch('/api/user/classes?limit=100')
+            const [categoriesData, ratesData, specialRatesData, classesData] = await Promise.all([
+                apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-rates'), apiFetch('/api/user/classes?limit=100')
             ]);
             const categories = categoriesData.categories || [];
             document.getElementById('class-category-list').innerHTML = categories.length ? categories.map(c => `<span class="badge"><i class="fa-solid fa-tag"></i> ${escapeHtml(c.Name)}</span>`).join('') : '<span class="text-muted">등록된 카테고리가 없습니다.</span>';
@@ -5169,8 +5160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             assignmentBody.querySelectorAll('.btn-save-class-category').forEach(button => button.addEventListener('click', () => saveClassCategoryAssignment(button.dataset.classId)));
             const rates = ratesData.rates || [];
             document.getElementById('class-pay-rate-body').innerHTML = rates.length ? rates.map(r => `<tr><td>${escapeHtml(r.CategoryName)}</td><td>${escapeHtml(r.GradeGroup)}</td><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">등록된 일반 수업 단가가 없습니다.</td></tr>';
-            const types = specialData.special_types || [];
-            document.getElementById('special-lesson-type-body').innerHTML = types.length ? types.map(t => `<tr><td>${escapeHtml(t.Name)}</td><td>${t.IsActive ? '사용' : '중지'}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">등록된 특강 유형이 없습니다.</td></tr>';
             const specialRates = specialRatesData.rates || [];
             document.getElementById('special-pay-rate-body').innerHTML = specialRates.length ? specialRates.map(r => `<tr><td>${Number(r.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(r.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="2" class="empty-state">등록된 특강 학생수당 단가가 없습니다.</td></tr>';
             const today = new Date().toISOString().slice(0, 10);
@@ -5201,13 +5190,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const payload = { CategoryId: Number(document.getElementById('rate-category').value), GradeGroup: document.getElementById('rate-grade-group').value, UnitAmount: Number(document.getElementById('rate-unit-amount').value), EffectiveFrom: document.getElementById('rate-effective-from').value };
         try { await apiFetch('/api/user/payroll/rates', { method: 'POST', body: JSON.stringify(payload) }); showClassRateMessage('일반 수업 단가를 저장했습니다.'); await loadClassRateSettings(); }
-        catch (err) { showClassRateMessage(err.message, true); }
-    }
-
-    async function submitSpecialLessonType(e) {
-        e.preventDefault();
-        const payload = { Name: document.getElementById('special-type-name').value.trim() };
-        try { await apiFetch('/api/user/payroll/special-types', { method: 'POST', body: JSON.stringify(payload) }); e.target.reset(); showClassRateMessage('특강 유형을 등록했습니다.'); await loadClassRateSettings(); }
         catch (err) { showClassRateMessage(err.message, true); }
     }
 
@@ -5454,20 +5436,12 @@ document.addEventListener('DOMContentLoaded', () => {
             classBatchResult.classList.remove('hidden');
             return;
         }
-        const hasSpecial = logs.some(log => log.include && log.is_special);
-        const specialLessonTypeId = parseInt(document.getElementById('batch-special-lesson-type')?.value || '0') || null;
-        if (hasSpecial && !specialLessonTypeId) {
-            classBatchResult.className = 'alert alert-danger';
-            classBatchResult.textContent = '특강으로 등록할 학생이 있으면 특강 유형을 선택해 주세요.';
-            classBatchResult.classList.remove('hidden');
-            return;
-        }
         try {
             const shouldContinue = await confirmBatchStudylogDate(activeBatchClassId, dateVal);
             if (!shouldContinue) return;
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, SpecialLessonTypeId: specialLessonTypeId, ActualTeacherUsername: isStaff() ? (document.getElementById('batch-actual-teacher')?.value || '') : '', logs: logs })
+                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, ActualTeacherUsername: isStaff() ? (document.getElementById('batch-actual-teacher')?.value || '') : '', logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {

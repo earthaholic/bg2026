@@ -198,7 +198,6 @@ class ClassStudyLogBatchRequest(BaseModel):
     StudiedDay: str
     LessonContent: Optional[str] = ""
     logs: List[ClassStudyLogItem] = []
-    SpecialLessonTypeId: Optional[int] = None
     ActualTeacherUsername: Optional[str] = ""
     IsCancelled: bool = False
     CancellationReason: Optional[str] = ""
@@ -208,9 +207,6 @@ class PayRateRequest(BaseModel):
     GradeGroup: str
     UnitAmount: int
     EffectiveFrom: str
-
-class SpecialLessonTypeRequest(BaseModel):
-    Name: str
 
 class SpecialLessonPayRateRequest(BaseModel):
     UnitAmount: int
@@ -1986,8 +1982,6 @@ def user_batch_register_class_studylogs(
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
-    if any(item.include and item.is_special for item in payload.logs) and not payload.SpecialLessonTypeId:
-        raise HTTPException(status_code=400, detail="특강으로 등록할 학생이 있으면 특강 유형을 선택해 주세요.")
     conn = get_db_connection()
     try:
         is_cancelled_day = conn.execute(
@@ -2015,15 +2009,6 @@ def user_batch_register_class_studylogs(
             raise HTTPException(status_code=409, detail="실제 진행 선생님의 해당 월 정산이 마감되어 학습 이력을 등록할 수 없습니다.")
     finally:
         conn.close()
-    if payload.SpecialLessonTypeId:
-        conn = get_db_connection()
-        try:
-            exists = conn.execute('SELECT 1 FROM "SpecialLessonTypes" WHERE "Id" = ? AND "IsActive" = 1', (payload.SpecialLessonTypeId,)).fetchone()
-            if not exists:
-                raise HTTPException(status_code=400, detail="사용 가능한 특강 유형을 선택해 주세요.")
-        finally:
-            conn.close()
-
     book_row = _resolve_domain_pk("Books", payload.BookId)
     if book_row is None:
         raise HTTPException(status_code=400, detail="해당 도서를 찾을 수 없습니다.")
@@ -2080,7 +2065,6 @@ def user_batch_register_class_studylogs(
                 "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
                 "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
                 "IsSpecial": 1 if item.is_special else 0, "ClassId": class_id,
-                "SpecialLessonTypeId": payload.SpecialLessonTypeId if item.is_special else None,
                 "ActualTeacherUsername": actual_teacher,
                 "SubstituteStatus": "approved",
                 "GradeSnapshot": _student_grade(sid),
@@ -2160,25 +2144,6 @@ def get_payroll_rates(current_user: Dict[str, Any] = Depends(get_current_user)):
                              JOIN "ClassCategories" c ON c."Id"=r."CategoryId"
                              ORDER BY r."EffectiveFrom" DESC, c."Name", r."GradeGroup"''').fetchall()
         return {"rates":[dict(r) for r in rows]}
-    finally: conn.close()
-
-@app.post("/api/user/payroll/special-types")
-def create_special_type(payload: SpecialLessonTypeRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
-    if not payload.Name.strip(): raise HTTPException(status_code=400, detail="특강 유형명을 입력해 주세요.")
-    conn=get_db_connection()
-    try:
-        # UnitAmount/EffectiveFrom은 구버전 테이블의 NOT NULL 호환값이며 실제 정산 단가는 별도 공통 단가표를 사용한다.
-        conn.execute('INSERT INTO "SpecialLessonTypes"("Name","UnitAmount","EffectiveFrom") VALUES(?,?,?)',(payload.Name.strip(),0,datetime.now().strftime("%Y-%m-%d"))); conn.commit(); return {"status":"success"}
-    except Exception: raise HTTPException(status_code=400, detail="이미 등록된 특강 유형입니다.")
-    finally: conn.close()
-
-@app.get("/api/user/payroll/special-types")
-def get_special_types(active_only: bool = Query(False), current_user: Dict[str, Any] = Depends(get_current_user)):
-    conn=get_db_connection()
-    try:
-        where=' WHERE "IsActive"=1' if active_only else ''
-        rows=conn.execute(f'SELECT * FROM "SpecialLessonTypes"{where} ORDER BY "EffectiveFrom" DESC, "Name"').fetchall()
-        return {"special_types":[dict(r) for r in rows]}
     finally: conn.close()
 
 @app.post("/api/user/payroll/special-rates")
@@ -2478,7 +2443,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
             if teacher_username: sql += ' AND pl."TeacherUsername"=?'; params.append(teacher_username)
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
         sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
-                        sl."ActualTeacherUsername", sl."SubstituteStatus", sl."SpecialLessonTypeId",
+                        sl."ActualTeacherUsername", sl."SubstituteStatus",
                         s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                         c."ClassName", c."CategoryId", c."TeacherUsername"
                  FROM "StudyLogs" sl JOIN "Classes" c ON sl."ClassId"=c."Id"
