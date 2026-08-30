@@ -774,7 +774,7 @@
                             <div class="card-header-styled flex-between" style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <h2><i class="fa-solid fa-square-plus"></i> 꿈꾸는봄결 새 학습 기록 등록</h2>
-                                    <p class="subtitle">학생과 도서를 검색하여 선택 후 학습 일자를 입력하면 StudyLogs에 수록됩니다. (한 번에 여러 명 선택할 수 있습니다)</p>
+                                    <p class="subtitle">담당 수업을 먼저 선택한 뒤 학생과 도서, 학습 일자를 순서대로 입력해 주세요. (한 번에 여러 명 선택할 수 있습니다)</p>
                                 </div>
                                 <button type="button" id="btn-clear-studylog-cache" class="btn btn-sm btn-outline" title="캐싱된 선택 정보를 초기화합니다">
                                     <i class="fa-solid fa-broom"></i> 선택 초기화
@@ -784,9 +784,31 @@
                             <form id="form-user-studylog-reg" class="book-form">
                                 <div id="user-studylog-msg" class="alert hidden"></div>
 
-                                <!-- Section 1: 학생 선택 -->
+                                <!-- Section 1: 담당 수업 및 정산 연결 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 1. 학습 학생 선택 (다중 선택 가능)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-chalkboard-user"></i> 1. 담당 수업 선택</h4>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="studylog-class">담당 수업 <span id="studylog-class-required" class="required hidden">*</span></label>
+                                            <select id="studylog-class" class="form-control"><option value="">정산에 연결하지 않음</option></select>
+                                            <div class="text-muted">일반 선생님은 학생을 선택하기 전에 담당 수업을 먼저 선택해 주세요.</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="studylog-actual-teacher">실제 진행 선생님</label>
+                                            <select id="studylog-actual-teacher" class="form-control"><option value="">선택하지 않음</option></select>
+                                            <div class="text-muted">수업을 연결하지 않아도 실제 진행 선생님을 기록할 수 있습니다.</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="studylog-payroll-category">정산 카테고리 (선택)</label>
+                                            <select id="studylog-payroll-category" class="form-control"><option value="">정산에 포함하지 않음</option></select>
+                                            <div class="text-muted">수업이 없을 때 카테고리와 실제 진행 선생님을 지정하면 월급 정산에 포함됩니다.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Section 2: 학생 선택 -->
+                                <div class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-user-graduate"></i> 2. 학습 학생 선택 (다중 선택 가능)</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
                                             <label>학습 학생 <span class="required">*</span></label>
@@ -803,9 +825,9 @@
                                     </div>
                                 </div>
 
-                                <!-- Section 2: 도서 선택 -->
+                                <!-- Section 3: 도서 선택 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 2. 학습 도서 선택</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 3. 학습 도서 선택</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
                                             <label>도서 선택 <span class="required">*</span></label>
@@ -821,35 +843,20 @@
                                     </div>
                                 </div>
 
-                                <!-- Section 3: 학습 일자 -->
+                                <!-- Section 4: 학습 일자 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 3. 학습 수행 일자</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 4. 학습 수행 일자</h4>
                                     <div class="form-grid">
                                         <div class="form-group">
                                             <label for="studylog-date">학습 일자 (StudiedDay) <span class="required">*</span></label>
                                             <input type="date" id="studylog-date" name="StudiedDay" class="form-control" required>
                                         </div>
-                                        <div class="form-group">
-                                            <label for="studylog-class">담당 수업 <span id="studylog-class-required" class="required hidden">*</span></label>
-                                            <select id="studylog-class" class="form-control"><option value="">정산에 연결하지 않음</option></select>
-                                            <div class="text-muted">월급 정산에 반영하려면 학생이 배정된 수업을 선택해 주세요.</div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="studylog-actual-teacher">실제 진행 선생님</label>
-                                            <select id="studylog-actual-teacher" class="form-control"><option value="">선택하지 않음</option></select>
-                                            <div class="text-muted">수업을 연결하지 않아도 실제 진행 선생님을 기록할 수 있습니다.</div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="studylog-payroll-category">정산 카테고리 (선택)</label>
-                                            <select id="studylog-payroll-category" class="form-control"><option value="">정산에 포함하지 않음</option></select>
-                                            <div class="text-muted">수업이 없을 때 카테고리와 실제 진행 선생님을 지정하면 월급 정산에 포함됩니다.</div>
-                                        </div>
                                     </div>
                                 </div>
 
-                                <!-- Section 4: 특강 여부 -->
+                                <!-- Section 5: 특강 여부 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-star"></i> 4. 특강 여부</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-star"></i> 5. 특강 여부</h4>
                                     <div class="form-group">
                                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                             <input type="checkbox" id="studylog-special" name="IsSpecial" style="width: 18px; height: 18px; accent-color: var(--warning); cursor: pointer;">
@@ -859,17 +866,17 @@
                                     </div>
                                 </div>
 
-                                <!-- Section 5: 수업 내용 -->
+                                <!-- Section 6: 수업 내용 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 5. 수업 내용 (선택)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 6. 수업 내용 (선택)</h4>
                                     <div class="form-group">
                                         <textarea id="studylog-content" name="LessonContent" class="form-control" rows="3" placeholder="이번 수업에서 다룬 주요 내용, 진도, 다룬 문제 등을 입력하세요. (선택사항)"></textarea>
                                     </div>
                                 </div>
 
-                                <!-- Section 6: 수업 내용 메모 -->
+                                <!-- Section 7: 수업 내용 메모 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 6. 수업 내용 메모 (선택)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 7. 수업 내용 메모 (선택)</h4>
                                     <div class="form-group">
                                         <textarea id="studylog-desc" name="Description" class="form-control" rows="3" placeholder="수업과 관련한 보충 메모, 학생의 특이사항 등을 간략히 적어두세요. (선택사항)"></textarea>
                                     </div>
