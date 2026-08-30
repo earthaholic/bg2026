@@ -463,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities'];
+    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
@@ -518,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
         document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', currentUser.role !== 'teacher'));
 
-        // 선생님(조회 전용)은 검색/상세 조회 뷰로 이동
+        // 일반 선생님은 로그인 직후 학습 기록 검색 화면에서 시작한다.
         if (!isStaff()) {
             switchView('studylog-search');
         }
@@ -1395,6 +1395,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const studentPickerOpener = e.target.closest('#btn-open-student-picker, #selected-student-display, #btn-open-picker-monthly-student');
         if (studentPickerOpener) {
             activeStudentPickerTarget = studentPickerOpener.id === 'btn-open-picker-monthly-student' ? 'monthly' : 'studylog';
+            if (activeStudentPickerTarget === 'studylog' && currentUser?.role === 'teacher' && !document.getElementById('studylog-class')?.value) {
+                alert('담당 수업을 먼저 선택해 주세요.');
+                return;
+            }
             const modal = document.getElementById('modal-student-picker');
             const inputQ = document.getElementById('input-picker-student-q');
             const footer = document.getElementById('picker-student-footer');
@@ -1674,7 +1678,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 검색 중...</div>';
             const q = inputQ ? inputQ.value.trim() : '';
-            const data = await apiFetch(`/api/user/picker/students${q ? '?q=' + encodeURIComponent(q) : ''}`);
+            const queryParams = new URLSearchParams();
+            if (q) queryParams.set('q', q);
+            if (activeStudentPickerTarget === 'studylog' && currentUser?.role === 'teacher') {
+                const classId = document.getElementById('studylog-class')?.value;
+                if (classId) queryParams.set('class_id', classId);
+            }
+            const data = await apiFetch(`/api/user/picker/students${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
             const students = data.students || [];
 
             if (students.length === 0) {
@@ -1924,6 +1934,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const classId = parseInt(document.getElementById('studylog-class')?.value || '0') || null;
         const actualTeacherUsername = document.getElementById('studylog-actual-teacher')?.value || '';
         const payrollCategoryId = parseInt(document.getElementById('studylog-payroll-category')?.value || '0') || null;
+        if (currentUser?.role === 'teacher' && !classId) {
+            if (userStudyLogMsg) {
+                userStudyLogMsg.className = 'alert alert-danger';
+                userStudyLogMsg.textContent = '담당 수업을 선택해 주세요.';
+                userStudyLogMsg.classList.remove('hidden');
+            }
+            return;
+        }
         if (!classId && payrollCategoryId && !actualTeacherUsername) {
             if (userStudyLogMsg) {
                 userStudyLogMsg.className = 'alert alert-danger';
@@ -2486,18 +2504,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadStudyLogAssignmentOptions() {
         const classSelect = document.getElementById('studylog-class');
-        if (!classSelect || !isStaff()) return;
+        if (!classSelect) return;
         const selectedClass = classSelect.value;
         try {
-            const [classData, teacherData, categoryData] = await Promise.all([
-                apiFetch('/api/user/classes?limit=100'),
-                apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/payroll/categories')
-            ]);
-            classSelect.innerHTML = '<option value="">정산에 연결하지 않음</option>' + (classData.classes || []).map(cls =>
+            const classData = await apiFetch('/api/user/classes?limit=100');
+            const teacherData = isStaff() ? await apiFetch('/api/user/teachers-options') : { teachers: [currentUser] };
+            const categoryData = isStaff() ? await apiFetch('/api/user/payroll/categories') : { categories: [] };
+            const emptyLabel = currentUser?.role === 'teacher' ? '담당 수업을 선택해 주세요' : '정산에 연결하지 않음';
+            classSelect.innerHTML = `<option value="">${emptyLabel}</option>` + (classData.classes || []).map(cls =>
                 `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
             ).join('');
             classSelect.value = selectedClass;
+            document.getElementById('studylog-class-required')?.classList.toggle('hidden', currentUser?.role !== 'teacher');
             const actualTeacherSelect = document.getElementById('studylog-actual-teacher');
             actualTeacherSelect.dataset.options = JSON.stringify(teacherData.teachers || []);
             const payrollCategorySelect = document.getElementById('studylog-payroll-category');
@@ -2519,14 +2537,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let teachers = [];
         try { teachers = JSON.parse(teacherSelect.dataset.options || '[]'); } catch (_) { teachers = []; }
         const targetTeacher = classId ? assignedTeacher : selectedTeacher;
-        teacherSelect.disabled = false;
+        teacherSelect.disabled = currentUser?.role === 'teacher';
         teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
             `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
         ).join('');
         const selectedCategory = categorySelect.value;
         let categories = [];
         try { categories = JSON.parse(categorySelect.dataset.options || '[]'); } catch (_) { categories = []; }
-        categorySelect.disabled = Boolean(classId);
+        categorySelect.disabled = Boolean(classId) || currentUser?.role === 'teacher';
         categorySelect.innerHTML = classId
             ? '<option value="">연결된 수업 카테고리 사용</option>'
             : '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
@@ -2534,7 +2552,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ).join('');
     }
 
-    document.getElementById('studylog-class')?.addEventListener('change', updateStudyLogActualTeacherOptions);
+    document.getElementById('studylog-class')?.addEventListener('change', () => {
+        selectedStudentsMap.clear();
+        updateSelectedStudentsUI();
+        updateStudyLogActualTeacherOptions();
+    });
 
     async function loadBookStudyStudentCandidates() {
         const query = bookStudyStudentQ.value.trim();

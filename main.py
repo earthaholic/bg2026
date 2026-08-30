@@ -1045,6 +1045,7 @@ def user_get_books_options(current_user: Dict[str, Any] = Depends(get_current_us
 def picker_search_students(
     q: Optional[str] = Query(None),
     include_ended: bool = Query(False),
+    class_id: Optional[int] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -1057,6 +1058,15 @@ def picker_search_students(
         pattern = f"%{q.strip()}%"
         conds.append('("Name" LIKE ? OR "Grade" LIKE ? OR "Referrer" LIKE ? OR "Description" LIKE ?)')
         params.extend([pattern] * 4)
+
+    if class_id is not None:
+        _get_accessible_class(class_id, current_user)
+        conds.append('''EXISTS (
+            SELECT 1 FROM "ClassStudents" cs
+            WHERE cs."ClassId" = ?
+              AND (cs."StudentId" = "Students".rowid OR cs."StudentId" = "Students"."Id")
+        )''')
+        params.append(class_id)
 
     # 일반 선생님은 본인 수업에 배정된 학생만 검색할 수 있다.
     if current_user.get("role") == "teacher":
@@ -1231,7 +1241,7 @@ def get_student_tuition_progress(student_id: int, studied_day: Optional[str] = N
 @app.post("/api/user/studylogs")
 def user_register_studylog(
     payload: UserStudyLogRegisterRequest,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     target_student_ids = []
     if payload.StudentIds:
@@ -1254,15 +1264,20 @@ def user_register_studylog(
     class_row = None
     actual_teacher = ""
     payroll_category_id = None
+    if current_user.get("role") == "teacher" and not payload.ClassId:
+        raise HTTPException(status_code=400, detail="일반 선생님은 본인 담당 수업을 선택해야 합니다.")
     if payload.ClassId:
-        class_row = get_class_by_id(payload.ClassId)
-        if not class_row:
-            raise HTTPException(status_code=400, detail="정산에 연결할 수업 정보를 찾을 수 없습니다.")
-        allowed_student_ids = set(get_class_student_ids(payload.ClassId))
+        class_row = _get_accessible_class(payload.ClassId, current_user)
+        allowed_student_ids = {
+            student_id
+            for student in get_class_students(payload.ClassId)
+            for student_id in (student.get("row_id"), student.get("Id"))
+            if student_id is not None
+        }
         invalid_students = [sid for sid in target_student_ids if sid not in allowed_student_ids]
         if invalid_students:
             raise HTTPException(status_code=400, detail="선택한 수업에 배정되지 않은 학생이 포함되어 있습니다.")
-        actual_teacher = (payload.ActualTeacherUsername or "").strip() or class_row["TeacherUsername"]
+        actual_teacher = class_row["TeacherUsername"] if current_user.get("role") == "teacher" else ((payload.ActualTeacherUsername or "").strip() or class_row["TeacherUsername"])
         teacher = get_user_by_username(actual_teacher)
         if not teacher or teacher.get("role") not in ("teacher", "manager"):
             raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")

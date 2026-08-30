@@ -83,7 +83,7 @@
                         <i class="fa-solid fa-book-bookmark nav-icon"></i>
                         <span>학습 기록 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="studylog-reg">
+                    <div class="menu-nav-item" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
                     </div>
@@ -830,7 +830,7 @@
                                             <input type="date" id="studylog-date" name="StudiedDay" class="form-control" required>
                                         </div>
                                         <div class="form-group">
-                                            <label for="studylog-class">정산 연결 수업 (선택)</label>
+                                            <label for="studylog-class">담당 수업 <span id="studylog-class-required" class="required hidden">*</span></label>
                                             <select id="studylog-class" class="form-control"><option value="">정산에 연결하지 않음</option></select>
                                             <div class="text-muted">월급 정산에 반영하려면 학생이 배정된 수업을 선택해 주세요.</div>
                                         </div>
