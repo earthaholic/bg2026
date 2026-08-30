@@ -260,7 +260,8 @@ def init_system_tables():
             cursor.execute('ALTER TABLE "Classes" ADD COLUMN "CategoryId" INTEGER')
         cursor.execute('PRAGMA table_info("StudyLogs")')
         cols = [r["name"] for r in cursor.fetchall()]
-        for col, ddl in [("ClassId", "INTEGER"), ("GradeSnapshot", "TEXT DEFAULT ''"),
+        for col, ddl in [("ClassId", "INTEGER"), ("PayrollCategoryId", "INTEGER"),
+                         ("GradeSnapshot", "TEXT DEFAULT ''"),
                          ("ActualTeacherUsername", "TEXT DEFAULT ''"),
                          ("SubstituteStatus", "TEXT DEFAULT ''")]:
             if col not in cols:

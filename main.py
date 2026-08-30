@@ -173,6 +173,7 @@ class UserStudyLogRegisterRequest(BaseModel):
     LessonContent: Optional[str] = ""
     Description: Optional[str] = ""
     ClassId: Optional[int] = None
+    PayrollCategoryId: Optional[int] = None
     ActualTeacherUsername: Optional[str] = ""
 
 class ClassRequest(BaseModel):
@@ -1252,6 +1253,7 @@ def user_register_studylog(
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
     class_row = None
     actual_teacher = ""
+    payroll_category_id = None
     if payload.ClassId:
         class_row = get_class_by_id(payload.ClassId)
         if not class_row:
@@ -1277,6 +1279,27 @@ def user_register_studylog(
             teacher = get_user_by_username(actual_teacher)
             if not teacher or teacher.get("role") not in ("teacher", "manager"):
                 raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
+        if payload.PayrollCategoryId:
+            conn = get_db_connection()
+            try:
+                category = conn.execute(
+                    'SELECT "Id" FROM "ClassCategories" WHERE "Id" = ? AND "IsActive" = 1',
+                    (payload.PayrollCategoryId,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if not category:
+                raise HTTPException(status_code=400, detail="사용 가능한 정산 카테고리를 선택해 주세요.")
+            if not actual_teacher:
+                raise HTTPException(status_code=400, detail="정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.")
+            payroll_category_id = payload.PayrollCategoryId
+            conn = get_db_connection()
+            try:
+                if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                                (studied_day[:7], actual_teacher)).fetchone():
+                    raise HTTPException(status_code=409, detail="실제 진행 선생님의 해당 월 정산이 마감되어 학습 이력을 등록할 수 없습니다.")
+            finally:
+                conn.close()
 
     created_log_ids = []
     try:
@@ -1289,9 +1312,10 @@ def user_register_studylog(
                 "LessonContent": (payload.LessonContent or "").strip(),
                 "Description": (payload.Description or "").strip(),
                 "ClassId": payload.ClassId if class_row else None,
+                "PayrollCategoryId": payroll_category_id,
                 "ActualTeacherUsername": actual_teacher,
-                "SubstituteStatus": "approved" if class_row else "",
-                "GradeSnapshot": _student_grade(s_id) if class_row else "",
+                "SubstituteStatus": "approved" if class_row or payroll_category_id else "",
+                "GradeSnapshot": _student_grade(s_id) if class_row or payroll_category_id else "",
                 "CreatedBy": current_user["username"]
             }
             res = insert_table_row("StudyLogs", log_data)
@@ -1421,10 +1445,14 @@ def user_get_studylog_detail(
                s.Grade as StudentGrade, s.Referrer as StudentReferrer,
                b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher, b.Subject as BookSubject, b.Target as BookTarget,
                b.BookLength, b.Voca, b.Metaphor, b.HasQuiz, b.HasReadingQuestion, b.HasReadingAnswer, b.HasWritingQuestion, b.HasWritingAnswer,
-               b.HasAdvancedMaterial, b.HasDebateMaterial, b.IsPaperbookExist, b.IsPdfExist, b.IsYes24Exist, b.IsMillieExist, b.Desc as BookDesc
+               b.HasAdvancedMaterial, b.HasDebateMaterial, b.IsPaperbookExist, b.IsPdfExist, b.IsYes24Exist, b.IsMillieExist, b.Desc as BookDesc,
+               c."ClassName", COALESCE(cc."Name", pc."Name") AS "PayrollCategoryName"
         FROM "StudyLogs" sl
         LEFT JOIN "Students" s ON sl.StudentId = s.rowid OR sl.StudentId = s.Id
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
+        LEFT JOIN "Classes" c ON sl."ClassId" = c."Id"
+        LEFT JOIN "ClassCategories" cc ON c."CategoryId" = cc."Id"
+        LEFT JOIN "ClassCategories" pc ON sl."PayrollCategoryId" = pc."Id"
         WHERE sl.rowid = ? OR sl.Id = ?
     '''
     cursor.execute(query, (log_id, log_id))
@@ -2646,20 +2674,27 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
         closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
             sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
-                            sl."GradeSnapshot", c."ClassName"
+                            sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
-                     LEFT JOIN "Classes" c ON sl."ClassId"=c."Id" WHERE pl."PayrollMonth"=?'''
+                     LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"
+                     LEFT JOIN "ClassCategories" pc ON sl."PayrollCategoryId"=pc."Id"
+                     WHERE pl."PayrollMonth"=?'''
             params = [month]
             if teacher_username: sql += ' AND pl."TeacherUsername"=?'; params.append(teacher_username)
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
         sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus",
                         s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
-                        c."ClassName", c."CategoryId", c."TeacherUsername"
-                 FROM "StudyLogs" sl JOIN "Classes" c ON sl."ClassId"=c."Id"
+                        COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
+                        COALESCE(c."CategoryId", sl."PayrollCategoryId") AS "CategoryId", c."TeacherUsername"
+                 FROM "StudyLogs" sl LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"
+                 LEFT JOIN "ClassCategories" pc ON sl."PayrollCategoryId"=pc."Id"
                  LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
-                 WHERE substr(sl."StudiedDay",1,7)=? AND (sl."SubstituteStatus" IN ('','approved') OR sl."SubstituteStatus" IS NULL)'''
+                 WHERE substr(sl."StudiedDay",1,7)=?
+                   AND (sl."SubstituteStatus" IN ('','approved') OR sl."SubstituteStatus" IS NULL)
+                   AND (c."Id" IS NOT NULL OR (sl."ClassId" IS NULL AND sl."PayrollCategoryId" IS NOT NULL
+                                                AND COALESCE(sl."ActualTeacherUsername", '') != ''))'''
         rows=[]
         for row in conn.execute(sql, (month,)).fetchall():
             r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
@@ -2840,6 +2875,71 @@ def user_update_studylog(
             except ValueError:
                 raise HTTPException(status_code=400, detail="학습 수행 일자는 YYYY-MM-DD 형식으로 입력해 주세요.")
             update_data["StudiedDay"] = studied_day
+
+        assignment_fields = {"ClassId", "ActualTeacherUsername", "PayrollCategoryId"}
+        assignment_requested = assignment_fields.intersection(update_data)
+        assignment_changed = any(
+            (str((update_data.get(field) or "")).strip() != str((old_snapshot.get(field) or "")).strip())
+            for field in assignment_requested
+        )
+        if assignment_changed:
+            conn = get_db_connection()
+            try:
+                if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId" = ?', (row_id,)).fetchone():
+                    raise HTTPException(status_code=409, detail="이미 마감된 정산에 포함된 학습 기록의 수업·선생님·카테고리는 수정할 수 없습니다.")
+            finally:
+                conn.close()
+
+            target_class_id = (update_data.get("ClassId") if "ClassId" in update_data else old_snapshot.get("ClassId")) or None
+            target_teacher_value = (update_data.get("ActualTeacherUsername") if "ActualTeacherUsername" in update_data
+                                    else old_snapshot.get("ActualTeacherUsername"))
+            target_teacher = str(target_teacher_value or "").strip()
+            target_category_id = (update_data.get("PayrollCategoryId") if "PayrollCategoryId" in update_data
+                                  else old_snapshot.get("PayrollCategoryId")) or None
+            target_day = str(update_data.get("StudiedDay") or old_snapshot.get("StudiedDay") or "").strip()
+            student_id = old_snapshot.get("StudentId")
+
+            if target_class_id:
+                class_row = get_class_by_id(int(target_class_id))
+                if not class_row:
+                    raise HTTPException(status_code=400, detail="정산에 연결할 수업 정보를 찾을 수 없습니다.")
+                if student_id not in set(get_class_student_ids(int(target_class_id))):
+                    raise HTTPException(status_code=400, detail="해당 학생이 선택한 수업에 배정되어 있지 않습니다.")
+                target_teacher = target_teacher or class_row["TeacherUsername"]
+                target_category_id = None
+            elif target_category_id:
+                conn = get_db_connection()
+                try:
+                    category = conn.execute(
+                        'SELECT "Id" FROM "ClassCategories" WHERE "Id" = ? AND "IsActive" = 1',
+                        (target_category_id,)
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if not category:
+                    raise HTTPException(status_code=400, detail="사용 가능한 정산 카테고리를 선택해 주세요.")
+                if not target_teacher:
+                    raise HTTPException(status_code=400, detail="정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.")
+
+            if target_teacher:
+                teacher = get_user_by_username(target_teacher)
+                if not teacher or teacher.get("role") not in ("teacher", "manager"):
+                    raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
+            if target_teacher and (target_class_id or target_category_id):
+                conn = get_db_connection()
+                try:
+                    if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                                    (target_day[:7], target_teacher)).fetchone():
+                        raise HTTPException(status_code=409, detail="실제 진행 선생님의 해당 월 정산이 마감되어 학습 기록을 수정할 수 없습니다.")
+                finally:
+                    conn.close()
+
+            update_data["ClassId"] = int(target_class_id) if target_class_id else None
+            update_data["PayrollCategoryId"] = int(target_category_id) if target_category_id else None
+            update_data["ActualTeacherUsername"] = target_teacher
+            update_data["SubstituteStatus"] = "approved" if target_class_id or target_category_id else ""
+            if (target_class_id or target_category_id) and not str(old_snapshot.get("GradeSnapshot") or "").strip():
+                update_data["GradeSnapshot"] = _student_grade(student_id)
         update_data["UpdatedBy"] = current_user["username"]
         update_data["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         res = update_table_row("StudyLogs", "rowid", row_id, update_data)
@@ -2851,6 +2951,8 @@ def user_update_studylog(
             "message": "학습 기록이 성공적으로 수정되었습니다.",
             "updated_rows": res.get("updated_rows")
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"학습 기록 수정 중 오류가 발생했습니다: {str(e)}")
 

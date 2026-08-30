@@ -1923,6 +1923,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const isSpecial = specialEl ? specialEl.checked : false;
         const classId = parseInt(document.getElementById('studylog-class')?.value || '0') || null;
         const actualTeacherUsername = document.getElementById('studylog-actual-teacher')?.value || '';
+        const payrollCategoryId = parseInt(document.getElementById('studylog-payroll-category')?.value || '0') || null;
+        if (!classId && payrollCategoryId && !actualTeacherUsername) {
+            if (userStudyLogMsg) {
+                userStudyLogMsg.className = 'alert alert-danger';
+                userStudyLogMsg.textContent = '정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.';
+                userStudyLogMsg.classList.remove('hidden');
+            }
+            return;
+        }
 
         const payload = {
             StudentIds: studentIds,
@@ -1933,6 +1942,7 @@ document.addEventListener('DOMContentLoaded', () => {
             LessonContent: content,
             Description: desc,
             ClassId: classId,
+            PayrollCategoryId: classId ? null : payrollCategoryId,
             ActualTeacherUsername: actualTeacherUsername
         };
 
@@ -2274,6 +2284,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="detail-meta-row">
                         ${studiedDayHtml}
                         <span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${l.row_id || l.Id}</strong></span>
+                        <span><i class="fa-solid fa-chalkboard-user"></i> 실제 진행: <strong>${escapeHtml(l.ActualTeacherUsername || '미지정')}</strong></span>
+                        <span><i class="fa-solid fa-users-rectangle"></i> 연결 수업: <strong>${escapeHtml(l.ClassName || '수업 없음')}</strong></span>
+                        <span><i class="fa-solid fa-tag"></i> 정산 카테고리: <strong>${escapeHtml(l.PayrollCategoryName || '미지정')}</strong></span>
                     </div>
                 </div>
 
@@ -2337,10 +2350,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderStudyLogDetailEditForm(log, logId) {
+    async function renderStudyLogDetailEditForm(log, logId) {
         const studiedDay = String(log.StudiedDay || '').trim().split('T')[0].split(' ')[0];
         modalStudyLogDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 학습 기록 수정';
         modalStudyLogDetailActions.innerHTML = '';
+        modalStudyLogDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 수정 항목을 불러오는 중...</div>';
+        let classes = [];
+        let teachers = [];
+        let categories = [];
+        try {
+            const [classData, teacherData, categoryData] = await Promise.all([
+                apiFetch('/api/user/classes?limit=100'),
+                apiFetch('/api/user/teachers-options'),
+                apiFetch('/api/user/payroll/categories')
+            ]);
+            classes = classData.classes || [];
+            teachers = teacherData.teachers || [];
+            categories = categoryData.categories || [];
+        } catch (err) {
+            modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">수정 항목 로딩 실패: ${escapeHtml(err.message)}</div>`;
+            return;
+        }
+        const classOptions = '<option value="">수업 없음</option>' + classes.map(cls =>
+            `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
+        ).join('');
+        const teacherOptions = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === (log.ActualTeacherUsername || '') ? 'selected' : ''}>${escapeHtml(teacher.username)}</option>`
+        ).join('');
+        const categoryOptions = '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
+            `<option value="${category.Id}" ${Number(log.PayrollCategoryId) === Number(category.Id) ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
+        ).join('');
         modalStudyLogDetailBody.innerHTML = `
             <form id="form-edit-studylog-detail" class="modal-edit-form">
                 <div class="detail-header-block">
@@ -2352,6 +2391,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-grid">
                         <div class="form-group"><label for="edit-studylog-studied-day">학습 수행 일자 <span class="required">*</span></label><input id="edit-studylog-studied-day" class="form-control" type="date" value="${escapeHtml(studiedDay)}" required></div>
                         <div class="form-group"><label>수업 구분</label><label class="checkbox-pill"><input id="edit-studylog-is-special" type="checkbox" ${log.IsSpecial ? 'checked' : ''}><span><i class="fa-solid fa-star"></i> 특강 수업</span></label></div>
+                        <div class="form-group"><label for="edit-studylog-class">연결 수업</label><select id="edit-studylog-class" class="form-control">${classOptions}</select></div>
+                        <div class="form-group"><label for="edit-studylog-actual-teacher">실제 진행 선생님</label><select id="edit-studylog-actual-teacher" class="form-control">${teacherOptions}</select></div>
+                        <div class="form-group"><label for="edit-studylog-payroll-category">정산 카테고리</label><select id="edit-studylog-payroll-category" class="form-control">${categoryOptions}</select><div class="text-muted">수업이 없을 때 실제 진행 선생님과 함께 지정하면 정산에 포함됩니다.</div></div>
                     </div>
                 </div>
                 <div class="form-section">
@@ -2368,14 +2410,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </form>
         `;
+        const editClassSelect = document.getElementById('edit-studylog-class');
+        const editTeacherSelect = document.getElementById('edit-studylog-actual-teacher');
+        const editCategorySelect = document.getElementById('edit-studylog-payroll-category');
+        const updateEditAssignmentOptions = (applyAssignedTeacher = true) => {
+            const hasClass = Boolean(editClassSelect.value);
+            editCategorySelect.disabled = hasClass;
+            if (hasClass) {
+                editCategorySelect.value = '';
+                const assignedTeacher = editClassSelect.selectedOptions[0]?.dataset.teacher || '';
+                if (applyAssignedTeacher && assignedTeacher) editTeacherSelect.value = assignedTeacher;
+            }
+        };
+        editClassSelect.addEventListener('change', () => updateEditAssignmentOptions(true));
+        updateEditAssignmentOptions(false);
         document.getElementById('btn-cancel-edit-studylog').addEventListener('click', () => openStudyLogDetailModal(logId));
         document.getElementById('form-edit-studylog-detail').addEventListener('submit', async event => {
             event.preventDefault();
+            const classId = parseInt(editClassSelect.value || '0') || null;
+            const actualTeacherUsername = editTeacherSelect.value || '';
+            const payrollCategoryId = parseInt(editCategorySelect.value || '0') || null;
+            if (!classId && payrollCategoryId && !actualTeacherUsername) {
+                showToast('정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.', 'warning');
+                return;
+            }
             const data = {
                 StudiedDay: document.getElementById('edit-studylog-studied-day').value,
                 LessonContent: document.getElementById('edit-studylog-lesson-content').value.trim(),
                 Description: document.getElementById('edit-studylog-description').value.trim(),
-                IsSpecial: document.getElementById('edit-studylog-is-special').checked ? 1 : 0
+                IsSpecial: document.getElementById('edit-studylog-is-special').checked ? 1 : 0,
+                ClassId: classId,
+                ActualTeacherUsername: actualTeacherUsername,
+                PayrollCategoryId: classId ? null : payrollCategoryId
             };
             try {
                 await apiFetch(`/api/user/studylogs/${log.row_id || log.Id}`, { method: 'PUT', body: JSON.stringify({ data }) });
@@ -2423,9 +2489,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!classSelect || !isStaff()) return;
         const selectedClass = classSelect.value;
         try {
-            const [classData, teacherData] = await Promise.all([
+            const [classData, teacherData, categoryData] = await Promise.all([
                 apiFetch('/api/user/classes?limit=100'),
-                apiFetch('/api/user/teachers-options')
+                apiFetch('/api/user/teachers-options'),
+                apiFetch('/api/user/payroll/categories')
             ]);
             classSelect.innerHTML = '<option value="">정산에 연결하지 않음</option>' + (classData.classes || []).map(cls =>
                 `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
@@ -2433,6 +2500,8 @@ document.addEventListener('DOMContentLoaded', () => {
             classSelect.value = selectedClass;
             const actualTeacherSelect = document.getElementById('studylog-actual-teacher');
             actualTeacherSelect.dataset.options = JSON.stringify(teacherData.teachers || []);
+            const payrollCategorySelect = document.getElementById('studylog-payroll-category');
+            payrollCategorySelect.dataset.options = JSON.stringify(categoryData.categories || []);
             updateStudyLogActualTeacherOptions();
         } catch (err) {
             classSelect.innerHTML = `<option value="">수업 목록 로딩 실패: ${escapeHtml(err.message)}</option>`;
@@ -2442,7 +2511,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateStudyLogActualTeacherOptions() {
         const classSelect = document.getElementById('studylog-class');
         const teacherSelect = document.getElementById('studylog-actual-teacher');
-        if (!classSelect || !teacherSelect) return;
+        const categorySelect = document.getElementById('studylog-payroll-category');
+        if (!classSelect || !teacherSelect || !categorySelect) return;
         const classId = classSelect.value;
         const assignedTeacher = classSelect.selectedOptions[0]?.dataset.teacher || '';
         const selectedTeacher = teacherSelect.value;
@@ -2453,6 +2523,15 @@ document.addEventListener('DOMContentLoaded', () => {
         teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
             `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
         ).join('');
+        const selectedCategory = categorySelect.value;
+        let categories = [];
+        try { categories = JSON.parse(categorySelect.dataset.options || '[]'); } catch (_) { categories = []; }
+        categorySelect.disabled = Boolean(classId);
+        categorySelect.innerHTML = classId
+            ? '<option value="">연결된 수업 카테고리 사용</option>'
+            : '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
+                `<option value="${category.Id}" ${String(category.Id) === selectedCategory ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
+            ).join('');
     }
 
     document.getElementById('studylog-class')?.addEventListener('change', updateStudyLogActualTeacherOptions);
