@@ -1271,8 +1271,12 @@ def user_register_studylog(
                 raise HTTPException(status_code=409, detail="실제 진행 선생님의 해당 월 정산이 마감되어 학습 이력을 등록할 수 없습니다.")
         finally:
             conn.close()
-    elif (payload.ActualTeacherUsername or "").strip():
-        raise HTTPException(status_code=400, detail="실제 진행 선생님을 지정하려면 정산에 연결할 수업을 선택해 주세요.")
+    else:
+        actual_teacher = (payload.ActualTeacherUsername or "").strip()
+        if actual_teacher:
+            teacher = get_user_by_username(actual_teacher)
+            if not teacher or teacher.get("role") not in ("teacher", "manager"):
+                raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
 
     created_log_ids = []
     try:

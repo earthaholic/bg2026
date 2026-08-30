@@ -1930,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             LessonContent: content,
             Description: desc,
             ClassId: classId,
-            ActualTeacherUsername: classId ? actualTeacherUsername : ''
+            ActualTeacherUsername: actualTeacherUsername
         };
 
         try {
@@ -2442,12 +2442,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!classSelect || !teacherSelect) return;
         const classId = classSelect.value;
         const assignedTeacher = classSelect.selectedOptions[0]?.dataset.teacher || '';
+        const selectedTeacher = teacherSelect.value;
         let teachers = [];
         try { teachers = JSON.parse(teacherSelect.dataset.options || '[]'); } catch (_) { teachers = []; }
-        teacherSelect.disabled = !classId;
-        teacherSelect.innerHTML = classId
-            ? teachers.map(teacher => `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`).join('')
-            : '<option value="">수업을 먼저 선택해 주세요</option>';
+        const targetTeacher = classId ? assignedTeacher : selectedTeacher;
+        teacherSelect.disabled = false;
+        teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
+        ).join('');
     }
 
     document.getElementById('studylog-class')?.addEventListener('change', updateStudyLogActualTeacherOptions);
