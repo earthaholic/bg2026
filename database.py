@@ -217,13 +217,25 @@ def init_system_tables():
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClaims" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
         "ClaimDate" TEXT DEFAULT '', "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',
-        "Status" TEXT NOT NULL DEFAULT 'pending' CHECK("Status" IN ('pending','approved','rejected')),
-        "ReviewedBy" TEXT DEFAULT '', "ReviewedAt" TEXT DEFAULT '',
         "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
     )''')
     cursor.execute('PRAGMA table_info("TeacherPayrollClaims")')
-    if "ClaimDate" not in [r["name"] for r in cursor.fetchall()]:
+    payroll_claim_columns = [r["name"] for r in cursor.fetchall()]
+    if "ClaimDate" not in payroll_claim_columns:
         cursor.execute('ALTER TABLE "TeacherPayrollClaims" ADD COLUMN "ClaimDate" TEXT DEFAULT \'\'')
+    # 추가 청구 결재 절차 폐지: 기존 데이터는 보존하고 승인 관련 컬럼만 제거한다.
+    if any(col in payroll_claim_columns for col in ("Status", "ReviewedBy", "ReviewedAt")):
+        cursor.execute('ALTER TABLE "TeacherPayrollClaims" RENAME TO "TeacherPayrollClaims_legacy"')
+        cursor.execute('''CREATE TABLE "TeacherPayrollClaims" (
+            "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
+            "ClaimDate" TEXT DEFAULT '', "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime'))
+        )''')
+        cursor.execute('''INSERT INTO "TeacherPayrollClaims"
+                          ("Id","PayrollMonth","TeacherUsername","ClaimDate","ItemName","Amount","Description","CreatedAt")
+                          SELECT "Id","PayrollMonth","TeacherUsername",COALESCE("ClaimDate",''),"ItemName","Amount",COALESCE("Description",''),"CreatedAt"
+                          FROM "TeacherPayrollClaims_legacy"''')
+        cursor.execute('DROP TABLE "TeacherPayrollClaims_legacy"')
 
     # 도서·자료 제작 요청 및 정산 기준. 자료 종류는 Books 반영용이며 단가는 도서 분류별 요청 1건 기준이다.
     cursor.execute('''CREATE TABLE IF NOT EXISTS "BookMaterialPayRates" (

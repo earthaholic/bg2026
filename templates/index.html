@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-detail-dialogs-2">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-payroll-claims">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -990,8 +990,22 @@
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>팀</th><th>학년</th><th>학생</th><th>수업일</th><th>구분</th><th>미정산 원인</th></tr></thead><tbody id="payroll-unconfigured-body"></tbody></table></div>
                         </div>
                         <div id="payroll-team-cards" class="payroll-team-cards"></div>
-                        <div id="payroll-claim-list-card" class="card table-card hidden"><div class="card-header-styled"><h3><i class="fa-solid fa-receipt"></i> 추가 청구</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>청구일</th><th>항목</th><th>사유</th><th>상태</th><th>금액</th></tr></thead><tbody id="payroll-claims-body"></tbody></table></div></div>
-                        <div id="payroll-claim-card" class="card form-card"><div class="card-header-styled"><h3><i class="fa-solid fa-circle-plus"></i> 추가 청구 등록</h3></div><form id="form-payroll-claim" class="payroll-claim-form"><div class="form-group"><label>청구일</label><input id="payroll-claim-date" class="form-control" type="date" required></div><div class="form-group"><label>항목명</label><input id="payroll-claim-name" class="form-control" required></div><div class="form-group"><label>금액</label><input id="payroll-claim-amount" class="form-control" type="number" min="0" required></div><div class="form-group"><label>사유</label><input id="payroll-claim-description" class="form-control"></div><button class="btn btn-success"><i class="fa-solid fa-plus"></i> 청구 등록</button></form></div>
+                        <div id="payroll-claim-list-card" class="card table-card hidden"><div class="card-header-styled"><h3><i class="fa-solid fa-receipt"></i> 추가 청구</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>선생님</th><th>청구일</th><th>항목</th><th>사유</th><th>금액</th><th>관리</th></tr></thead><tbody id="payroll-claims-body"></tbody></table></div></div>
+                        <div id="payroll-claim-card" class="card form-card">
+                            <div class="card-header-styled"><div><h3 id="payroll-claim-form-title"><i class="fa-solid fa-circle-plus"></i> 추가 청구 등록</h3><p class="subtitle">등록한 금액은 선택한 정산월에 즉시 포함됩니다.</p></div></div>
+                            <form id="form-payroll-claim" class="book-form">
+                                <input id="payroll-claim-id" type="hidden">
+                                <div class="form-section">
+                                    <div class="form-grid">
+                                        <div class="form-group"><label for="payroll-claim-date">청구일</label><input id="payroll-claim-date" class="form-control" type="date" required></div>
+                                        <div class="form-group"><label for="payroll-claim-name">항목명</label><input id="payroll-claim-name" class="form-control" required></div>
+                                        <div class="form-group"><label for="payroll-claim-amount">금액</label><input id="payroll-claim-amount" class="form-control" type="number" min="0" required></div>
+                                        <div class="form-group"><label for="payroll-claim-description">사유</label><input id="payroll-claim-description" class="form-control"></div>
+                                    </div>
+                                </div>
+                                <div class="form-submit-actions"><button id="btn-cancel-payroll-claim-edit" class="btn btn-outline hidden" type="button">수정 취소</button><button id="btn-submit-payroll-claim" class="btn btn-success" type="submit"><i class="fa-solid fa-plus"></i> 청구 등록</button></div>
+                            </form>
+                        </div>
                     </div>
                 </section>
 
@@ -2157,6 +2171,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260830-detail-dialogs-2"></script>
+    <script src="/static/js/app.js?v=20260830-payroll-claims"></script>
 </body>
 </html>

@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
+    const payrollClaimsById = new Map();
+    let payrollEditingClaimTeacher = '';
 
     // DOM Elements
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
@@ -6385,7 +6387,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
         const teacherGroup = document.getElementById('payroll-teacher-group');
         teacherGroup.classList.toggle('hidden', !isStaff());
-        document.getElementById('payroll-claim-card').classList.toggle('hidden', isStaff());
         if (isStaff()) {
             await loadPayrollTeacherOptions();
         }
@@ -6419,6 +6420,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPayrollUnconfiguredLines(unconfiguredLines);
         renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer);
         renderPayrollClaims(data.claims || []);
+        const claimCard = document.getElementById('payroll-claim-card');
+        claimCard.classList.toggle('hidden', Boolean(isStaff() && !teacher && !document.getElementById('payroll-claim-id').value));
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
         document.getElementById('payroll-summary').innerHTML = `<span class="payroll-summary-label">${escapeHtml(month)} 정산 합계</span><strong>${total.toLocaleString()}원</strong>${data.closed ? '<em><i class="fa-solid fa-lock"></i> 마감 완료</em>' : '<em class="is-open"><i class="fa-solid fa-lock-open"></i> 정산 진행 중</em>'}`;
         document.getElementById('btn-backfill-payroll-class-links').classList.toggle('hidden', !isStaff() || data.closed);
@@ -6519,14 +6522,42 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPayrollClaims(claims) {
         const card = document.getElementById('payroll-claim-list-card');
         card.classList.toggle('hidden', !claims.length);
+        payrollClaimsById.clear();
+        claims.forEach(claim => payrollClaimsById.set(Number(claim.Id), claim));
         document.getElementById('payroll-claims-body').innerHTML = claims.map(claim => {
-            const status = { pending: '승인 대기', approved: '승인됨', rejected: '반려됨' }[claim.Status] || claim.Status;
-            return `<tr><td>${escapeHtml(claim.ClaimDate || '-')}</td><td>${escapeHtml(claim.ItemName)}</td><td>${escapeHtml(claim.Description || '-')}</td><td>${escapeHtml(status)}</td><td class="payroll-amount">${Number(claim.Amount || 0).toLocaleString()}원</td></tr>`;
+            return `<tr><td>${escapeHtml(claim.TeacherUsername)}</td><td>${escapeHtml(claim.ClaimDate || '-')}</td><td>${escapeHtml(claim.ItemName)}</td><td>${escapeHtml(claim.Description || '-')}</td><td class="payroll-amount">${Number(claim.Amount || 0).toLocaleString()}원</td><td><button type="button" class="btn btn-xs btn-outline btn-edit-payroll-claim" data-id="${Number(claim.Id)}">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-payroll-claim" data-id="${Number(claim.Id)}">삭제</button></td></tr>`;
         }).join('');
     }
+
+    function resetPayrollClaimForm() {
+        document.getElementById('form-payroll-claim').reset();
+        document.getElementById('payroll-claim-id').value = '';
+        payrollEditingClaimTeacher = '';
+        document.getElementById('payroll-claim-form-title').innerHTML = '<i class="fa-solid fa-circle-plus"></i> 추가 청구 등록';
+        document.getElementById('btn-submit-payroll-claim').innerHTML = '<i class="fa-solid fa-plus"></i> 청구 등록';
+        document.getElementById('btn-cancel-payroll-claim-edit').classList.add('hidden');
+        const selectedTeacher = document.getElementById('payroll-teacher')?.value.trim();
+        document.getElementById('payroll-claim-card').classList.toggle('hidden', Boolean(isStaff() && !selectedTeacher));
+    }
+
+    function startPayrollClaimEdit(claim) {
+        document.getElementById('payroll-claim-id').value = claim.Id;
+        document.getElementById('payroll-month').value = claim.PayrollMonth;
+        document.getElementById('payroll-claim-date').value = claim.ClaimDate || '';
+        document.getElementById('payroll-claim-name').value = claim.ItemName || '';
+        document.getElementById('payroll-claim-amount').value = Number(claim.Amount || 0);
+        document.getElementById('payroll-claim-description').value = claim.Description || '';
+        payrollEditingClaimTeacher = claim.TeacherUsername;
+        document.getElementById('payroll-claim-form-title').innerHTML = `<i class="fa-solid fa-pen"></i> ${escapeHtml(claim.TeacherUsername)} 추가 청구 수정`;
+        document.getElementById('btn-submit-payroll-claim').innerHTML = '<i class="fa-solid fa-check"></i> 수정 저장';
+        document.getElementById('btn-cancel-payroll-claim-edit').classList.remove('hidden');
+        const card = document.getElementById('payroll-claim-card');
+        card.classList.remove('hidden');
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
-    document.getElementById('payroll-teacher')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
-    document.getElementById('payroll-month')?.addEventListener('change', () => loadTeacherPayroll().catch(e => alert(e.message)));
+    document.getElementById('payroll-teacher')?.addEventListener('change', () => { resetPayrollClaimForm(); loadTeacherPayroll().catch(e => alert(e.message)); });
+    document.getElementById('payroll-month')?.addEventListener('change', () => { resetPayrollClaimForm(); loadTeacherPayroll().catch(e => alert(e.message)); });
     document.getElementById('payroll-transfer-teacher')?.addEventListener('change', updatePayrollTransferSelection);
     document.getElementById('view-teacher-payroll')?.addEventListener('change', event => {
         const checkbox = event.target.closest('.payroll-session-transfer-checkbox');
@@ -6574,7 +6605,43 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadTeacherPayroll();
     });
     document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
-    document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => { e.preventDefault(); const month=document.getElementById('payroll-month').value; await apiFetch('/api/user/payroll/claims', {method:'POST', body:JSON.stringify({PayrollMonth:month, ClaimDate:document.getElementById('payroll-claim-date').value, ItemName:document.getElementById('payroll-claim-name').value, Amount:Number(document.getElementById('payroll-claim-amount').value), Description:document.getElementById('payroll-claim-description').value})}); e.target.reset(); await loadTeacherPayroll(); showToast('추가 청구를 등록했습니다.', 'success'); });
+    document.getElementById('btn-cancel-payroll-claim-edit')?.addEventListener('click', resetPayrollClaimForm);
+    document.getElementById('payroll-claims-body')?.addEventListener('click', async event => {
+        const editButton = event.target.closest('.btn-edit-payroll-claim');
+        const deleteButton = event.target.closest('.btn-delete-payroll-claim');
+        const claimId = Number((editButton || deleteButton)?.dataset.id);
+        const claim = payrollClaimsById.get(claimId);
+        if (!claim) return;
+        if (editButton) {
+            startPayrollClaimEdit(claim);
+            return;
+        }
+        if (!confirm(`${claim.TeacherUsername} 선생님의 '${claim.ItemName}' 추가 청구를 삭제할까요?\n\n삭제 즉시 정산 합계에서 제외됩니다.`)) return;
+        const result = await apiFetch(`/api/user/payroll/claims/${claimId}`, { method: 'DELETE' });
+        if (Number(document.getElementById('payroll-claim-id').value) === claimId) resetPayrollClaimForm();
+        await loadTeacherPayroll();
+        showToast(result.message, 'success');
+    });
+    document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const claimId = document.getElementById('payroll-claim-id').value;
+        const selectedTeacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : currentUser.username;
+        const payload = {
+            PayrollMonth: document.getElementById('payroll-month').value,
+            ClaimDate: document.getElementById('payroll-claim-date').value,
+            ItemName: document.getElementById('payroll-claim-name').value,
+            Amount: Number(document.getElementById('payroll-claim-amount').value),
+            Description: document.getElementById('payroll-claim-description').value,
+            TeacherUsername: payrollEditingClaimTeacher || selectedTeacher
+        };
+        const result = await apiFetch(claimId ? `/api/user/payroll/claims/${claimId}` : '/api/user/payroll/claims', {
+            method: claimId ? 'PUT' : 'POST',
+            body: JSON.stringify(payload)
+        });
+        resetPayrollClaimForm();
+        await loadTeacherPayroll();
+        showToast(result.message, 'success');
+    });
 
     /* 모든 목록 테이블 공통 정렬 */
     const NON_SORTABLE_HEADER_PATTERN = /^(관리|작업|처리|상세|저장|선택|이전)$/;

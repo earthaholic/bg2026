@@ -3631,8 +3631,7 @@ body {
 
 .payroll-filter-heading,
 .payroll-filter-fields,
-.payroll-filter-actions,
-.payroll-claim-form {
+.payroll-filter-actions {
     display: flex;
     align-items: end;
     gap: .75rem;
@@ -3718,13 +3717,10 @@ body {
 .payroll-amount { color: var(--primary); font-weight: 700; text-align: right !important; white-space: nowrap; }
 .payroll-empty-state { padding: 3rem 1rem; color: var(--text-muted); text-align: center; }
 .payroll-empty-state i { margin-bottom: .75rem; font-size: 2rem; }
-.payroll-claim-form .form-group { flex: 1; margin: 0; }
-.payroll-claim-form .btn { flex: 0 0 auto; }
-
 @media (max-width: 640px) {
-    .payroll-filter-heading, .payroll-filter-fields, .payroll-filter-actions, .payroll-claim-form, .payroll-transfer-panel, .payroll-transfer-controls { align-items: stretch; flex-direction: column; }
+    .payroll-filter-heading, .payroll-filter-fields, .payroll-filter-actions, .payroll-transfer-panel, .payroll-transfer-controls { align-items: stretch; flex-direction: column; }
     .payroll-filter-fields .form-group { min-width: 0; }
-    .payroll-filter-fields .btn, .payroll-filter-actions .btn, .payroll-claim-form .btn { width: 100%; }
+    .payroll-filter-fields .btn, .payroll-filter-actions .btn { width: 100%; }
     .payroll-team-card > header { align-items: flex-start; flex-direction: column; gap: .65rem; }
     .payroll-unconfigured-card > header { align-items: flex-start; gap: .65rem; }
     .payroll-team-total { text-align: left; }

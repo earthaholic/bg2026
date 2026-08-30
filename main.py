@@ -218,9 +218,7 @@ class PayrollClaimRequest(BaseModel):
     ItemName: str
     Amount: int
     Description: Optional[str] = ""
-
-class PayrollClaimReviewRequest(BaseModel):
-    Status: str
+    TeacherUsername: Optional[str] = ""
 
 class PayrollSessionTransferItem(BaseModel):
     ClassId: int
@@ -2178,6 +2176,7 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         claim_params = [month]
         if teacher:
             claim_sql += ' AND "TeacherUsername"=?'; claim_params.append(teacher)
+        claim_sql += ' ORDER BY "ClaimDate" DESC, "Id" DESC'
         claims = [dict(r) for r in conn.execute(claim_sql, claim_params).fetchall()]
         material_sql = 'SELECT r.*, b."Title" AS "BookTitle" FROM "BookMaterialRequests" r LEFT JOIN "Books" b ON r."BookId"=b.rowid OR r."BookId"=b."Id" WHERE r."Status"=\'approved\' AND r."PayrollMonth"=?'
         material_params = [month]
@@ -2185,9 +2184,9 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
             material_sql += ' AND r."RequestedBy"=?'; material_params.append(teacher)
         material_requests = [_book_material_request_dict(r) for r in conn.execute(material_sql, material_params).fetchall()]
     finally: conn.close()
+    # 추가 청구는 별도 승인 없이 등록 즉시 해당 월 정산에 포함한다.
     for claim in claims:
-        if claim["Status"] == "approved":
-            totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
+        totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
     for item in material_requests:
         totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
     return {"month":month,"closed":closed,"lines":rows,"claims":claims,"material_requests":material_requests,"totals":totals}
@@ -2370,13 +2369,68 @@ def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, A
     if (not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.ClaimDate)
             or not payload.ClaimDate.startswith(payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0):
         raise HTTPException(status_code=400, detail="청구월에 맞는 청구일, 항목명, 금액을 확인해 주세요.")
+    teacher_username = (payload.TeacherUsername or '').strip() if current_user["role"] in ("admin", "manager") else current_user["username"]
+    if not teacher_username:
+        raise HTTPException(status_code=400, detail="추가 청구를 등록할 선생님을 선택해 주세요.")
+    target_user = get_user_by_username(teacher_username)
+    if not target_user or target_user.get("role") not in ("teacher", "manager"):
+        raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
     conn=get_db_connection()
     try:
-        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(payload.PayrollMonth,current_user['username'])).fetchone():
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(payload.PayrollMonth,teacher_username)).fetchone():
             raise HTTPException(status_code=400, detail="마감된 정산월에는 청구할 수 없습니다.")
-        conn.execute('INSERT INTO "TeacherPayrollClaims"("PayrollMonth","TeacherUsername","ClaimDate","ItemName","Amount","Description") VALUES(?,?,?,?,?,?)',(payload.PayrollMonth,current_user['username'],payload.ClaimDate,payload.ItemName.strip(),payload.Amount,(payload.Description or '').strip()))
-        conn.commit(); return {"status":"success","message":"추가 청구를 등록했습니다. 승인 후 정산에 반영됩니다."}
+        conn.execute('''INSERT INTO "TeacherPayrollClaims"
+                        ("PayrollMonth","TeacherUsername","ClaimDate","ItemName","Amount","Description")
+                        VALUES(?,?,?,?,?,?)''',
+                     (payload.PayrollMonth,teacher_username,payload.ClaimDate,payload.ItemName.strip(),payload.Amount,(payload.Description or '').strip()))
+        conn.commit(); return {"status":"success","message":"추가 청구를 등록하고 정산에 반영했습니다."}
     finally: conn.close()
+
+def _get_manageable_payroll_claim(conn, claim_id: int, current_user: Dict[str, Any]):
+    claim = conn.execute('SELECT * FROM "TeacherPayrollClaims" WHERE "Id"=?', (claim_id,)).fetchone()
+    if not claim:
+        raise HTTPException(status_code=404, detail="추가 청구 항목을 찾을 수 없습니다.")
+    if current_user["role"] not in ("admin", "manager") and claim["TeacherUsername"] != current_user["username"]:
+        raise HTTPException(status_code=403, detail="다른 선생님의 추가 청구 항목을 변경할 권한이 없습니다.")
+    return claim
+
+@app.put("/api/user/payroll/claims/{claim_id}")
+def update_payroll_claim(claim_id: int, payload: PayrollClaimRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    if (not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.ClaimDate)
+            or not payload.ClaimDate.startswith(payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0):
+        raise HTTPException(status_code=400, detail="청구월에 맞는 청구일, 항목명, 금액을 확인해 주세요.")
+    conn = get_db_connection()
+    try:
+        claim = _get_manageable_payroll_claim(conn, claim_id, current_user)
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                        (claim["PayrollMonth"], claim["TeacherUsername"])).fetchone():
+            raise HTTPException(status_code=400, detail="마감된 정산월의 추가 청구는 수정할 수 없습니다.")
+        if payload.PayrollMonth != claim["PayrollMonth"]:
+            if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                            (payload.PayrollMonth, claim["TeacherUsername"])).fetchone():
+                raise HTTPException(status_code=400, detail="이동할 정산월이 이미 마감되었습니다.")
+        conn.execute('''UPDATE "TeacherPayrollClaims"
+                        SET "PayrollMonth"=?, "ClaimDate"=?, "ItemName"=?, "Amount"=?, "Description"=? WHERE "Id"=?''',
+                     (payload.PayrollMonth, payload.ClaimDate, payload.ItemName.strip(), payload.Amount,
+                      (payload.Description or '').strip(), claim_id))
+        conn.commit()
+        return {"status":"success", "message":"추가 청구를 수정하고 정산에 반영했습니다."}
+    finally:
+        conn.close()
+
+@app.delete("/api/user/payroll/claims/{claim_id}")
+def delete_payroll_claim(claim_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        claim = _get_manageable_payroll_claim(conn, claim_id, current_user)
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                        (claim["PayrollMonth"], claim["TeacherUsername"])).fetchone():
+            raise HTTPException(status_code=400, detail="마감된 정산월의 추가 청구는 삭제할 수 없습니다.")
+        conn.execute('DELETE FROM "TeacherPayrollClaims" WHERE "Id"=?', (claim_id,))
+        conn.commit()
+        return {"status":"success", "message":"추가 청구를 삭제하고 정산에서 제외했습니다."}
+    finally:
+        conn.close()
 
 @app.post("/api/user/payroll/{month}/close")
 def close_payroll(month: str, teacher_username: str = Query(...), current_user: Dict[str, Any] = Depends(get_current_staff)):
