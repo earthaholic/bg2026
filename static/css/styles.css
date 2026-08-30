@@ -3149,6 +3149,63 @@ body {
     max-width: 680px;
 }
 
+/* 학습 기록 상세/수정 모달은 화면 안에 맞추고 본문만 스크롤한다. */
+#modal-studylog-detail {
+    padding: 1rem;
+}
+
+#modal-studylog-detail .detail-modal-card {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 620px);
+    max-height: calc(100dvh - 2rem);
+}
+
+#modal-studylog-detail .modal-header {
+    flex: 0 0 auto;
+}
+
+#modal-studylog-detail .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+#modal-studylog-detail .modal-edit-form .modal-actions {
+    position: sticky;
+    bottom: -1.5rem;
+    z-index: 1;
+    margin: 0 -1.5rem -1.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+@media (max-width: 640px) {
+    #modal-studylog-detail {
+        align-items: stretch;
+        padding: 0.5rem;
+    }
+
+    #modal-studylog-detail .detail-modal-card {
+        max-height: calc(100dvh - 1rem);
+    }
+
+    #modal-studylog-detail .modal-header {
+        padding: 1rem;
+    }
+
+    #modal-studylog-detail .modal-body {
+        padding: 1rem;
+    }
+
+    #modal-studylog-detail .modal-edit-form .modal-actions {
+        bottom: -1rem;
+        margin: 0 -1rem -1rem;
+        padding: 0.875rem 1rem;
+    }
+}
+
 /* 상세 모달 헤더 우측 버튼 영역 */
 .modal-header-right {
     display: flex;
