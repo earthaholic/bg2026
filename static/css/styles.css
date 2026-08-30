@@ -1071,6 +1071,16 @@ body {
 .utility-controls .form-control { max-width: 180px; }
 .utility-summary { margin-top: .85rem; padding: .75rem; border-radius: var(--radius-md); background: rgba(59, 130, 246, .08); color: var(--primary); font-weight: 600; }
 .utility-danger-card { border-color: rgba(239, 68, 68, .28); }
+.utility-preview-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); }
+.utility-preview-header h3 { margin: 0; font-size: 1.05rem; }
+.utility-preview-header p { margin: .35rem 0 0; color: var(--text-muted); font-size: .85rem; }
+.utility-preview-table td { vertical-align: top; }
+.utility-preview-table td small { display: block; margin-top: .25rem; color: var(--text-muted); }
+.utility-book-id, .utility-reference-item { display: block; width: max-content; margin-bottom: .3rem; padding: .2rem .45rem; border-radius: .35rem; font-size: .78rem; white-space: nowrap; }
+.utility-book-id.is-survivor { background: rgba(16, 185, 129, .12); color: #10b981; }
+.utility-book-id.is-removed { background: rgba(239, 68, 68, .1); color: #ef4444; }
+.utility-reference-item { background: rgba(59, 130, 246, .08); color: var(--text-main); }
+.utility-no-reference { color: var(--text-muted); font-size: .82rem; }
 @media (max-width: 640px) {
     .utility-grid { grid-template-columns: 1fr; }
     .utility-controls { align-items: stretch; flex-direction: column; }

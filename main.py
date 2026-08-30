@@ -2304,23 +2304,34 @@ def preview_duplicate_books(current_user: Dict[str, Any] = Depends(get_current_s
         for group in groups:
             row_ids = [int(value) for value in group["RowIds"].split(",")]
             duplicate_ids = [row_id for row_id in row_ids if row_id != group["SurvivorRowId"]]
+            placeholders = ",".join("?" for _ in row_ids)
+            books = [dict(row) for row in conn.execute(
+                f'SELECT rowid AS "RowId", "Id" FROM "Books" WHERE rowid IN ({placeholders}) ORDER BY rowid',
+                row_ids
+            ).fetchall()]
             aliases = set(duplicate_ids)
             if duplicate_ids:
                 placeholders = ",".join("?" for _ in duplicate_ids)
                 aliases.update(row[0] for row in conn.execute(
                     f'SELECT "Id" FROM "Books" WHERE rowid IN ({placeholders})', duplicate_ids
                 ).fetchall())
-            reference_count = 0
+            references_by_table = {}
             for table_name in reference_tables:
                 if not aliases:
                     continue
                 placeholders = ",".join("?" for _ in aliases)
                 quoted_table = table_name.replace('"', '""')
-                reference_count += conn.execute(
+                count = conn.execute(
                     f'SELECT COUNT(*) FROM "{quoted_table}" WHERE "BookId" IN ({placeholders})',
                     list(aliases)
                 ).fetchone()[0]
+                if count:
+                    references_by_table[table_name] = count
+            reference_count = sum(references_by_table.values())
             group["ReferenceCount"] = reference_count
+            group["ReferencesByTable"] = references_by_table
+            group["SurvivorBook"] = next(book for book in books if book["RowId"] == group["SurvivorRowId"])
+            group["RemovedBooks"] = [book for book in books if book["RowId"] != group["SurvivorRowId"]]
             group["DuplicateCount"] = group.pop("BookCount") - 1
             group.pop("RowIds")
             total_references += reference_count

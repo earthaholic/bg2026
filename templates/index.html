@@ -1032,6 +1032,17 @@
                                 <div class="utility-controls"><button id="btn-refresh-duplicate-books" class="btn btn-outline">대상 새로고침</button><button id="btn-merge-duplicate-books" class="btn btn-danger" disabled>중복 도서 병합</button></div>
                             </article>
                         </div>
+                        <div id="duplicate-books-preview-card" class="card table-card hidden">
+                            <div class="table-card-header utility-preview-header">
+                                <div><h3><i class="fa-solid fa-list-check"></i> 병합 전 수정 목록</h3><p>각 행에서 유지·삭제될 도서와 BookId가 변경될 참조를 확인하세요.</p></div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="modern-table utility-preview-table">
+                                    <thead><tr><th>도서명</th><th>저자 / 출판사</th><th>유지할 도서</th><th>삭제될 도서</th><th>수정될 참조</th></tr></thead>
+                                    <tbody id="duplicate-books-preview-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </section>
 

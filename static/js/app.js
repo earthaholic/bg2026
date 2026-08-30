@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payrollSelectedSessions = new Map();
     const payrollClaimsById = new Map();
     let payrollEditingClaimTeacher = '';
+    let duplicateBooksPreviewData = null;
 
     // DOM Elements
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
@@ -6609,15 +6610,31 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadDuplicateBooksPreview() {
         const summary = document.getElementById('duplicate-books-summary');
         const mergeButton = document.getElementById('btn-merge-duplicate-books');
+        const previewCard = document.getElementById('duplicate-books-preview-card');
         summary.textContent = '병합 대상을 확인하는 중입니다.';
         mergeButton.disabled = true;
+        previewCard.classList.add('hidden');
         try {
             const data = await apiFetch('/api/user/utilities/duplicate-books');
+            duplicateBooksPreviewData = data;
             summary.textContent = data.group_count
                 ? `${data.group_count}개 그룹 · 중복 ${data.duplicate_count}권 · 이동할 참조 ${data.reference_count}건`
                 : '현재 병합할 중복 도서가 없습니다.';
             mergeButton.disabled = !data.duplicate_count;
+            if (data.group_count) {
+                const tableLabels = { StudyLogs: '학습 이력', BookMaterialRequests: '도서·자료 요청' };
+                document.getElementById('duplicate-books-preview-body').innerHTML = data.groups.map(group => {
+                    const survivor = group.SurvivorBook;
+                    const removed = group.RemovedBooks.map(book => `<span class="utility-book-id is-removed">rowid ${Number(book.RowId)} / ID ${Number(book.Id)}</span>`).join('');
+                    const references = Object.entries(group.ReferencesByTable)
+                        .map(([table, count]) => `<span class="utility-reference-item"><b>${escapeHtml(tableLabels[table] || table)}</b> ${Number(count)}건</span>`)
+                        .join('') || '<span class="utility-no-reference">수정할 참조 없음</span>';
+                    return `<tr><td><b>${escapeHtml(group.Title || '(도서명 없음)')}</b></td><td>${escapeHtml(group.Author || '-')}<small>${escapeHtml(group.Publisher || '-')}</small></td><td><span class="utility-book-id is-survivor">rowid ${Number(survivor.RowId)} / ID ${Number(survivor.Id)}</span></td><td>${removed}</td><td>${references}</td></tr>`;
+                }).join('');
+                previewCard.classList.remove('hidden');
+            }
         } catch (error) {
+            duplicateBooksPreviewData = null;
             summary.textContent = error.message;
         }
     }
@@ -6630,7 +6647,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`${result.message}${result.unmatched_count ? ` 자동 연결하지 않은 기록 ${result.unmatched_count}건` : ''}`, result.linked_count ? 'success' : 'info');
     });
     document.getElementById('btn-merge-duplicate-books')?.addEventListener('click', async () => {
-        if (!confirm('도서명, 저자, 출판사가 모두 같은 도서를 병합할까요?\n\n가장 오래된 도서를 남기고 모든 참조를 옮긴 뒤 중복 도서를 삭제합니다. 이 작업은 되돌릴 수 없습니다.')) return;
+        const preview = duplicateBooksPreviewData;
+        if (!preview?.duplicate_count) return;
+        if (!confirm(`표시된 수정 목록대로 병합할까요?\n\n중복 그룹: ${preview.group_count}개\n삭제될 도서: ${preview.duplicate_count}권\n수정될 참조: ${preview.reference_count}건\n\n가장 오래된 도서를 남기며, 이 작업은 되돌릴 수 없습니다.`)) return;
         const button = document.getElementById('btn-merge-duplicate-books');
         button.disabled = true;
         const result = await apiFetch('/api/user/utilities/merge-duplicate-books', { method: 'POST' });
