@@ -2260,6 +2260,148 @@ def backfill_payroll_class_links(
     return {"status": "success", "linked_count": len(candidates), "unmatched_count": unmatched,
             "message": f"{len(candidates)}건의 누락 학습 이력을 수업에 연결했습니다."}
 
+
+def _duplicate_book_groups(conn) -> List[Dict[str, Any]]:
+    """도서명·저자·출판사가 완전히 같은 중복 도서 그룹을 반환한다."""
+    rows = conn.execute('''
+        SELECT COALESCE("Title", '') AS "Title",
+               COALESCE("Author", '') AS "Author",
+               COALESCE("Publisher", '') AS "Publisher",
+               COUNT(*) AS "BookCount",
+               MIN(rowid) AS "SurvivorRowId",
+               GROUP_CONCAT(rowid) AS "RowIds"
+        FROM "Books"
+        GROUP BY COALESCE("Title", ''), COALESCE("Author", ''), COALESCE("Publisher", '')
+        HAVING COUNT(*) > 1
+        ORDER BY "Title", "Author", "Publisher"
+    ''').fetchall()
+    return [dict(row) for row in rows]
+
+
+def _book_reference_tables(conn) -> List[str]:
+    """BookId 컬럼이 있는 모든 로컬 테이블을 찾아 참조 누락을 방지한다."""
+    table_names = [row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()]
+    result = []
+    for table_name in table_names:
+        columns = [column[1] for column in conn.execute(
+            f'PRAGMA table_info("{table_name.replace(chr(34), chr(34) * 2)}")'
+        ).fetchall()]
+        if table_name != "Books" and "BookId" in columns:
+            result.append(table_name)
+    return result
+
+
+@app.get("/api/user/utilities/duplicate-books")
+def preview_duplicate_books(current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """병합 전에 중복 그룹과 이동될 참조 건수를 미리 보여준다."""
+    conn = get_db_connection()
+    try:
+        groups = _duplicate_book_groups(conn)
+        reference_tables = _book_reference_tables(conn)
+        total_references = 0
+        for group in groups:
+            row_ids = [int(value) for value in group["RowIds"].split(",")]
+            duplicate_ids = [row_id for row_id in row_ids if row_id != group["SurvivorRowId"]]
+            aliases = set(duplicate_ids)
+            if duplicate_ids:
+                placeholders = ",".join("?" for _ in duplicate_ids)
+                aliases.update(row[0] for row in conn.execute(
+                    f'SELECT "Id" FROM "Books" WHERE rowid IN ({placeholders})', duplicate_ids
+                ).fetchall())
+            reference_count = 0
+            for table_name in reference_tables:
+                if not aliases:
+                    continue
+                placeholders = ",".join("?" for _ in aliases)
+                quoted_table = table_name.replace('"', '""')
+                reference_count += conn.execute(
+                    f'SELECT COUNT(*) FROM "{quoted_table}" WHERE "BookId" IN ({placeholders})',
+                    list(aliases)
+                ).fetchone()[0]
+            group["ReferenceCount"] = reference_count
+            group["DuplicateCount"] = group.pop("BookCount") - 1
+            group.pop("RowIds")
+            total_references += reference_count
+        return {
+            "groups": groups,
+            "group_count": len(groups),
+            "duplicate_count": sum(group["DuplicateCount"] for group in groups),
+            "reference_count": total_references,
+            "reference_tables": reference_tables
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/user/utilities/merge-duplicate-books")
+def merge_duplicate_books(current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """중복 도서의 모든 BookId 참조를 대표 도서로 옮기고 중복 행을 삭제한다."""
+    conn = get_db_connection()
+    deleted_snapshots = []
+    updated_studylog_snapshots = []
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        groups = _duplicate_book_groups(conn)
+        reference_tables = _book_reference_tables(conn)
+        moved_by_table = {table_name: 0 for table_name in reference_tables}
+        deleted_count = 0
+
+        for group in groups:
+            title, author, publisher = group["Title"], group["Author"], group["Publisher"]
+            books = conn.execute('''
+                SELECT rowid AS row_id, * FROM "Books"
+                WHERE COALESCE("Title", '') = ? AND COALESCE("Author", '') = ?
+                  AND COALESCE("Publisher", '') = ?
+                ORDER BY rowid
+            ''', (title, author, publisher)).fetchall()
+            survivor_id = books[0]["row_id"]
+            duplicates = books[1:]
+            aliases = {value for book in duplicates for value in (book["row_id"], book["Id"])}
+            if aliases:
+                placeholders = ",".join("?" for _ in aliases)
+                for table_name in reference_tables:
+                    quoted_table = table_name.replace('"', '""')
+                    if table_name == "StudyLogs":
+                        affected_logs = conn.execute(
+                            f'SELECT rowid AS row_id, * FROM "StudyLogs" WHERE "BookId" IN ({placeholders})',
+                            list(aliases)
+                        ).fetchall()
+                        updated_studylog_snapshots.extend(
+                            (row["row_id"], dict(row)) for row in affected_logs
+                        )
+                    cursor = conn.execute(
+                        f'UPDATE "{quoted_table}" SET "BookId" = ? WHERE "BookId" IN ({placeholders})',
+                        [survivor_id, *aliases]
+                    )
+                    moved_by_table[table_name] += cursor.rowcount
+            for book in duplicates:
+                deleted_snapshots.append((book["row_id"], dict(book)))
+                conn.execute('DELETE FROM "Books" WHERE rowid = ?', (book["row_id"],))
+                deleted_count += 1
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=f"중복 도서 병합 중 오류가 발생했습니다: {exc}")
+    finally:
+        conn.close()
+
+    for row_id, snapshot in deleted_snapshots:
+        _audit_delete("Books", row_id, snapshot, current_user["username"], current_user["role"])
+    for row_id, snapshot in updated_studylog_snapshots:
+        _audit_update("StudyLogs", row_id, snapshot, get_record_snapshot("StudyLogs", row_id),
+                      current_user["username"], current_user["role"])
+    moved_count = sum(moved_by_table.values())
+    return {
+        "status": "success",
+        "group_count": len(groups),
+        "deleted_count": deleted_count,
+        "moved_reference_count": moved_count,
+        "moved_by_table": moved_by_table,
+        "message": f"중복 도서 {deleted_count}권을 병합하고 참조 {moved_count}건을 이동했습니다."
+    }
+
 @app.post("/api/user/payroll/transfer-sessions")
 def transfer_payroll_sessions(
     payload: PayrollSessionTransferRequest,

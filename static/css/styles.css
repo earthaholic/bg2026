@@ -1057,6 +1057,26 @@ body {
     }
 }
 
+/* 관리 선생님용 일회성 데이터 유틸리티 */
+#view-utilities { overflow-y: auto; }
+.utility-layout { display: flex; flex-direction: column; gap: 1rem; width: 100%; }
+.utility-header-card { padding: 1.25rem; }
+.utility-header-card h2 { margin: 0; font-size: 1.25rem; }
+.utility-header-card p { margin: .45rem 0 0; color: var(--text-muted); }
+.utility-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+.utility-card { display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem; padding: 1.25rem; }
+.utility-card h3 { margin: 0; font-size: 1.05rem; }
+.utility-card p { margin: .45rem 0 0; color: var(--text-muted); line-height: 1.55; }
+.utility-controls { display: flex; align-items: center; gap: .65rem; }
+.utility-controls .form-control { max-width: 180px; }
+.utility-summary { margin-top: .85rem; padding: .75rem; border-radius: var(--radius-md); background: rgba(59, 130, 246, .08); color: var(--primary); font-weight: 600; }
+.utility-danger-card { border-color: rgba(239, 68, 68, .28); }
+@media (max-width: 640px) {
+    .utility-grid { grid-template-columns: 1fr; }
+    .utility-controls { align-items: stretch; flex-direction: column; }
+    .utility-controls .form-control, .utility-controls .btn { width: 100%; max-width: none; }
+}
+
 /* Difficulty Checkbox & Radio Group Styles */
 .checkbox-group-inline,
 .radio-group-inline {

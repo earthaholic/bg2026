@@ -462,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates'];
+    const STAFF_ONLY_VIEWS = ['studylog-reg', 'student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'audit-log'];
 
     function isAdmin() {
@@ -584,6 +584,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBookMaterialRequests(true);
         } else if (targetView === 'book-material-rates') {
             loadBookMaterialRates();
+        } else if (targetView === 'utilities') {
+            initUtilitiesView();
         }
     }
 
@@ -6426,7 +6428,6 @@ document.addEventListener('DOMContentLoaded', () => {
         claimCard.classList.toggle('hidden', Boolean(isStaff() && !teacher && !document.getElementById('payroll-claim-id').value));
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
         document.getElementById('payroll-summary').innerHTML = `<span class="payroll-summary-label">${escapeHtml(month)} 정산 합계</span><strong>${total.toLocaleString()}원</strong>${data.closed ? '<em><i class="fa-solid fa-lock"></i> 마감 완료</em>' : '<em class="is-open"><i class="fa-solid fa-lock-open"></i> 정산 진행 중</em>'}`;
-        document.getElementById('btn-backfill-payroll-class-links').classList.toggle('hidden', !isStaff() || data.closed);
         document.getElementById('btn-close-payroll').classList.toggle('hidden', !isStaff() || !teacher || data.closed);
     }
 
@@ -6599,12 +6600,42 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(result.message, 'success');
         await loadTeacherPayroll();
     });
+    async function initUtilitiesView() {
+        const month = document.getElementById('utility-backfill-month');
+        if (!month.value) month.value = new Date().toISOString().slice(0, 7);
+        await loadDuplicateBooksPreview();
+    }
+
+    async function loadDuplicateBooksPreview() {
+        const summary = document.getElementById('duplicate-books-summary');
+        const mergeButton = document.getElementById('btn-merge-duplicate-books');
+        summary.textContent = '병합 대상을 확인하는 중입니다.';
+        mergeButton.disabled = true;
+        try {
+            const data = await apiFetch('/api/user/utilities/duplicate-books');
+            summary.textContent = data.group_count
+                ? `${data.group_count}개 그룹 · 중복 ${data.duplicate_count}권 · 이동할 참조 ${data.reference_count}건`
+                : '현재 병합할 중복 도서가 없습니다.';
+            mergeButton.disabled = !data.duplicate_count;
+        } catch (error) {
+            summary.textContent = error.message;
+        }
+    }
+
+    document.getElementById('btn-refresh-duplicate-books')?.addEventListener('click', () => loadDuplicateBooksPreview());
     document.getElementById('btn-backfill-payroll-class-links')?.addEventListener('click', async () => {
-        const month = document.getElementById('payroll-month').value;
+        const month = document.getElementById('utility-backfill-month').value;
         if (!month || !confirm(`${month}의 수업 연결이 비어 있는 학습 이력을 자동 연결할까요?\n\n학생별 일반/특강 수업이 각각 정확히 하나인 경우에만 처리하며, 기존 연결은 변경하지 않습니다.`)) return;
         const result = await apiFetch(`/api/user/payroll/backfill-class-links?month=${encodeURIComponent(month)}`, { method: 'POST' });
         showToast(`${result.message}${result.unmatched_count ? ` 자동 연결하지 않은 기록 ${result.unmatched_count}건` : ''}`, result.linked_count ? 'success' : 'info');
-        await loadTeacherPayroll();
+    });
+    document.getElementById('btn-merge-duplicate-books')?.addEventListener('click', async () => {
+        if (!confirm('도서명, 저자, 출판사가 모두 같은 도서를 병합할까요?\n\n가장 오래된 도서를 남기고 모든 참조를 옮긴 뒤 중복 도서를 삭제합니다. 이 작업은 되돌릴 수 없습니다.')) return;
+        const button = document.getElementById('btn-merge-duplicate-books');
+        button.disabled = true;
+        const result = await apiFetch('/api/user/utilities/merge-duplicate-books', { method: 'POST' });
+        showToast(result.message, result.deleted_count ? 'success' : 'info');
+        await loadDuplicateBooksPreview();
     });
     document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
     document.getElementById('btn-cancel-payroll-claim-edit')?.addEventListener('click', resetPayrollClaimForm);
