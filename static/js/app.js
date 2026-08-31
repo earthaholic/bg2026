@@ -1477,6 +1477,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (e.target.closest('#btn-confirm-batch-books')) {
+            updateSelectedBatchBooksUI();
+            const modal = document.getElementById('modal-book-picker');
+            if (modal) modal.classList.add('hidden');
+            return;
+        }
+
         // Clear StudyLog Form Cache
         if (e.target.closest('#btn-clear-studylog-cache')) {
             selectedStudentsMap.clear();
@@ -1648,11 +1655,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if (e.target.closest('#btn-confirm-batch-books')) {
-            updateSelectedBatchBooksUI();
-            document.getElementById('modal-book-picker')?.classList.add('hidden');
-            return;
-        }
         renderStudylogTuitionProgress(students);
     }
 
