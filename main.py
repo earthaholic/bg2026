@@ -196,6 +196,7 @@ class ClassStudyLogItem(BaseModel):
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: Optional[int] = None
+    BookIds: Optional[List[int]] = []
     StudiedDay: str
     LessonContent: Optional[str] = ""
     logs: List[ClassStudyLogItem] = []
@@ -2023,7 +2024,11 @@ def user_batch_register_class_studylogs(
             "results": []
         }
 
-    if not payload.BookId or payload.BookId <= 0:
+    book_ids = list(dict.fromkeys(
+        book_id for book_id in (payload.BookIds or ([payload.BookId] if payload.BookId else []))
+        if book_id and book_id > 0
+    ))
+    if not book_ids:
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
@@ -2054,9 +2059,13 @@ def user_batch_register_class_studylogs(
             raise HTTPException(status_code=409, detail="실제 진행 선생님의 해당 월 정산이 마감되어 학습 이력을 등록할 수 없습니다.")
     finally:
         conn.close()
-    book_row = _resolve_domain_pk("Books", payload.BookId)
-    if book_row is None:
-        raise HTTPException(status_code=400, detail="해당 도서를 찾을 수 없습니다.")
+    book_names: Dict[int, str] = {}
+    for book_id in book_ids:
+        book_row = _resolve_domain_pk("Books", book_id)
+        if book_row is None:
+            raise HTTPException(status_code=400, detail=f"해당 도서를 찾을 수 없습니다. (도서 #{book_id})")
+        snapshot = get_record_snapshot("Books", book_row) or {}
+        book_names[book_id] = snapshot.get("Title") or f"도서 #{book_id}"
 
     allowed_student_ids = set(get_class_student_ids(class_id))
 
@@ -2092,36 +2101,38 @@ def user_batch_register_class_studylogs(
             results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
             continue
 
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT COUNT(*) as cnt FROM "StudyLogs" WHERE "StudentId" = ? AND "BookId" = ? AND "StudiedDay" = ?',
-                (sid, payload.BookId, day)
-            )
-            exists = cursor.fetchone()["cnt"] > 0
-            conn.close()
-            if exists:
-                skipped_count += 1
-                results.append({"StudentId": sid, "Name": name, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
-                continue
+        for book_id in book_ids:
+            book_title = book_names[book_id]
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT COUNT(*) as cnt FROM "StudyLogs" WHERE "StudentId" = ? AND "BookId" = ? AND "StudiedDay" = ?',
+                    (sid, book_id, day)
+                )
+                exists = cursor.fetchone()["cnt"] > 0
+                conn.close()
+                if exists:
+                    skipped_count += 1
+                    results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
+                    continue
 
-            res = insert_table_row("StudyLogs", {
-                "StudentId": sid, "BookId": payload.BookId, "StudiedDay": day,
-                "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
-                "IsSpecial": 1 if item.is_special else 0, "ClassId": class_id,
-                "ActualTeacherUsername": actual_teacher,
-                "SubstituteStatus": "approved",
-                "GradeSnapshot": _student_grade(sid),
-                "CreatedBy": current_user["username"]
-            })
-            new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
-            _audit_insert("StudyLogs", res.get("id"), new_snapshot,
-                          current_user["username"], current_user["role"])
-            created_count += 1
-            results.append({"StudentId": sid, "Name": name, "status": "created", "message": "등록 완료"})
-        except Exception as e:
-            results.append({"StudentId": sid, "Name": name, "status": "error", "message": f"등록 실패: {str(e)}"})
+                res = insert_table_row("StudyLogs", {
+                    "StudentId": sid, "BookId": book_id, "StudiedDay": day,
+                    "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
+                    "IsSpecial": 1 if item.is_special else 0, "ClassId": class_id,
+                    "ActualTeacherUsername": actual_teacher,
+                    "SubstituteStatus": "approved",
+                    "GradeSnapshot": _student_grade(sid),
+                    "CreatedBy": current_user["username"]
+                })
+                new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
+                _audit_insert("StudyLogs", res.get("id"), new_snapshot,
+                              current_user["username"], current_user["role"])
+                created_count += 1
+                results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "created", "message": "등록 완료"})
+            except Exception as e:
+                results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "error", "message": f"등록 실패: {str(e)}"})
 
     return {
         "status": "success",

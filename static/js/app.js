@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let batchCalendarDays = {}; // 월(YYYY-MM)별 날짜 학습 이력
     let batchCalendarCancellations = {}; // 월(YYYY-MM)별 휴강 일정
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
+    const selectedBatchBooks = new Map();
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
@@ -1464,6 +1465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const inputQ = document.getElementById('input-picker-book-q');
             if (inputQ) inputQ.value = '';
             if (modal) modal.classList.remove('hidden');
+            document.getElementById('batch-book-picker-footer')?.classList.toggle('hidden', activeBookPickerTarget !== 'batch');
             loadPickerBooks();
             return;
         }
@@ -1645,6 +1647,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         }
+
+        if (e.target.closest('#btn-confirm-batch-books')) {
+            updateSelectedBatchBooksUI();
+            document.getElementById('modal-book-picker')?.classList.add('hidden');
+            return;
+        }
         renderStudylogTuitionProgress(students);
     }
 
@@ -1777,15 +1785,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const author = escapeHtml(b.Author || '저자 미상');
                 const publisher = escapeHtml(b.Publisher || '출판사 미상');
                 const subject = escapeHtml(b.Subject || '분야 미상');
+                const isBatchSelected = activeBookPickerTarget === 'batch' && selectedBatchBooks.has(String(bId));
                 html += `
-                    <div class="picker-item-row">
+                    <div class="picker-item-row ${isBatchSelected ? 'selected' : ''}">
                         <div class="item-main">
                             <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title}</div>
                             <div class="item-sub">저자: ${author} | 출판사: ${publisher} | 분야: ${subject} | ID: #${bId}</div>
                         </div>
                         <button type="button" class="btn btn-sm btn-success btn-select-book-picker"
                                 data-id="${bId}" data-title="${title}" data-author="${author}" data-publisher="${publisher}">
-                            <i class="fa-solid fa-check"></i> 선택
+                            <i class="fa-solid ${isBatchSelected ? 'fa-minus' : 'fa-check'}"></i> ${isBatchSelected ? '해제' : '선택'}
                         </button>
                     </div>
                 `;
@@ -1799,7 +1808,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const author = btn.getAttribute('data-author');
                     const publisher = btn.getAttribute('data-publisher');
 
-                    // 대상 요소 결정: 'batch' → 일괄 등록 폼, 그 외 → 기존 학습 기록 등록 폼
+                    if (activeBookPickerTarget === 'batch') {
+                        if (selectedBatchBooks.has(String(id))) selectedBatchBooks.delete(String(id));
+                        else selectedBatchBooks.set(String(id), { id: Number(id), title, author, publisher });
+                        updateBatchBookPickerCount();
+                        loadPickerBooks();
+                        return;
+                    }
+
+                    // 개별 학습 기록 등록 폼
                     const targetMap = {
                         batch: { id: 'batch-book-id', display: 'batch-book-display', preview: 'preview-batch-book' },
                         studylog: { id: 'selected-book-id', display: 'selected-book-display', preview: 'preview-selected-book' }
@@ -2366,6 +2383,36 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
+    }
+
+    function updateBatchBookPickerCount() {
+        const count = document.getElementById('batch-book-picker-count');
+        if (count) count.textContent = `${selectedBatchBooks.size}권 선택됨`;
+    }
+
+    function updateSelectedBatchBooksUI() {
+        const books = Array.from(selectedBatchBooks.values());
+        const idEl = document.getElementById('batch-book-id');
+        const displayEl = document.getElementById('batch-book-display');
+        const previewEl = document.getElementById('preview-batch-book');
+        if (idEl) idEl.value = books.map(book => book.id).join(',');
+        if (displayEl) displayEl.value = books.length ? `${books.length}권 선택됨` : '';
+        if (!previewEl) return;
+        if (!books.length) {
+            previewEl.innerHTML = '';
+            previewEl.classList.add('hidden');
+            return;
+        }
+        previewEl.innerHTML = `<div class="selected-students-chips">${books.map(book => `
+            <span class="student-chip"><i class="fa-solid fa-book"></i> ${escapeHtml(book.title)}
+                <span class="btn-remove-batch-book btn-remove-chip" data-id="${book.id}" title="선택 삭제">&times;</span>
+            </span>`).join('')}</div>`;
+        previewEl.classList.remove('hidden');
+        previewEl.querySelectorAll('.btn-remove-batch-book').forEach(btn => btn.addEventListener('click', () => {
+            selectedBatchBooks.delete(btn.getAttribute('data-id'));
+            updateSelectedBatchBooksUI();
+            updateBatchBookPickerCount();
+        }));
     }
 
     async function renderStudyLogDetailEditForm(log, logId) {
@@ -5474,6 +5521,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bId) bId.value = '';
         if (bDisp) bDisp.value = '';
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+        selectedBatchBooks.clear();
+        updateBatchBookPickerCount();
         updateBatchRegistrationMode();
     }
 
@@ -5520,9 +5569,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-        const bookIdEl = document.getElementById('batch-book-id');
-        const bookId = bookIdEl ? parseInt(bookIdEl.value || '0') : 0;
-        if (!bookId || bookId <= 0) {
+        const bookIds = Array.from(selectedBatchBooks.values()).map(book => book.id);
+        if (bookIds.length === 0) {
             classBatchResult.className = 'alert alert-danger';
             classBatchResult.textContent = '도서를 선택해 주세요.';
             classBatchResult.classList.remove('hidden');
@@ -5549,13 +5597,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!shouldContinue) return;
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                 method: 'POST',
-                body: JSON.stringify({ BookId: bookId, StudiedDay: dateVal, LessonContent: content, ActualTeacherUsername: isStaff() ? (document.getElementById('batch-actual-teacher')?.value || '') : '', logs: logs })
+                body: JSON.stringify({ BookIds: bookIds, StudiedDay: dateVal, LessonContent: content, ActualTeacherUsername: isStaff() ? (document.getElementById('batch-actual-teacher')?.value || '') : '', logs: logs })
             });
             let resList = '';
             (result.results || []).forEach(r => {
                 const statusClass = BATCH_STATUS_CLASS[r.status] || '';
                 const icon = BATCH_STATUS_ICON[r.status] || 'fa-circle-info';
-                resList += `<div class="res-row"><span>${escapeHtml(r.Name || `학생 #${r.StudentId}`)}</span><span class="${statusClass}"><i class="fa-solid ${icon}"></i> ${escapeHtml(r.message || '')}</span></div>`;
+                const resultTarget = r.BookId ? `${r.Name || `학생 #${r.StudentId}`} · ${r.BookTitle || `도서 #${r.BookId}`}` : (r.Name || `학생 #${r.StudentId}`);
+                resList += `<div class="res-row"><span>${escapeHtml(resultTarget)}</span><span class="${statusClass}"><i class="fa-solid ${icon}"></i> ${escapeHtml(r.message || '')}</span></div>`;
             });
             classBatchResult.className = 'alert alert-success';
             classBatchResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}${resList ? `<div class="class-batch-result-list">${resList}</div>` : ''}`;
@@ -5567,6 +5616,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bId) bId.value = '';
             if (bDisp) bDisp.value = '';
             if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
+            selectedBatchBooks.clear();
+            updateBatchBookPickerCount();
             loadBatchStudylogCalendar(getBatchMonth(dateVal));
         } catch (err) {
             classBatchResult.className = 'alert alert-danger';
