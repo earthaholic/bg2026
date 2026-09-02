@@ -144,6 +144,10 @@
                         <i class="fa-solid fa-screwdriver-wrench nav-icon"></i>
                         <span>유틸리티</span>
                     </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="audit-log">
+                        <i class="fa-solid fa-clock-rotate-left nav-icon"></i>
+                        <span>변경 이력 조회</span>
+                    </div>
 
                     <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
                     <div class="menu-nav-item admin-only hidden" data-view="data-view">
@@ -159,10 +163,6 @@
                     <div class="menu-nav-item admin-only hidden" data-view="user-manage">
                         <i class="fa-solid fa-user-gear nav-icon"></i>
                         <span>선생님 계정 관리</span>
-                    </div>
-                    <div class="menu-nav-item admin-only hidden" data-view="audit-log">
-                        <i class="fa-solid fa-clock-rotate-left nav-icon"></i>
-                        <span>변경 이력 조회</span>
                     </div>
                 </nav>
 
@@ -1319,7 +1319,7 @@
                     </div>
                 </section>
 
-                <!-- View: 계정별 변경 이력 조회 (Admin Only) -->
+                <!-- View: 계정별 변경 이력 조회 (Staff Only) -->
                 <section id="view-audit-log" class="workspace-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">

@@ -3266,10 +3266,10 @@ def admin_delete_user(
     return {"status": "success", "message": "계정이 성공적으로 삭제되었습니다."}
 
 
-# --- 감사 로그(Audit Trail) 조회 APIs (Admin Only) ---
+# --- 감사 로그(Audit Trail) 조회 APIs (Staff Only) ---
 
 @app.get("/api/admin/audit-logs/users")
-def admin_audit_username_options(current_admin: Dict[str, Any] = Depends(get_current_admin)):
+def admin_audit_username_options(current_staff: Dict[str, Any] = Depends(get_current_staff)):
     """감사 로그 필터용 계정 목록을 반환한다."""
     return {"users": get_audit_username_options()}
 
@@ -3284,7 +3284,7 @@ def admin_list_audit_logs(
     record_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
-    current_admin: Dict[str, Any] = Depends(get_current_admin)
+    current_staff: Dict[str, Any] = Depends(get_current_staff)
 ):
     """계정별 변경 이력을 필터링해 조회한다. (계정·기간 필수 조합 지원)"""
     rows, total_count = get_audit_logs(
