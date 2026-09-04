@@ -3,6 +3,7 @@ import io
 import csv
 import re
 import json
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
@@ -112,6 +113,19 @@ class BatchDeleteRequest(BaseModel):
 
 class SQLExecuteRequest(BaseModel):
     query: str
+
+class StudyLogCsvRow(BaseModel):
+    row_number: int
+    student_name: str
+    book_title: str
+    studied_day: str
+    lesson_content: Optional[str] = ""
+    student_id: Optional[int] = None
+    book_id: Optional[int] = None
+
+class StudyLogCsvRequest(BaseModel):
+    source_file: Optional[str] = ""
+    rows: List[StudyLogCsvRow]
 
 class UserBookRegisterRequest(BaseModel):
     Title: str
@@ -2396,6 +2410,172 @@ def preview_duplicate_books(current_user: Dict[str, Any] = Depends(get_current_s
             "reference_count": total_references,
             "reference_tables": reference_tables
         }
+    finally:
+        conn.close()
+
+
+def _csv_book_score(source: str, target: str) -> float:
+    """표기 차이를 허용하되 과도한 자동 연결은 피하는 도서명 유사도 점수."""
+    source_key, target_key = normalize_key(source), normalize_key(target)
+    if not source_key or not target_key:
+        return 0.0
+    if source_key == target_key:
+        return 1.0
+    sequence = SequenceMatcher(None, source_key, target_key).ratio()
+    kind = classify_match(source_key, target_key)
+    if kind == "contains":
+        sequence = max(sequence, min(len(source_key), len(target_key)) / max(len(source_key), len(target_key)))
+    return round(sequence, 4)
+
+
+@app.post("/api/user/utilities/studylog-csv/preview")
+def preview_studylog_csv(payload: StudyLogCsvRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """CSV 행별 학생·도서 후보를 판정한다. 이 단계에서는 데이터를 변경하지 않는다."""
+    if not payload.rows or len(payload.rows) > 500:
+        raise HTTPException(status_code=400, detail="CSV는 한 번에 1~500개의 데이터 행만 처리할 수 있습니다.")
+    conn = get_db_connection()
+    try:
+        students = [dict(row) for row in conn.execute('SELECT rowid AS row_id, "Id", "Name" FROM "Students"').fetchall()]
+        books = [dict(row) for row in conn.execute('SELECT rowid AS row_id, "Id", "Title", "Author", "Publisher" FROM "Books"').fetchall()]
+        existing = {(str(row[0]), str(row[1]), row[2]) for row in conn.execute('SELECT "StudentId", "BookId", "StudiedDay" FROM "StudyLogs"').fetchall()}
+    finally:
+        conn.close()
+    student_map = {}
+    for student in students:
+        student_map.setdefault(normalize_key(student.get("Name") or ""), []).append(student)
+    results = []
+    for source in payload.rows:
+        errors, warnings = [], []
+        matched_students = student_map.get(normalize_key(source.student_name), [])
+        student = matched_students[0] if len(matched_students) == 1 else None
+        if not matched_students:
+            errors.append("일치하는 학생을 찾을 수 없습니다.")
+        elif len(matched_students) > 1:
+            errors.append("동명이인 학생이 있어 자동 선택할 수 없습니다.")
+        try:
+            datetime.strptime(source.studied_day.strip(), "%Y-%m-%d")
+        except ValueError:
+            errors.append("일자는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.")
+        ranked = sorted(
+            [(_csv_book_score(source.book_title, book.get("Title") or ""), book) for book in books],
+            key=lambda item: (-item[0], item[1]["row_id"])
+        )
+        candidates = [{
+            "book_id": item[1]["row_id"], "title": item[1].get("Title") or "",
+            "author": item[1].get("Author") or "", "publisher": item[1].get("Publisher") or "",
+            "score": item[0]
+        } for item in ranked[:5] if item[0] >= 0.35]
+        selected_book_id = None
+        match_type = "none"
+        if ranked:
+            top_score = ranked[0][0]
+            second_score = ranked[1][0] if len(ranked) > 1 else 0.0
+            exact_count = sum(1 for score, _ in ranked if score == 1.0)
+            if top_score == 1.0 and exact_count == 1:
+                selected_book_id, match_type = ranked[0][1]["row_id"], "exact"
+            elif top_score >= 0.85 and top_score - second_score >= 0.08:
+                selected_book_id, match_type = ranked[0][1]["row_id"], "similar"
+                warnings.append(f"도서명을 유사도 {top_score * 100:.1f}%로 자동 연결했습니다.")
+            else:
+                errors.append("도서 후보가 불확실합니다. 후보에서 직접 선택해 주세요.")
+        else:
+            errors.append("등록된 도서가 없습니다.")
+        duplicate = False
+        if student and selected_book_id:
+            aliases = {str(student["row_id"]), str(student.get("Id"))}
+            duplicate = any((sid, str(selected_book_id), source.studied_day.strip()) in existing for sid in aliases)
+            if duplicate:
+                errors.append("같은 학생·도서·일자의 학습 기록이 이미 있습니다.")
+        results.append({
+            **source.dict(), "student_id": student["row_id"] if student else None,
+            "book_id": selected_book_id, "book_match_type": match_type,
+            "book_candidates": candidates, "errors": errors, "warnings": warnings,
+            "ready": not errors
+        })
+    return {"rows": results, "total_count": len(results), "ready_count": sum(1 for row in results if row["ready"])}
+
+
+@app.post("/api/user/utilities/studylog-csv/import")
+def import_studylog_csv(payload: StudyLogCsvRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """확정된 CSV 행을 수업·정산·진행 선생님 연결 없이 등록하고 실행 결과를 보존한다."""
+    if not payload.rows or len(payload.rows) > 500:
+        raise HTTPException(status_code=400, detail="가져올 행은 1~500개여야 합니다.")
+    results, audit_items = [], []
+    conn = get_db_connection()
+    try:
+        columns = {row[1] for row in conn.execute('PRAGMA table_info("StudyLogs")').fetchall()}
+        for source in payload.rows:
+            result = {"row_number": source.row_number, "student_name": source.student_name,
+                      "book_title": source.book_title, "studied_day": source.studied_day}
+            try:
+                datetime.strptime(source.studied_day.strip(), "%Y-%m-%d")
+                if not source.student_id or not conn.execute('SELECT 1 FROM "Students" WHERE rowid=? OR "Id"=?', (source.student_id, source.student_id)).fetchone():
+                    raise ValueError("학생을 확인할 수 없습니다.")
+                if not source.book_id or not conn.execute('SELECT 1 FROM "Books" WHERE rowid=? OR "Id"=?', (source.book_id, source.book_id)).fetchone():
+                    raise ValueError("도서를 확인할 수 없습니다.")
+                if conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "BookId"=? AND "StudiedDay"=? LIMIT 1',
+                                (source.student_id, source.book_id, source.studied_day.strip())).fetchone():
+                    raise ValueError("같은 학생·도서·일자의 학습 기록이 이미 있습니다.")
+                values = {
+                    "StudentId": source.student_id, "BookId": source.book_id,
+                    "StudiedDay": source.studied_day.strip(), "LessonContent": (source.lesson_content or "").strip(),
+                    "Description": "", "IsSpecial": 0, "ClassId": None, "PayrollCategoryId": None,
+                    "ActualTeacherUsername": "", "SubstituteStatus": "", "GradeSnapshot": "",
+                    "CreatedBy": current_user["username"]
+                }
+                values = {key: value for key, value in values.items() if key in columns}
+                names = list(values)
+                cursor = conn.execute(
+                    f'INSERT INTO "StudyLogs" ({", ".join(chr(34) + name + chr(34) for name in names)}) VALUES ({", ".join("?" for _ in names)})',
+                    [values[name] for name in names]
+                )
+                log_id = cursor.lastrowid
+                conn.commit()
+                snapshot = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (log_id,)).fetchone())
+                audit_items.append((log_id, snapshot))
+                result.update({"status": "success", "studylog_id": log_id, "message": "등록 완료"})
+            except Exception as exc:
+                conn.rollback()
+                result.update({"status": "failure", "message": str(exc)})
+            results.append(result)
+        success_count = sum(1 for item in results if item["status"] == "success")
+        conn.execute('''INSERT INTO _app_studylog_import_runs
+                        (source_file,total_count,success_count,failure_count,results_json,username)
+                        VALUES (?,?,?,?,?,?)''',
+                     ((payload.source_file or "")[:255], len(results), success_count, len(results) - success_count,
+                      json.dumps(results, ensure_ascii=False), current_user["username"]))
+        run_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        conn.commit()
+    finally:
+        conn.close()
+    for log_id, snapshot in audit_items:
+        _audit_insert("StudyLogs", log_id, snapshot, current_user["username"], current_user["role"])
+    return {"status": "success", "run_id": run_id, "total_count": len(results),
+            "success_count": success_count, "failure_count": len(results) - success_count, "results": results,
+            "message": f"{success_count}건을 등록했고 {len(results) - success_count}건은 실패했습니다."}
+
+
+@app.get("/api/user/utilities/studylog-csv/runs")
+def list_studylog_csv_runs(current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''SELECT id,source_file,total_count,success_count,failure_count,username,created_at
+                               FROM _app_studylog_import_runs ORDER BY id DESC LIMIT 20''').fetchall()
+        return {"runs": [dict(row) for row in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/user/utilities/studylog-csv/runs/{run_id}")
+def get_studylog_csv_run(run_id: int, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT * FROM _app_studylog_import_runs WHERE id=?', (run_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="CSV 실행 이력을 찾을 수 없습니다.")
+        result = dict(row)
+        result["results"] = json.loads(result.pop("results_json") or "[]")
+        return result
     finally:
         conn.close()
 

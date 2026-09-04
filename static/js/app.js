@@ -6759,7 +6759,106 @@ document.addEventListener('DOMContentLoaded', () => {
         const month = document.getElementById('utility-backfill-month');
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
         await loadDuplicateBooksPreview();
+        await loadStudyLogCsvRuns();
     }
+
+    let studyLogCsvPreview = null;
+    let studyLogCsvFileName = '';
+
+    function parseCsvText(text) {
+        const rows = [];
+        let row = [], field = '', quoted = false;
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (char === '"') {
+                if (quoted && text[i + 1] === '"') { field += '"'; i++; }
+                else quoted = !quoted;
+            } else if (char === ',' && !quoted) { row.push(field); field = ''; }
+            else if ((char === '\n' || char === '\r') && !quoted) {
+                if (char === '\r' && text[i + 1] === '\n') i++;
+                row.push(field); rows.push(row); row = []; field = '';
+            } else field += char;
+        }
+        if (field || row.length) { row.push(field); rows.push(row); }
+        return rows;
+    }
+
+    function renderStudyLogCsvPreview() {
+        const body = document.getElementById('studylog-csv-preview-body');
+        const card = document.getElementById('studylog-csv-preview-card');
+        const button = document.getElementById('btn-import-studylog-csv');
+        const rows = studyLogCsvPreview?.rows || [];
+        body.innerHTML = rows.map(row => {
+            const selected = Number(row.book_id || 0);
+            const options = ['<option value="">도서 후보 선택</option>', ...(row.book_candidates || []).map(book => `<option value="${Number(book.book_id)}" ${Number(book.book_id) === selected ? 'selected' : ''}>${escapeHtml(book.title)} (${(Number(book.score) * 100).toFixed(1)}%)${book.author ? ` · ${escapeHtml(book.author)}` : ''}</option>`)].join('');
+            const messages = [...(row.errors || []).map(message => `<span class="utility-row-message is-error">${escapeHtml(message)}</span>`), ...(row.warnings || []).map(message => `<span class="utility-row-message is-warning">${escapeHtml(message)}</span>`)].join('');
+            return `<tr><td>${Number(row.row_number)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.studied_day)}</td><td><b>${escapeHtml(row.book_title)}</b><small><select class="form-control utility-match-select" data-row-number="${Number(row.row_number)}">${options}</select></small></td><td class="utility-csv-content">${escapeHtml(row.lesson_content || '-')}</td><td>${row.ready ? '<span class="badge badge-success">등록 가능</span>' : '<span class="badge badge-danger">확인 필요</span>'}${messages}</td></tr>`;
+        }).join('');
+        card.classList.remove('hidden');
+        button.disabled = !rows.some(row => row.ready);
+        const ready = rows.filter(row => row.ready).length;
+        document.getElementById('studylog-csv-summary').textContent = `전체 ${rows.length}건 · 등록 가능 ${ready}건 · 확인 필요 ${rows.length - ready}건`;
+    }
+
+    async function loadStudyLogCsvRuns() {
+        const body = document.getElementById('studylog-csv-runs-body');
+        try {
+            const data = await apiFetch('/api/user/utilities/studylog-csv/runs');
+            body.innerHTML = data.runs.length ? data.runs.map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(run.username)}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
+        } catch (error) { body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`; }
+    }
+
+    document.getElementById('studylog-csv-runs-body')?.addEventListener('click', async event => {
+        const button = event.target.closest('.btn-studylog-csv-run-detail');
+        if (!button) return;
+        const run = await apiFetch(`/api/user/utilities/studylog-csv/runs/${Number(button.dataset.runId)}`);
+        document.getElementById('studylog-csv-run-detail-title').textContent = `${run.created_at} · ${run.source_file || '-'} · 성공 ${run.success_count}건 / 실패 ${run.failure_count}건`;
+        document.getElementById('studylog-csv-run-detail-body').innerHTML = run.results.map(item => `<tr><td>${Number(item.row_number)}</td><td>${escapeHtml(item.student_name || '-')}</td><td>${escapeHtml(item.book_title || '-')}</td><td>${escapeHtml(item.studied_day || '-')}</td><td><span class="badge ${item.status === 'success' ? 'badge-success' : 'badge-danger'}">${item.status === 'success' ? '성공' : '실패'}</span></td><td>${escapeHtml(item.message || '')}</td></tr>`).join('');
+        document.getElementById('studylog-csv-run-detail-card').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-preview-studylog-csv')?.addEventListener('click', async () => {
+        const file = document.getElementById('studylog-csv-file').files[0];
+        if (!file) return showToast('CSV 파일을 선택해 주세요.', 'warning');
+        const bytes = await file.arrayBuffer();
+        let text = new TextDecoder('utf-8').decode(bytes);
+        if (text.includes('\uFFFD')) text = new TextDecoder('euc-kr').decode(bytes);
+        const parsed = parseCsvText(text.replace(/^\uFEFF/, ''));
+        const headers = (parsed.shift() || []).map(value => value.trim());
+        const required = ['이름', '도서', '일자', '수업기록'];
+        if (!required.every(name => headers.includes(name))) return showToast('CSV 헤더는 이름, 도서, 일자, 수업기록이어야 합니다.', 'error');
+        const indexes = Object.fromEntries(required.map(name => [name, headers.indexOf(name)]));
+        const rows = parsed.map((values, index) => ({ row_number: index + 2, student_name: (values[indexes['이름']] || '').trim(), book_title: (values[indexes['도서']] || '').trim(), studied_day: (values[indexes['일자']] || '').trim(), lesson_content: (values[indexes['수업기록']] || '').trim() })).filter(row => row.student_name || row.book_title || row.studied_day || row.lesson_content);
+        if (!rows.length) return showToast('가져올 데이터 행이 없습니다.', 'warning');
+        studyLogCsvFileName = file.name;
+        studyLogCsvPreview = await apiFetch('/api/user/utilities/studylog-csv/preview', { method: 'POST', body: JSON.stringify({ source_file: file.name, rows }) });
+        renderStudyLogCsvPreview();
+    });
+
+    document.getElementById('studylog-csv-preview-body')?.addEventListener('change', event => {
+        const select = event.target.closest('.utility-match-select');
+        if (!select || !studyLogCsvPreview) return;
+        const row = studyLogCsvPreview.rows.find(item => Number(item.row_number) === Number(select.dataset.rowNumber));
+        row.book_id = Number(select.value) || null;
+        row.errors = (row.errors || []).filter(message => !message.startsWith('도서 후보가 불확실') && !message.startsWith('같은 학생·도서') && message !== '도서를 선택해 주세요.');
+        if (!row.book_id) row.errors.push('도서를 선택해 주세요.');
+        row.ready = Boolean(row.student_id && row.book_id && !row.errors.length);
+        renderStudyLogCsvPreview();
+    });
+
+    document.getElementById('btn-import-studylog-csv')?.addEventListener('click', async () => {
+        const rows = studyLogCsvPreview?.rows || [];
+        const readyCount = rows.filter(row => row.ready).length;
+        if (!readyCount || !confirm(`등록 가능한 ${readyCount}건을 학습 기록에 추가할까요?\n\n확인 필요 ${rows.length - readyCount}건은 실패 사유와 함께 실행 이력에 남습니다. 수업·정산·실제 진행 선생님에는 연결되지 않습니다.`)) return;
+        const button = document.getElementById('btn-import-studylog-csv');
+        button.disabled = true;
+        const result = await apiFetch('/api/user/utilities/studylog-csv/import', { method: 'POST', body: JSON.stringify({ source_file: studyLogCsvFileName, rows }) });
+        showToast(result.message, result.failure_count ? 'warning' : 'success');
+        document.getElementById('studylog-csv-summary').textContent = `실행 완료 · 성공 ${result.success_count}건 · 실패 ${result.failure_count}건 (실행 #${result.run_id})`;
+        await loadStudyLogCsvRuns();
+        studyLogCsvPreview = null;
+        document.getElementById('studylog-csv-preview-card').classList.add('hidden');
+    });
 
     async function loadDuplicateBooksPreview() {
         const summary = document.getElementById('duplicate-books-summary');

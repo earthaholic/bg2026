@@ -1069,6 +1069,13 @@ body {
 .utility-card p { margin: .45rem 0 0; color: var(--text-muted); line-height: 1.55; }
 .utility-controls { display: flex; align-items: center; gap: .65rem; }
 .utility-controls .form-control { max-width: 180px; }
+.utility-csv-card { grid-column: 1 / -1; }
+.utility-csv-controls .form-control { max-width: 420px; }
+.utility-match-select { min-width: 260px; }
+.utility-row-message { display: block; margin-top: .35rem; font-size: .78rem; }
+.utility-row-message.is-error { color: var(--danger); }
+.utility-row-message.is-warning { color: var(--warning); }
+.utility-csv-content { min-width: 260px; max-width: 440px; white-space: normal; }
 .utility-summary { margin-top: .85rem; padding: .75rem; border-radius: var(--radius-md); background: rgba(59, 130, 246, .08); color: var(--primary); font-weight: 600; }
 .utility-danger-card { border-color: rgba(239, 68, 68, .28); }
 .utility-preview-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); }

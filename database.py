@@ -101,6 +101,21 @@ def init_system_tables():
         cursor.execute('ALTER TABLE "TuitionPayments" ADD COLUMN "Memo" TEXT DEFAULT \'\'')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tuition_payments_student_start ON "TuitionPayments"("StudentId", "StartDate")')
 
+    # CSV 학습 기록 가져오기 실행 이력. 실패 행도 원문과 사유를 함께 보존한다.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS _app_studylog_import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL DEFAULT '',
+            total_count INTEGER NOT NULL DEFAULT 0,
+            success_count INTEGER NOT NULL DEFAULT 0,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            results_json TEXT NOT NULL DEFAULT '[]',
+            username TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_studylog_import_runs_created ON _app_studylog_import_runs(created_at DESC)')
+
     # 학생별 상담 기록 (로컬 전용)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS "StudentConsultations" (

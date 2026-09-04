@@ -1035,6 +1035,10 @@
                             <p>데이터 정리와 보정처럼 필요할 때만 실행하는 관리 기능입니다.</p>
                         </div>
                         <div class="utility-grid">
+                            <article class="card utility-card utility-csv-card">
+                                <div class="utility-card-copy"><h3>CSV 학습 기록 가져오기</h3><p><code>이름, 도서, 일자, 수업기록</code> 형식의 CSV를 분석합니다. 수업·정산·진행 선생님에는 연결하지 않으며, 도서명은 유사도를 계산한 뒤 미리 확인합니다.</p><div id="studylog-csv-summary" class="utility-summary">CSV 파일을 선택해 주세요.</div></div>
+                                <div class="utility-controls utility-csv-controls"><input id="studylog-csv-file" class="form-control" type="file" accept=".csv,text/csv"><button id="btn-preview-studylog-csv" class="btn btn-primary">미리보기</button></div>
+                            </article>
                             <article class="card utility-card">
                                 <div class="utility-card-copy"><h3>누락 학습 이력 수업 연결</h3><p>선택한 월의 미연결 학습 이력을 학생별 일반·특강 수업이 정확히 하나인 경우에만 연결합니다.</p></div>
                                 <div class="utility-controls"><input id="utility-backfill-month" class="form-control" type="month"><button id="btn-backfill-payroll-class-links" class="btn btn-primary">실행</button></div>
@@ -1044,6 +1048,15 @@
                                 <div class="utility-controls"><button id="btn-refresh-duplicate-books" class="btn btn-outline">대상 새로고침</button><button id="btn-merge-duplicate-books" class="btn btn-danger" disabled>중복 도서 병합</button></div>
                             </article>
                         </div>
+                        <div id="studylog-csv-preview-card" class="card table-card hidden">
+                            <div class="table-card-header utility-preview-header"><div><h3><i class="fa-solid fa-file-csv"></i> 가져오기 미리보기</h3><p>오류가 없는 행만 등록됩니다. 불확실한 도서는 후보를 직접 선택할 수 있습니다.</p></div><button id="btn-import-studylog-csv" class="btn btn-success" disabled>등록 실행</button></div>
+                            <div class="table-responsive"><table class="modern-table utility-preview-table"><thead><tr><th>행</th><th>학생</th><th>일자</th><th>입력 도서 / 연결 도서</th><th>수업기록</th><th>판정</th></tr></thead><tbody id="studylog-csv-preview-body"></tbody></table></div>
+                        </div>
+                        <div class="card table-card">
+                            <div class="table-card-header utility-preview-header"><div><h3><i class="fa-solid fa-clock-rotate-left"></i> 최근 CSV 실행 이력</h3><p>성공·실패 건수는 서버에 영구 보관됩니다.</p></div></div>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>실행 시각</th><th>파일</th><th>실행 계정</th><th>전체</th><th>성공</th><th>실패</th><th>상세</th></tr></thead><tbody id="studylog-csv-runs-body"><tr><td colspan="7" class="empty-state">실행 이력을 불러오는 중입니다.</td></tr></tbody></table></div>
+                        </div>
+                        <div id="studylog-csv-run-detail-card" class="card table-card hidden"><div class="table-card-header utility-preview-header"><div><h3>행별 성공·실패 로그</h3><p id="studylog-csv-run-detail-title"></p></div></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>CSV 행</th><th>학생</th><th>도서</th><th>일자</th><th>결과</th><th>메시지</th></tr></thead><tbody id="studylog-csv-run-detail-body"></tbody></table></div></div>
                         <div id="duplicate-books-preview-card" class="card table-card hidden">
                             <div class="table-card-header utility-preview-header">
                                 <div><h3><i class="fa-solid fa-list-check"></i> 병합 전 수정 목록</h3><p>각 행에서 유지·삭제될 도서와 BookId가 변경될 참조를 확인하세요.</p></div>
@@ -2224,6 +2237,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260831-batch-multi-books-fix"></script>
+    <script src="/static/js/app.js?v=20260904-studylog-csv-import"></script>
 </body>
 </html>
