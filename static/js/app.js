@@ -1701,7 +1701,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (classId) queryParams.set('class_id', classId);
             }
             const data = await apiFetch(`/api/user/picker/students${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-            const students = data.students || [];
+            let students = data.students || [];
+            const lastMonthlyStudentId = activeStudentPickerTarget === 'monthly'
+                ? localStorage.getItem(`monthly-report-picker-last-student:${currentUser?.username || 'default'}`)
+                : null;
+            if (lastMonthlyStudentId) {
+                students = [...students].sort((a, b) => {
+                    const aIsLast = String(a.row_id || a.Id) === lastMonthlyStudentId;
+                    const bIsLast = String(b.row_id || b.Id) === lastMonthlyStudentId;
+                    return Number(bIsLast) - Number(aIsLast);
+                });
+            }
 
             if (students.length === 0) {
                 container.innerHTML = '<div class="empty-state"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
@@ -1716,11 +1726,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const grade = formatGrade(s.Grade);
                 const referrer = formatReferrer(s.Referrer);
                 const isSelected = activeStudentPickerTarget === 'studylog' && selectedStudentsMap.has(sId);
+                const isLastMonthly = activeStudentPickerTarget === 'monthly' && String(sId) === lastMonthlyStudentId;
 
                 html += `
                     <div class="picker-item-row ${isSelected ? 'selected' : ''}" data-row-id="${sId}">
                         <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex})</div>
+                            <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex}) ${isLastMonthly ? '<span class="tag-badge primary">최근 선택</span>' : ''}</div>
                             <div class="item-sub">학년: ${grade}${s.Referrer ? ' · 추천: ' + referrer : ''} | ID: #${sId}</div>
                         </div>
                         <button type="button" class="btn btn-sm ${isSelected ? 'btn-success' : 'btn-outline-primary'} btn-select-student-picker"
@@ -1744,9 +1755,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (activeStudentPickerTarget === 'monthly') {
                         const monthlySelect = document.getElementById('monthly-report-student-select');
                         const elModal = document.getElementById('modal-student-picker');
+                        localStorage.setItem(`monthly-report-picker-last-student:${currentUser?.username || 'default'}`, String(id));
                         if (monthlySelect) {
-                            monthlySelect.value = id;
-                            loadMonthlyReportLogs();
+                            monthlySelect.value = String(id);
+                            monthlySelect.dispatchEvent(new Event('change'));
                         }
                         if (elModal) elModal.classList.add('hidden');
                         activeStudentPickerTarget = 'studylog';
@@ -5955,26 +5967,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.innerHTML = '<option value="">등록된 학생이 없습니다</option>';
                 return;
             }
-            const storageKey = `monthly-report-last-student:${currentUser?.username || 'default'}`;
-            const lastStudentId = localStorage.getItem(storageKey);
-            const preferredStudentId = String(selectedStudentId || lastStudentId || '');
-            const orderedStudents = [...students].sort((a, b) => {
-                const aId = String(a.row_id || a.Id);
-                const bId = String(b.row_id || b.Id);
-                if (aId === preferredStudentId) return -1;
-                if (bId === preferredStudentId) return 1;
-                return 0;
-            });
             let html = '<option value="">-- 학생을 선택하세요 --</option>';
-            orderedStudents.forEach(s => {
+            students.forEach(s => {
                 const sId = s.row_id || s.Id;
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
                 html += `<option value="${sId}">${name} (${sex}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} [#${sId}]</option>`;
             });
             select.innerHTML = html;
-            if (preferredStudentId && [...select.options].some(option => option.value === preferredStudentId)) {
-                select.value = preferredStudentId;
+            if (selectedStudentId) {
+                select.value = selectedStudentId;
             }
         } catch (err) {
             select.innerHTML = `<option value="">학생 로딩 실패: ${err.message}</option>`;
@@ -6042,16 +6044,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     /* 조용히 무시 */
                 }
             }
-            if (select?.value) {
-                localStorage.setItem(`monthly-report-last-student:${currentUser?.username || 'default'}`, select.value);
-                const selectedOption = select.options[select.selectedIndex];
-                if (selectedOption && select.options.length > 1) {
-                    select.insertBefore(selectedOption, select.options[1]);
-                }
-            }
         }
 
-        if (document.getElementById('monthly-report-student-select')?.value) {
+        if (preselectStudentId) {
             await loadMonthlyReportLogs();
         }
         await loadSavedMonthlyReports();
@@ -6163,12 +6158,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMonthlyReportId = null;
             setMonthlyReportSaveState(null);
             if (studentSelectEl.value) {
-                const storageKey = `monthly-report-last-student:${currentUser?.username || 'default'}`;
-                localStorage.setItem(storageKey, studentSelectEl.value);
-                const selectedOption = studentSelectEl.options[studentSelectEl.selectedIndex];
-                if (selectedOption && studentSelectEl.options.length > 1) {
-                    studentSelectEl.insertBefore(selectedOption, studentSelectEl.options[1]);
-                }
                 loadMonthlyReportLogs();
             } else {
                 generateMonthlyReportText();
