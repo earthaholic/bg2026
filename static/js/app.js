@@ -3091,7 +3091,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const referredStudents = data.referred_students || [];
             const tuitionProgress = data.tuition_progress;
             const tuitionHtml = isStaff() ? (tuitionProgress?.has_payment
-                ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><div class="detail-meta-row"><span>누적 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? '<span class="badge badge-warning">차시 소진</span>' : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">특강은 수강 차시에서 차감하지 않습니다.</p></div>`
+                ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 현재 결제 수강 현황</div><div class="detail-meta-row"><span>현재 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? '<span class="badge badge-warning">차시 소진</span>' : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">${escapeHtml(tuitionProgress.payment_start || '')} 시작 결제 기준이며, 특강은 수강 차시에서 차감하지 않습니다.</p></div>`
                 : `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><p class="text-muted">등록된 결제 정보가 없습니다.</p></div>`) : '';
 
             const referredStudentsHtml = referredStudents.length
@@ -5835,7 +5835,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide is-calculated';
-                guide.textContent = `결제 시작일 ${progress.earliest_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작`;
+                guide.textContent = `현재 결제 시작일 ${progress.payment_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작`;
             }
         } catch (err) {
             if (requestSeq !== monthlyLectureRequestSeq) return;
@@ -6476,7 +6476,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const p = await apiFetch(`/api/user/students/${studentId}/tuition-progress`);
             box.className = `alert ${p.has_payment && !p.is_exhausted ? 'alert-info' : 'alert-warning'}`;
             box.innerHTML = p.has_payment
-                ? `<i class="fa-solid fa-chart-line"></i> 현재 누적 수강 현황: <strong>총 ${p.total_lessons}회 중 ${p.used_lessons}회 사용</strong> · 잔여 ${p.remaining_lessons}회${p.is_exhausted ? ' (차시 소진)' : ` · 다음 수업은 ${p.next_lesson}번째`}`
+                ? `<i class="fa-solid fa-chart-line"></i> 현재 결제 수강 현황: <strong>총 ${p.total_lessons}회 중 ${p.used_lessons}회 사용</strong> · 잔여 ${p.remaining_lessons}회${p.is_exhausted ? ' (차시 소진)' : ` · 다음 수업은 ${p.next_lesson}번째`} · ${escapeHtml(p.payment_start || '')} 시작 기준`
                 : '<i class="fa-solid fa-circle-exclamation"></i> 유효한 결제 이력이 없습니다.';
             box.classList.remove('hidden');
         } catch (_) { box.classList.add('hidden'); }

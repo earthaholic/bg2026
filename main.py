@@ -277,28 +277,61 @@ def _validate_tuition_values(class_type: str, paid_lessons: int, service_lessons
     if fee_amount < 0:
         raise HTTPException(status_code=400, detail="수업료는 0원 이상으로 입력해 주세요.")
 
+def _count_general_lesson_sessions(
+    cursor: Any,
+    student_row_id: int,
+    student_id: Any,
+    student_name: str,
+    start_date: str,
+    end_date: str,
+    include_end: bool = True
+) -> int:
+    """특강을 제외하고 같은 날짜·수업 내용의 복수 도서를 한 차시로 계산한다."""
+    end_operator = "<=" if include_end else "<"
+    cursor.execute(f'''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
+                       FROM "StudyLogs"
+                       WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
+                         AND "StudiedDay" >= ? AND "StudiedDay" {end_operator} ?
+                         AND COALESCE("IsSpecial", 0) = 0
+                       ORDER BY "StudiedDay", rowid''',
+                   (student_row_id, str(student_row_id), student_id, student_name, start_date, end_date))
+    seen_sessions = set()
+    for row in cursor.fetchall():
+        lesson_content = (row["LessonContent"] or "").strip()
+        key = (row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])
+        seen_sessions.add(key)
+    return len(seen_sessions)
+
 def _get_tuition_progress(student_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
-    """시작일 순으로 결제차시를 합산하고, 시작일 이후의 학습 이력을 차감한다."""
+    """조회일에 적용되는 최신 결제 건을 기준으로 수강 차시와 잔여 차시를 계산한다."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        cursor.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
+        student_row = cursor.fetchone()
+        if not student_row:
+            return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
+                    "next_lesson": None, "remaining_lessons": 0, "payments": []}
+        student = dict(student_row)
+        reference_day = as_of or datetime.now().strftime("%Y-%m-%d")
         cursor.execute('''SELECT rowid as row_id, * FROM "TuitionPayments"
-                          WHERE "StudentId" = ? AND "StartDate" <= ? ORDER BY "StartDate", rowid''',
-                       (student_id, as_of or datetime.now().strftime("%Y-%m-%d")))
+                          WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
+                          ORDER BY "StartDate" DESC, rowid DESC LIMIT 1''',
+                       (student["row_id"], student.get("Id", student["row_id"]), reference_day))
         payments = [dict(r) for r in cursor.fetchall()]
         if not payments:
             return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
                     "next_lesson": None, "remaining_lessons": 0, "payments": []}
-        earliest_start = payments[0]["StartDate"]
-        cursor.execute('''SELECT COUNT(*) AS count FROM "StudyLogs"
-                          WHERE "StudentId" = ? AND "StudiedDay" >= ? AND "StudiedDay" <= ?
-                          AND COALESCE("IsSpecial", 0) = 0''',
-                       (student_id, earliest_start, as_of or "9999-12-31"))
-        used = cursor.fetchone()["count"]
-        total = sum((p.get("PaidLessons") or 0) + (p.get("ServiceLessons") or 0) for p in payments)
+        current_payment = payments[0]
+        used = _count_general_lesson_sessions(
+            cursor, student["row_id"], student.get("Id", student["row_id"]), student.get("Name", ""),
+            current_payment["StartDate"], reference_day
+        )
+        total = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
         return {"has_payment": True, "total_lessons": total, "used_lessons": used,
                 "next_lesson": used + 1, "remaining_lessons": total - used,
-                "is_exhausted": used >= total, "payments": payments}
+                "is_exhausted": used >= total, "payments": payments,
+                "payment_start": current_payment["StartDate"]}
     finally:
         conn.close()
 
@@ -1557,38 +1590,28 @@ def _get_monthly_report_start_lecture(student: Dict[str, Any], first_studied_day
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # 선택한 수업일에 적용되는 가장 최근 결제 1건을 기준으로 차시를 다시 시작한다.
         cursor.execute('''SELECT rowid AS row_id, * FROM "TuitionPayments"
                           WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
-                          ORDER BY "StartDate", rowid''',
+                          ORDER BY "StartDate" DESC, rowid DESC LIMIT 1''',
                        (student_row_id, student_id, first_studied_day))
         payments = [dict(row) for row in cursor.fetchall()]
         if not payments:
             return {"has_payment": False, "start_lecture_num": None, "used_before": 0}
 
-        earliest_start = payments[0]["StartDate"]
-        cursor.execute('''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
-                          FROM "StudyLogs"
-                          WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
-                            AND "StudiedDay" >= ? AND "StudiedDay" < ?
-                            AND COALESCE("IsSpecial", 0) = 0
-                          ORDER BY "StudiedDay", rowid''',
-                       (student_row_id, str(student_row_id), student_id, student_name,
-                        earliest_start, first_studied_day))
-        seen_sessions = set()
-        used_before = 0
-        for row in cursor.fetchall():
-            lesson_content = (row["LessonContent"] or "").strip()
-            key = (row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])
-            if key not in seen_sessions:
-                seen_sessions.add(key)
-                used_before += 1
-        total_lessons = sum((payment.get("PaidLessons") or 0) + (payment.get("ServiceLessons") or 0) for payment in payments)
+        current_payment = payments[0]
+        payment_start = current_payment["StartDate"]
+        used_before = _count_general_lesson_sessions(
+            cursor, student_row_id, student_id, student_name,
+            payment_start, first_studied_day, include_end=False
+        )
+        total_lessons = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
         return {
             "has_payment": True,
             "start_lecture_num": used_before + 1,
             "used_before": used_before,
             "total_lessons": total_lessons,
-            "earliest_start": earliest_start
+            "payment_start": payment_start
         }
     finally:
         conn.close()
