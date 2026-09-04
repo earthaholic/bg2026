@@ -1197,6 +1197,19 @@
                                     <span id="monthly-report-status-badge" class="monthly-report-status-badge hidden"></span>
                                 </div>
                                 <div class="card-body">
+                                    <div class="monthly-report-history-picker">
+                                        <label for="monthly-report-history-select">
+                                            <i class="fa-solid fa-clock-rotate-left"></i> 이전 기록 불러오기
+                                        </label>
+                                        <div class="monthly-report-history-control">
+                                            <select id="monthly-report-history-select" class="form-control" disabled>
+                                                <option value="">학생을 선택해 주세요.</option>
+                                            </select>
+                                            <button type="button" id="btn-refresh-monthly-reports" class="btn btn-outline" title="저장 목록 새로고침">
+                                                <i class="fa-solid fa-rotate"></i><span class="sr-only">새로고침</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
                                         <i class="fa-solid fa-lightbulb"></i> 아래의 미리보기 텍스트를 직접 수정하거나 필요시 문구를 조정할 수 있습니다.
                                     </div>
@@ -1214,21 +1227,6 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="card monthly-report-history-card">
-                        <div class="monthly-report-history-header">
-                            <div>
-                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 저장된 월말보고</h3>
-                                <p>학생을 선택하면 이전에 저장한 문서를 바로 불러올 수 있습니다.</p>
-                            </div>
-                            <button type="button" id="btn-refresh-monthly-reports" class="btn btn-outline btn-sm">
-                                <i class="fa-solid fa-rotate"></i> 새로고침
-                            </button>
-                        </div>
-                        <div id="monthly-report-history" class="monthly-report-history">
-                            <div class="empty-state-sm"><i class="fa-solid fa-user-check"></i><p>학생을 선택해 주세요.</p></div>
                         </div>
                     </div>
                 </section>
@@ -2276,6 +2274,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260905-tuition-payment-cycle"></script>
+    <script src="/static/js/app.js?v=20260905-monthly-report-history-select"></script>
 </body>
 </html>

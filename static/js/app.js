@@ -6082,36 +6082,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadSavedMonthlyReports() {
-        const container = document.getElementById('monthly-report-history');
+        const select = document.getElementById('monthly-report-history-select');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
-        if (!container) return;
+        if (!select) return;
         if (!studentId) {
-            container.innerHTML = '<div class="empty-state-sm"><i class="fa-solid fa-user-check"></i><p>학생을 선택해 주세요.</p></div>';
+            select.innerHTML = '<option value="">학생을 선택해 주세요.</option>';
+            select.disabled = true;
             return;
         }
-        container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 저장 문서 불러오는 중...</div>';
+        select.innerHTML = '<option value="">저장 목록을 불러오는 중...</option>';
+        select.disabled = true;
         try {
             const data = await apiFetch(`/api/user/monthly-reports?student_id=${encodeURIComponent(studentId)}`);
             const reports = data.reports || [];
             if (!reports.length) {
-                container.innerHTML = '<div class="empty-state-sm"><i class="fa-regular fa-folder-open"></i><p>이 학생의 저장된 월말보고가 없습니다.</p></div>';
+                select.innerHTML = '<option value="">저장된 월말보고가 없습니다.</option>';
+                select.disabled = true;
                 return;
             }
-            container.innerHTML = reports.map(report => `
-                <div class="monthly-report-history-item">
-                    <div>
-                        <h4 class="monthly-report-history-title">${escapeHtml(report.ReportYearMonth)} 월말보고</h4>
-                        <div class="monthly-report-history-meta">
-                            <span>${report.Status === 'completed' ? '저장 완료' : '임시 저장'}</span>
-                            <span>${escapeHtml(report.UpdatedAt || report.CreatedAt || '')}</span>
-                            <span>${escapeHtml(report.UpdatedBy || report.CreatedBy || '')}</span>
-                        </div>
-                    </div>
-                    <button type="button" class="btn btn-outline btn-sm btn-load-monthly-report" data-id="${report.Id}">불러오기</button>
-                </div>`).join('');
-            container.querySelectorAll('.btn-load-monthly-report').forEach(button => button.addEventListener('click', () => loadSavedMonthlyReport(button.dataset.id)));
+            select.innerHTML = '<option value="">저장된 기록을 선택하세요.</option>' + reports.map(report => {
+                const status = report.Status === 'completed' ? '완료' : '임시';
+                const updatedAt = String(report.UpdatedAt || report.CreatedAt || '').slice(0, 16);
+                return `<option value="${report.Id}">${escapeHtml(report.ReportYearMonth)} · ${status} · ${escapeHtml(updatedAt)}</option>`;
+            }).join('');
+            select.disabled = false;
+            if (currentMonthlyReportId && reports.some(report => Number(report.Id) === Number(currentMonthlyReportId))) {
+                select.value = String(currentMonthlyReportId);
+            }
         } catch (err) {
-            container.innerHTML = `<div class="alert alert-danger">저장 문서 로딩 실패: ${escapeHtml(err.message)}</div>`;
+            select.innerHTML = `<option value="">저장 목록 로딩 실패: ${escapeHtml(err.message)}</option>`;
+            select.disabled = true;
         }
     }
 
@@ -6415,6 +6415,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-save-monthly-draft')?.addEventListener('click', () => saveMonthlyReport('draft'));
     document.getElementById('btn-save-monthly-completed')?.addEventListener('click', () => saveMonthlyReport('completed'));
     document.getElementById('btn-refresh-monthly-reports')?.addEventListener('click', loadSavedMonthlyReports);
+    document.getElementById('monthly-report-history-select')?.addEventListener('change', event => {
+        if (event.target.value) loadSavedMonthlyReport(event.target.value);
+    });
     document.getElementById('monthly-report-result-text')?.addEventListener('input', () => setMonthlyReportSaveState(null));
 
     async function loadTuitionPaymentView() {
