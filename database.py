@@ -130,6 +130,29 @@ def init_system_tables():
     """)
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_student_consultations_student_created ON "StudentConsultations"("StudentId", "CreatedAt" DESC)')
 
+    # 학생별 월말보고 문서. 최종 문구와 생성 당시 학습기록을 함께 보존한다.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "MonthlyReports" (
+            "Id" INTEGER PRIMARY KEY,
+            "StudentId" INTEGER NOT NULL,
+            "ReportYearMonth" TEXT NOT NULL,
+            "PeriodLabel" TEXT DEFAULT '',
+            "ReportMonthLabel" TEXT DEFAULT '',
+            "StartLectureNum" INTEGER NOT NULL DEFAULT 1,
+            "SpecialTeacherName" TEXT DEFAULT '',
+            "StudyLogSnapshot" TEXT NOT NULL DEFAULT '[]',
+            "Content" TEXT NOT NULL DEFAULT '',
+            "Status" TEXT NOT NULL DEFAULT 'draft' CHECK("Status" IN ('draft', 'completed')),
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT '',
+            UNIQUE("StudentId", "ReportYearMonth")
+        )
+    """)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_monthly_reports_month ON "MonthlyReports"("ReportYearMonth" DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_monthly_reports_student ON "MonthlyReports"("StudentId")')
+
     # 수업(Classes) 및 수업-학생 관계(ClassStudents) 테이블
     # (로컬 전용 도메인 테이블 - oracle_sync.py 실행 시 DROP되므로 시작 시점에 재생성됨)
     cursor.execute("""

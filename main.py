@@ -1511,6 +1511,39 @@ class MonthlyReportPreviewPayload(BaseModel):
     special_teacher_name: Optional[str] = ""
     logs: List[Dict[str, Any]] = []
 
+class MonthlyReportSavePayload(BaseModel):
+    student_id: int
+    report_year_month: str
+    period_label: Optional[str] = ""
+    report_month_label: Optional[str] = ""
+    start_lecture_num: Optional[int] = 1
+    special_teacher_name: Optional[str] = ""
+    logs: List[Dict[str, Any]] = []
+    content: str
+    status: str = "draft"
+
+def _get_monthly_report_student(cursor, student_id: int, current_user: Dict[str, Any]):
+    cursor.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
+    student = cursor.fetchone()
+    if not student:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    student_data = dict(student)
+    if current_user.get("role") == "teacher":
+        cursor.execute('''SELECT 1 FROM "ClassStudents" cs JOIN "Classes" c ON c."Id" = cs."ClassId"
+                          WHERE c."TeacherUsername" = ? AND (cs."StudentId" = ? OR cs."StudentId" = ?) LIMIT 1''',
+                       (current_user["username"], student_data["row_id"], student_data.get("Id", student_data["row_id"])))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="본인 수업에 배정된 학생의 월말보고만 이용할 수 있습니다.")
+    return student_data
+
+def _monthly_report_response(row: Any) -> Dict[str, Any]:
+    item = dict(row)
+    try:
+        item["StudyLogSnapshot"] = json.loads(item.get("StudyLogSnapshot") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        item["StudyLogSnapshot"] = []
+    return item
+
 def _get_korean_name_with_yi(name: str) -> str:
     if not name or len(name) == 0:
         return ""
@@ -1564,12 +1597,29 @@ def build_monthly_report_text(
 
     lines.append("")
 
+    # 같은 날짜·수업 내용·특강 여부의 기록은 여러 도서를 사용했더라도 한 강으로 묶는다.
+    grouped_logs: List[Dict[str, Any]] = []
+    grouped_by_key: Dict[Any, Dict[str, Any]] = {}
+    for log_index, log in enumerate(logs):
+        studied_day = str(log.get("StudiedDay") or log.get("studied_day") or "").strip()
+        lesson_content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
+        is_special = bool(log.get("IsSpecial") or log.get("is_special"))
+        key = (studied_day, lesson_content, is_special) if studied_day and lesson_content else ("__single__", log_index)
+        if key not in grouped_by_key:
+            grouped = dict(log)
+            grouped["_book_titles"] = []
+            grouped_by_key[key] = grouped
+            grouped_logs.append(grouped)
+        title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
+        if title and title not in grouped_by_key[key]["_book_titles"]:
+            grouped_by_key[key]["_book_titles"].append(title)
+
     current_lecture = start_lecture_num or 1
     teacher_suffix = (special_teacher_name or "").strip()
     if teacher_suffix and not teacher_suffix.endswith("선생님"):
         teacher_suffix += " 선생님"
 
-    for i, log in enumerate(logs):
+    for i, log in enumerate(grouped_logs):
         if i > 0:
             lines.append("")
 
@@ -1583,8 +1633,8 @@ def build_monthly_report_text(
             lines.append(f"<{current_lecture}강>")
             current_lecture += 1
 
-        book_title = (log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
-        lines.append(f"도서 : {book_title}")
+        book_titles = log.get("_book_titles") or []
+        lines.append(f"도서 : {', '.join(book_titles)}")
 
         date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
         lesson_content = (log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
@@ -1693,6 +1743,89 @@ def user_generate_monthly_report_preview(
         logs=payload.logs
     )
     return {"text": text}
+
+@app.get("/api/user/monthly-reports")
+def user_list_monthly_reports(
+    student_id: Optional[int] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    params: List[Any] = []
+    where = []
+    if student_id is not None:
+        student = _get_monthly_report_student(cursor, student_id, current_user)
+        where.append('mr."StudentId" = ?')
+        params.append(student["row_id"])
+    if current_user.get("role") == "teacher":
+        where.append('EXISTS (SELECT 1 FROM "ClassStudents" cs JOIN "Classes" c ON c."Id" = cs."ClassId" WHERE c."TeacherUsername" = ? AND (cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"))')
+        params.append(current_user["username"])
+    sql = '''SELECT mr.*, s."Name" AS "StudentName" FROM "MonthlyReports" mr
+             LEFT JOIN "Students" s ON mr."StudentId" = s.rowid'''
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += ' ORDER BY mr."ReportYearMonth" DESC, mr."UpdatedAt" DESC, mr."Id" DESC LIMIT 100'
+    cursor.execute(sql, params)
+    reports = [_monthly_report_response(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"reports": reports}
+
+@app.get("/api/user/monthly-reports/{report_id}")
+def user_get_monthly_report(report_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT mr.*, s."Name" AS "StudentName" FROM "MonthlyReports" mr LEFT JOIN "Students" s ON mr."StudentId" = s.rowid WHERE mr."Id" = ?', (report_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="저장된 월말보고를 찾을 수 없습니다.")
+    _get_monthly_report_student(cursor, row["StudentId"], current_user)
+    result = _monthly_report_response(row)
+    conn.close()
+    return {"report": result}
+
+@app.post("/api/user/monthly-reports")
+def user_save_monthly_report(payload: MonthlyReportSavePayload, current_user: Dict[str, Any] = Depends(get_current_user)):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", (payload.report_year_month or "").strip()):
+        raise HTTPException(status_code=400, detail="보고 월을 올바르게 선택해 주세요.")
+    if payload.status not in ("draft", "completed"):
+        raise HTTPException(status_code=400, detail="저장 상태가 올바르지 않습니다.")
+    if not payload.content.strip():
+        raise HTTPException(status_code=400, detail="저장할 문자 내용을 입력해 주세요.")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    student = _get_monthly_report_student(cursor, payload.student_id, current_user)
+    student_id = student["row_id"]
+    cursor.execute('SELECT * FROM "MonthlyReports" WHERE "StudentId" = ? AND "ReportYearMonth" = ?', (student_id, payload.report_year_month))
+    old_row = cursor.fetchone()
+    old_data = dict(old_row) if old_row else None
+    snapshot = json.dumps(payload.logs, ensure_ascii=False)
+    username = current_user["username"]
+    if old_row:
+        cursor.execute('''UPDATE "MonthlyReports" SET "PeriodLabel"=?, "ReportMonthLabel"=?, "StartLectureNum"=?,
+                          "SpecialTeacherName"=?, "StudyLogSnapshot"=?, "Content"=?, "Status"=?, "UpdatedBy"=?,
+                          "UpdatedAt"=datetime('now','localtime') WHERE "Id"=?''',
+                       (payload.period_label, payload.report_month_label, max(1, payload.start_lecture_num or 1),
+                        payload.special_teacher_name, snapshot, payload.content, payload.status, username, old_row["Id"]))
+        report_id = old_row["Id"]
+        action = "UPDATE"
+    else:
+        cursor.execute('''INSERT INTO "MonthlyReports" ("StudentId","ReportYearMonth","PeriodLabel","ReportMonthLabel",
+                          "StartLectureNum","SpecialTeacherName","StudyLogSnapshot","Content","Status","CreatedBy","UpdatedBy","UpdatedAt")
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))''',
+                       (student_id, payload.report_year_month, payload.period_label, payload.report_month_label,
+                        max(1, payload.start_lecture_num or 1), payload.special_teacher_name, snapshot, payload.content,
+                        payload.status, username, username))
+        report_id = cursor.lastrowid
+        action = "INSERT"
+    conn.commit()
+    cursor.execute('SELECT mr.*, s."Name" AS "StudentName" FROM "MonthlyReports" mr LEFT JOIN "Students" s ON mr."StudentId" = s.rowid WHERE mr."Id"=?', (report_id,))
+    new_data = dict(cursor.fetchone())
+    conn.close()
+    changed = [key for key in new_data if not old_data or old_data.get(key) != new_data.get(key)]
+    write_audit_log("MonthlyReports", report_id, action, old_data, new_data, changed if action == "UPDATE" else None,
+                    username, current_user.get("role", ""))
+    return {"report": _monthly_report_response(new_data), "message": "월말보고가 저장되었습니다."}
 
 # --- 수업(Classes) 관리 APIs ---
 # 조회: 모든 로그인 사용자 (선생님은 본인 수업만)

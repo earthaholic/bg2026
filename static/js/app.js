@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
+    let currentMonthlyReportId = null;
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
     const payrollClaimsById = new Map();
@@ -5716,6 +5717,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return idA - idB;
         });
 
+        // 같은 날짜·수업 내용·특강 여부의 기록은 도서명만 합쳐 한 강으로 출력한다.
+        const groupedLogMap = new Map();
+        const groupedLogItems = [];
+        checkedLogItems.forEach((log, logIndex) => {
+            const studiedDay = String(log.StudiedDay || log.studied_day || '').trim();
+            const lessonContent = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
+            const isSpecial = !!(log.IsSpecial || log.is_special);
+            const key = studiedDay && lessonContent
+                ? JSON.stringify([studiedDay, lessonContent, isSpecial])
+                : JSON.stringify(['__single__', logIndex]);
+            if (!groupedLogMap.has(key)) {
+                const grouped = { ...log, _bookTitles: [] };
+                groupedLogMap.set(key, grouped);
+                groupedLogItems.push(grouped);
+            }
+            const title = String(log.BookTitle || log.book_title || log.Title || '').trim();
+            const titles = groupedLogMap.get(key)._bookTitles;
+            if (title && !titles.includes(title)) titles.push(title);
+        });
+
         const nameYi = getKoreanNameWithYi(studentName);
         const lines = [];
         lines.push(`${nameYi} 어머니`);
@@ -5739,7 +5760,7 @@ document.addEventListener('DOMContentLoaded', () => {
             teacherSuffix += ' 선생님';
         }
 
-        checkedLogItems.forEach((log, idx) => {
+        groupedLogItems.forEach((log, idx) => {
             if (idx > 0) {
                 lines.push('');
             }
@@ -5756,8 +5777,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentLecture++;
             }
 
-            const bookTitle = (log.BookTitle || log.book_title || log.Title || '').trim();
-            lines.push(`도서 : ${bookTitle}`);
+            lines.push(`도서 : ${log._bookTitles.join(', ')}`);
 
             const dateStr = formatDateKorean(log.StudiedDay || log.studied_day || '');
             const lessonContent = (log.LessonContent || log.lesson_content || log.Description || '').trim();
@@ -5771,6 +5791,55 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         resultTextarea.value = lines.join('\n');
+        setMonthlyReportSaveState(null);
+    }
+
+    function setMonthlyReportSaveState(report) {
+        const state = document.getElementById('monthly-report-save-state');
+        const badge = document.getElementById('monthly-report-status-badge');
+        if (!state || !badge) return;
+        badge.classList.remove('completed');
+        if (!report) {
+            state.textContent = currentMonthlyReportId ? '저장 후 내용이 변경되었습니다.' : '아직 저장되지 않은 문서입니다.';
+            badge.classList.add('hidden');
+            return;
+        }
+        currentMonthlyReportId = report.Id;
+        const completed = report.Status === 'completed';
+        badge.textContent = completed ? '저장 완료' : '임시 저장';
+        badge.classList.toggle('completed', completed);
+        badge.classList.remove('hidden');
+        state.textContent = `${report.UpdatedBy || report.CreatedBy || ''} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
+    }
+
+    function renderMonthlyReportLogItems(logs, selectAll = false) {
+        const container = document.getElementById('monthly-report-logs-container');
+        if (!container) return;
+        if (!logs.length) {
+            container.innerHTML = '<div class="empty-state-sm"><i class="fa-solid fa-folder-open"></i><p>포함된 학습 기록이 없습니다.</p></div>';
+            return;
+        }
+        container.innerHTML = logs.map((log, idx) => {
+            const isSpecial = !!(log.IsSpecial || log.is_special);
+            return `
+                <div class="report-log-item" data-index="${idx}">
+                    <input type="checkbox" class="chk-log-include" id="chk-log-${idx}" ${selectAll ? 'checked' : ''}>
+                    <div class="report-log-info">
+                        <div class="report-log-header"><span class="report-log-date">${formatDateKorean(log.StudiedDay || log.studied_day)}</span>
+                            ${isSpecial ? '<span class="tag-badge warning">특강</span>' : '<span class="tag-badge primary">일반강의</span>'}</div>
+                        <div class="report-log-book">도서: ${escapeHtml(log.BookTitle || log.book_title || '도서 제목 미입력')}</div>
+                        <div class="report-log-content">${escapeHtml(log.LessonContent || log.lesson_content || log.Description || '수업 내용 미입력')}</div>
+                    </div>
+                </div>`;
+        }).join('');
+        container.querySelectorAll('.chk-log-include').forEach(chk => chk.addEventListener('change', generateMonthlyReportText));
+        container.querySelectorAll('.report-log-item').forEach(item => item.addEventListener('click', e => {
+            if (e.target.tagName !== 'INPUT') {
+                const chk = item.querySelector('.chk-log-include');
+                chk.checked = !chk.checked;
+                generateMonthlyReportText();
+            }
+        }));
     }
 
     async function loadMonthlyReportLogs() {
@@ -5815,47 +5884,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            let html = '';
-            currentMonthlyLogs.forEach((log, idx) => {
-                const isSpecial = !!(log.IsSpecial || log.is_special);
-                const dateStr = formatDateKorean(log.StudiedDay);
-                const bookTitle = escapeHtml(log.BookTitle || '도서 제목 미입력');
-                const lessonContent = escapeHtml(log.LessonContent || log.Description || '수업 내용 미입력');
-                const specialBadge = isSpecial
-                    ? '<span class="tag-badge warning">특강</span>'
-                    : '<span class="tag-badge primary">일반강의</span>';
-
-                html += `
-                    <div class="report-log-item" data-index="${idx}">
-                        <input type="checkbox" class="chk-log-include" id="chk-log-${idx}">
-                        <div class="report-log-info">
-                            <div class="report-log-header">
-                                <span class="report-log-date">${dateStr}</span>
-                                ${specialBadge}
-                            </div>
-                            <div class="report-log-book">도서: ${bookTitle}</div>
-                            <div class="report-log-content">${lessonContent}</div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-
-            container.querySelectorAll('.chk-log-include').forEach(chk => {
-                chk.addEventListener('change', () => generateMonthlyReportText());
-            });
-            container.querySelectorAll('.report-log-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    if (e.target.tagName !== 'INPUT') {
-                        const chk = item.querySelector('.chk-log-include');
-                        if (chk) {
-                            chk.checked = !chk.checked;
-                            generateMonthlyReportText();
-                        }
-                    }
-                });
-            });
+            renderMonthlyReportLogItems(currentMonthlyLogs);
 
             generateMonthlyReportText();
 
@@ -5899,6 +5928,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/monthly-report/default-period');
             dateFromInput.value = data.date_from || '';
             dateToInput.value = data.date_to || '';
+            const yearMonthInput = document.getElementById('monthly-report-year-month');
+            if (yearMonthInput && !yearMonthInput.value && data.date_to) {
+                yearMonthInput.value = data.date_to.slice(0, 7);
+            }
         } catch (err) {
             console.warn('월말보고 기본 조회 기간을 불러오지 못했습니다.', err);
         }
@@ -5952,6 +5985,101 @@ document.addEventListener('DOMContentLoaded', () => {
         if (preselectStudentId) {
             await loadMonthlyReportLogs();
         }
+        await loadSavedMonthlyReports();
+    }
+
+    function getSelectedMonthlyLogs() {
+        const selected = [];
+        document.querySelectorAll('#monthly-report-logs-container .report-log-item').forEach(row => {
+            const checkbox = row.querySelector('.chk-log-include');
+            const index = Number(row.dataset.index);
+            if (checkbox && checkbox.checked && currentMonthlyLogs[index]) selected.push(currentMonthlyLogs[index]);
+        });
+        return selected;
+    }
+
+    async function saveMonthlyReport(status) {
+        const studentId = document.getElementById('monthly-report-student-select')?.value;
+        const yearMonth = document.getElementById('monthly-report-year-month')?.value;
+        const content = document.getElementById('monthly-report-result-text')?.value.trim();
+        if (!studentId) return showToast('학생을 선택해 주세요.', 'warning');
+        if (!yearMonth) return showToast('저장할 보고 월을 선택해 주세요.', 'warning');
+        if (!content) return showToast('저장할 문자 내용을 입력해 주세요.', 'warning');
+        const buttons = [document.getElementById('btn-save-monthly-draft'), document.getElementById('btn-save-monthly-completed')];
+        buttons.forEach(button => { if (button) button.disabled = true; });
+        try {
+            const data = await apiFetch('/api/user/monthly-reports', {
+                method: 'POST',
+                body: JSON.stringify({
+                    student_id: Number(studentId), report_year_month: yearMonth,
+                    period_label: document.getElementById('monthly-report-period-label')?.value.trim() || '',
+                    report_month_label: document.getElementById('monthly-report-month-label')?.value.trim() || '',
+                    start_lecture_num: Number(document.getElementById('monthly-report-start-lecture')?.value) || 1,
+                    special_teacher_name: document.getElementById('monthly-report-special-teacher')?.value.trim() || '',
+                    logs: getSelectedMonthlyLogs(), content, status
+                })
+            });
+            setMonthlyReportSaveState(data.report);
+            showToast(status === 'completed' ? '월말보고를 저장 완료했습니다.' : '월말보고를 임시 저장했습니다.', 'success');
+            await loadSavedMonthlyReports();
+        } catch (err) {
+            showToast(`월말보고 저장 실패: ${err.message}`, 'error');
+        } finally {
+            buttons.forEach(button => { if (button) button.disabled = false; });
+        }
+    }
+
+    async function loadSavedMonthlyReports() {
+        const container = document.getElementById('monthly-report-history');
+        const studentId = document.getElementById('monthly-report-student-select')?.value;
+        if (!container) return;
+        if (!studentId) {
+            container.innerHTML = '<div class="empty-state-sm"><i class="fa-solid fa-user-check"></i><p>학생을 선택해 주세요.</p></div>';
+            return;
+        }
+        container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 저장 문서 불러오는 중...</div>';
+        try {
+            const data = await apiFetch(`/api/user/monthly-reports?student_id=${encodeURIComponent(studentId)}`);
+            const reports = data.reports || [];
+            if (!reports.length) {
+                container.innerHTML = '<div class="empty-state-sm"><i class="fa-regular fa-folder-open"></i><p>이 학생의 저장된 월말보고가 없습니다.</p></div>';
+                return;
+            }
+            container.innerHTML = reports.map(report => `
+                <div class="monthly-report-history-item">
+                    <div>
+                        <h4 class="monthly-report-history-title">${escapeHtml(report.ReportYearMonth)} 월말보고</h4>
+                        <div class="monthly-report-history-meta">
+                            <span>${report.Status === 'completed' ? '저장 완료' : '임시 저장'}</span>
+                            <span>${escapeHtml(report.UpdatedAt || report.CreatedAt || '')}</span>
+                            <span>${escapeHtml(report.UpdatedBy || report.CreatedBy || '')}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm btn-load-monthly-report" data-id="${report.Id}">불러오기</button>
+                </div>`).join('');
+            container.querySelectorAll('.btn-load-monthly-report').forEach(button => button.addEventListener('click', () => loadSavedMonthlyReport(button.dataset.id)));
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">저장 문서 로딩 실패: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    async function loadSavedMonthlyReport(reportId) {
+        try {
+            const data = await apiFetch(`/api/user/monthly-reports/${reportId}`);
+            const report = data.report;
+            document.getElementById('monthly-report-year-month').value = report.ReportYearMonth || '';
+            document.getElementById('monthly-report-period-label').value = report.PeriodLabel || '';
+            document.getElementById('monthly-report-month-label').value = report.ReportMonthLabel || '';
+            document.getElementById('monthly-report-start-lecture').value = report.StartLectureNum || 1;
+            document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
+            currentMonthlyLogs = report.StudyLogSnapshot || [];
+            renderMonthlyReportLogItems(currentMonthlyLogs, true);
+            document.getElementById('monthly-report-result-text').value = report.Content || '';
+            setMonthlyReportSaveState(report);
+            showToast('저장된 월말보고를 불러왔습니다.', 'success');
+        } catch (err) {
+            showToast(`월말보고 불러오기 실패: ${err.message}`, 'error');
+        }
     }
 
     // Attach Monthly Report Control Listeners
@@ -5963,11 +6091,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentSelectEl = document.getElementById('monthly-report-student-select');
     if (studentSelectEl) {
         studentSelectEl.addEventListener('change', () => {
+            currentMonthlyReportId = null;
+            setMonthlyReportSaveState(null);
             if (studentSelectEl.value) {
                 loadMonthlyReportLogs();
             } else {
                 generateMonthlyReportText();
             }
+            loadSavedMonthlyReports();
         });
     }
 
@@ -6046,7 +6177,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseAuditDetail = document.getElementById('btn-close-audit-detail');
 
     const AUDIT_TABLE_LABELS = {
-        Books: '도서', Students: '학생', StudyLogs: '학습 기록', Classes: '수업', _app_users: '계정'
+        Books: '도서', Students: '학생', StudyLogs: '학습 기록', Classes: '수업',
+        MonthlyReports: '월말보고', _app_users: '계정'
     };
     const AUDIT_ACTION_LABELS = { INSERT: '등록', UPDATE: '수정', DELETE: '삭제' };
     const AUDIT_ACTION_CLASSES = {
@@ -6227,6 +6359,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const digits = String(input.value || '').replace(/[^0-9]/g, '');
         input.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
     }
+
+    document.getElementById('btn-save-monthly-draft')?.addEventListener('click', () => saveMonthlyReport('draft'));
+    document.getElementById('btn-save-monthly-completed')?.addEventListener('click', () => saveMonthlyReport('completed'));
+    document.getElementById('btn-refresh-monthly-reports')?.addEventListener('click', loadSavedMonthlyReports);
+    document.getElementById('monthly-report-result-text')?.addEventListener('input', () => setMonthlyReportSaveState(null));
 
     async function loadTuitionPaymentView() {
         const studentInput = document.getElementById('tuition-student-search');

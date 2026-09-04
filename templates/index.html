@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260830-studylog-modal-scroll">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260905-monthly-report-save">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1117,6 +1117,14 @@
                                         <input type="text" id="monthly-report-period-label" class="form-control" placeholder="예: 2학기(5, 6, 7월)">
                                     </div>
 
+                                    <div class="form-group">
+                                        <label for="monthly-report-year-month" class="form-label required">
+                                            <i class="fa-solid fa-box-archive"></i> 저장할 보고 월
+                                        </label>
+                                        <input type="month" id="monthly-report-year-month" class="form-control">
+                                        <p class="form-help">같은 학생과 보고 월로 다시 저장하면 기존 문서가 안전하게 갱신됩니다.</p>
+                                    </div>
+
                                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                                         <!-- Report Month Label -->
                                         <div class="form-group">
@@ -1180,19 +1188,46 @@
                         <!-- Right Panel: Real-time Text Preview & Copy -->
                         <div class="report-preview-panel">
                             <div class="card preview-card">
-                                <div class="card-header-styled" style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h3><i class="fa-solid fa-file-lines"></i> 문자 양식 미리보기</h3>
-                                    <button type="button" id="btn-copy-monthly-report" class="btn btn-success btn-lg">
-                                        <i class="fa-solid fa-copy"></i> 클립보드에 복사
-                                    </button>
+                                <div class="card-header-styled monthly-report-preview-header">
+                                    <div>
+                                        <h3><i class="fa-solid fa-file-lines"></i> 문자 양식 미리보기</h3>
+                                        <p id="monthly-report-save-state" class="monthly-report-save-state">아직 저장되지 않은 문서입니다.</p>
+                                    </div>
+                                    <span id="monthly-report-status-badge" class="monthly-report-status-badge hidden"></span>
                                 </div>
                                 <div class="card-body">
                                     <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
                                         <i class="fa-solid fa-lightbulb"></i> 아래의 미리보기 텍스트를 직접 수정하거나 필요시 문구를 조정할 수 있습니다.
                                     </div>
                                     <textarea id="monthly-report-result-text" class="monthly-report-textarea" rows="22" placeholder="기록을 선택하면 월말 보고 문자 양식이 이곳에 자동으로 작성됩니다..."></textarea>
+                                    <div class="monthly-report-actions">
+                                        <button type="button" id="btn-save-monthly-draft" class="btn btn-outline btn-lg">
+                                            <i class="fa-regular fa-floppy-disk"></i> 임시 저장
+                                        </button>
+                                        <button type="button" id="btn-save-monthly-completed" class="btn btn-primary btn-lg">
+                                            <i class="fa-solid fa-circle-check"></i> 저장 완료
+                                        </button>
+                                        <button type="button" id="btn-copy-monthly-report" class="btn btn-success btn-lg">
+                                            <i class="fa-solid fa-copy"></i> 클립보드에 복사
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="card monthly-report-history-card">
+                        <div class="monthly-report-history-header">
+                            <div>
+                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 저장된 월말보고</h3>
+                                <p>학생을 선택하면 이전에 저장한 문서를 바로 불러올 수 있습니다.</p>
+                            </div>
+                            <button type="button" id="btn-refresh-monthly-reports" class="btn btn-outline btn-sm">
+                                <i class="fa-solid fa-rotate"></i> 새로고침
+                            </button>
+                        </div>
+                        <div id="monthly-report-history" class="monthly-report-history">
+                            <div class="empty-state-sm"><i class="fa-solid fa-user-check"></i><p>학생을 선택해 주세요.</p></div>
                         </div>
                     </div>
                 </section>
@@ -1366,6 +1401,7 @@
                                         <option value="Students">학생 (Students)</option>
                                         <option value="StudyLogs">학습 기록 (StudyLogs)</option>
                                         <option value="Classes">수업 (Classes)</option>
+                                        <option value="MonthlyReports">월말보고 (MonthlyReports)</option>
                                         <option value="_app_users">계정 (_app_users)</option>
                                     </select>
                                 </div>
@@ -2239,6 +2275,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260904-multi-book-studylog"></script>
+    <script src="/static/js/app.js?v=20260905-monthly-report-grouped-books"></script>
 </body>
 </html>

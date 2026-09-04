@@ -3065,6 +3065,111 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), inset 0 2px 5px rgba(0,0,0,0.2);
 }
 
+.form-help {
+    margin: 0.4rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.monthly-report-preview-header,
+.monthly-report-history-header,
+.monthly-report-actions,
+.monthly-report-history-item,
+.monthly-report-history-meta {
+    display: flex;
+    align-items: center;
+}
+
+.monthly-report-preview-header,
+.monthly-report-history-header,
+.monthly-report-history-item {
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.monthly-report-save-state,
+.monthly-report-history-header p {
+    margin: 0.3rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.monthly-report-status-badge {
+    flex-shrink: 0;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.monthly-report-status-badge.completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+
+.monthly-report-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.monthly-report-history-card {
+    margin-top: 1.25rem;
+}
+
+.monthly-report-history {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.monthly-report-history > .empty-state-sm,
+.monthly-report-history > .loading-spinner,
+.monthly-report-history > .alert {
+    grid-column: 1 / -1;
+}
+
+.monthly-report-history-item {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.monthly-report-history-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(59, 130, 246, 0.45);
+}
+
+.monthly-report-history-title {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.monthly-report-history-meta {
+    flex-wrap: wrap;
+    gap: 0.4rem 0.7rem;
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+}
+
+@media (max-width: 640px) {
+    .monthly-report-actions .btn {
+        flex: 1 1 100%;
+    }
+    .monthly-report-history-header {
+        align-items: flex-start;
+    }
+}
+
 .empty-state-sm {
     text-align: center;
     padding: 2rem 1rem;
