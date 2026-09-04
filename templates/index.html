@@ -1298,7 +1298,7 @@
                         <div class="card-header-styled">
                             <div>
                                 <h2><i class="fa-solid fa-user-gear"></i> 선생님 계정 관리</h2>
-                                <p class="subtitle">관리 선생님(manager)과 선생님(teacher) 계정을 발급·수정·삭제할 수 있습니다. 관리자(admin) 계정은 여기서 변경할 수 없습니다.</p>
+                                <p class="subtitle">부관리자(subadmin), 관리 선생님(manager), 선생님(teacher) 계정을 발급·수정·삭제할 수 있습니다. 사이트 관리자(admin) 계정은 여기서 변경할 수 없습니다.</p>
                             </div>
                             <button id="btn-open-user-create" class="btn btn-success">
                                 <i class="fa-solid fa-plus"></i> 새 계정 발급
@@ -1853,6 +1853,7 @@
 
                 <div class="login-hints">
                     <div class="hint-item"><span class="badge badge-admin">Admin</span> 사이트 관리자 (전체 권한 + 시스템 데이터 Studio)</div>
+                    <div class="hint-item"><span class="badge badge-subadmin">Subadmin</span> 부관리자 (사이트 관리자와 동일한 기능 권한)</div>
                     <div class="hint-item"><span class="badge badge-manager">Manager</span> 관리 선생님 (도서·학생·학습기록 등록/수정/삭제)</div>
                     <div class="hint-item"><span class="badge badge-teacher">Teacher</span> 선생님 (각 섹션 조회 전용)</div>
                 </div>
@@ -2092,6 +2093,7 @@
                     <div class="form-group">
                         <label for="select-user-create-role">역할</label>
                         <select id="select-user-create-role" class="form-control">
+                            <option value="subadmin">부관리자</option>
                             <option value="manager">관리 선생님</option>
                             <option value="teacher">선생님</option>
                         </select>
@@ -2237,6 +2239,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260904-studylog-csv-import"></script>
+    <script src="/static/js/app.js?v=20260904-subadmin-role"></script>
 </body>
 </html>

@@ -17,29 +17,29 @@ def init_system_tables():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # User authentication table (신규 스키마: admin / manager / teacher)
+    # User authentication table (신규 스키마: admin / subadmin / manager / teacher)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS _app_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('admin', 'manager', 'teacher')),
+            role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # 구버전 스키마(role: admin/user)로 생성된 테이블이면 데이터 보존 마이그레이션
+    # 구버전 역할 제약에 subadmin이 없으면 데이터 보존 마이그레이션
     cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='_app_users'")
     row = cursor.fetchone()
     existing_ddl = (row['sql'] or '') if row else ''
-    if existing_ddl and 'manager' not in existing_ddl:
+    if existing_ddl and 'subadmin' not in existing_ddl:
         cursor.execute("ALTER TABLE _app_users RENAME TO _app_users_legacy")
         cursor.execute("""
             CREATE TABLE _app_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('admin', 'manager', 'teacher')),
+                role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)

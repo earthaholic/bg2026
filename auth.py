@@ -40,17 +40,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
     return user
 
 def get_current_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ("admin", "subadmin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="이 작업을 수행할 권한이 없습니다. (관리자 전용)"
+            detail="이 작업을 수행할 권한이 없습니다. (관리자 권한 전용)"
         )
     return current_user
 
 def get_current_staff(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
-    """사이트 관리자(admin) 또는 관리 선생님(manager)만 허용.
+    """사이트 관리자(admin), 부관리자(subadmin), 관리 선생님(manager)만 허용.
     도메인 데이터(도서/학생/학습기록)의 등록·수정·삭제 권한을 부여한다."""
-    if current_user.get("role") not in ("admin", "manager"):
+    if current_user.get("role") not in ("admin", "subadmin", "manager"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이 작업을 수행할 권한이 없습니다. (관리 선생님 이상 전용)"

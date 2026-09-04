@@ -927,7 +927,7 @@ def user_get_student_detail(
         "total_studylogs": len(studylogs),
         "referred_students": referred_students,
     }
-    if current_user.get("role") in ("admin", "manager"):
+    if current_user.get("role") in ("admin", "subadmin", "manager"):
         result["tuition_progress"] = _get_tuition_progress(s_row_id)
     return result
 
@@ -2062,7 +2062,7 @@ def user_batch_register_class_studylogs(
         teacher = get_user_by_username(actual_teacher)
         if not teacher or teacher["role"] not in ("teacher", "manager"):
             raise HTTPException(status_code=400, detail="대체 진행 선생님 계정을 확인해 주세요.")
-        if current_user["role"] not in ("admin", "manager"):
+        if current_user["role"] not in ("admin", "subadmin", "manager"):
             raise HTTPException(status_code=403, detail="다른 선생님을 실제 진행자로 지정하는 작업은 관리 선생님 이상만 가능합니다.")
     else:
         actual_teacher = class_row["TeacherUsername"]
@@ -2760,7 +2760,7 @@ def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, A
     if (not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth) or not re.match(r'^\d{4}-\d{2}-\d{2}$', payload.ClaimDate)
             or not payload.ClaimDate.startswith(payload.PayrollMonth) or not payload.ItemName.strip() or payload.Amount < 0):
         raise HTTPException(status_code=400, detail="청구월에 맞는 청구일, 항목명, 금액을 확인해 주세요.")
-    teacher_username = (payload.TeacherUsername or '').strip() if current_user["role"] in ("admin", "manager") else current_user["username"]
+    teacher_username = (payload.TeacherUsername or '').strip() if current_user["role"] in ("admin", "subadmin", "manager") else current_user["username"]
     if not teacher_username:
         raise HTTPException(status_code=400, detail="추가 청구를 등록할 선생님을 선택해 주세요.")
     target_user = get_user_by_username(teacher_username)
@@ -2781,7 +2781,7 @@ def _get_manageable_payroll_claim(conn, claim_id: int, current_user: Dict[str, A
     claim = conn.execute('SELECT * FROM "TeacherPayrollClaims" WHERE "Id"=?', (claim_id,)).fetchone()
     if not claim:
         raise HTTPException(status_code=404, detail="추가 청구 항목을 찾을 수 없습니다.")
-    if current_user["role"] not in ("admin", "manager") and claim["TeacherUsername"] != current_user["username"]:
+    if current_user["role"] not in ("admin", "subadmin", "manager") and claim["TeacherUsername"] != current_user["username"]:
         raise HTTPException(status_code=403, detail="다른 선생님의 추가 청구 항목을 변경할 권한이 없습니다.")
     return claim
 
@@ -3188,7 +3188,7 @@ def user_delete_studylog(
 
 @app.get("/api/tables")
 def list_tables(current_user: Dict[str, Any] = Depends(get_current_user)):
-    if current_user["role"] != "admin":
+    if current_user["role"] not in ("admin", "subadmin"):
         return {"tables": []}
     tables = get_all_tables()
     return {"tables": tables}
@@ -3366,10 +3366,10 @@ def admin_create_user(
         raise HTTPException(status_code=400, detail="아이디는 필수 입력 항목입니다.")
     if len(payload.password) < 4:
         raise HTTPException(status_code=400, detail="비밀번호는 4자 이상 입력해 주세요.")
-    if payload.role not in ("manager", "teacher"):
+    if payload.role not in ("subadmin", "manager", "teacher"):
         raise HTTPException(
             status_code=400,
-            detail="발급 가능한 역할은 관리 선생님(manager) 또는 선생님(teacher)입니다."
+            detail="발급 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
         )
 
     try:
@@ -3411,10 +3411,10 @@ def admin_update_user_role(
     payload: UserRoleUpdateRequest,
     current_admin: Dict[str, Any] = Depends(get_current_admin)
 ):
-    if payload.role not in ("manager", "teacher"):
+    if payload.role not in ("subadmin", "manager", "teacher"):
         raise HTTPException(
             status_code=400,
-            detail="변경 가능한 역할은 관리 선생님(manager) 또는 선생님(teacher)입니다."
+            detail="변경 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
         )
 
     user = _resolve_target_user(user_id)

@@ -463,16 +463,16 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 
     // Role Helpers
-    const ROLE_LABELS = { admin: '사이트 관리자', manager: '관리 선생님', teacher: '선생님' };
+    const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
     const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities', 'audit-log'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage'];
 
     function isAdmin() {
-        return !!(currentUser && currentUser.role === 'admin');
+        return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'subadmin'));
     }
 
     function isStaff() {
-        return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager'));
+        return !!(currentUser && ['admin', 'subadmin', 'manager'].includes(currentUser.role));
     }
 
     async function init() {
@@ -4471,6 +4471,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fa-solid fa-lock"></i> 비밀번호 초기화
                     </button>
                     <select class="select-user-role" data-user-id="${u.id}" data-username="${username}">
+                        <option value="subadmin" ${u.role === 'subadmin' ? 'selected' : ''}>부관리자</option>
                         <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>관리 선생님</option>
                         <option value="teacher" ${u.role === 'teacher' ? 'selected' : ''}>선생님</option>
                     </select>

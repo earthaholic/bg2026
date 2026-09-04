@@ -392,6 +392,12 @@ body {
     border-color: rgba(16, 185, 129, 0.3);
 }
 
+.role-pill.subadmin {
+    background: rgba(59, 130, 246, 0.16);
+    color: #2563eb;
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
 .role-pill.manager {
     background: rgba(245, 158, 11, 0.15);
     color: var(--warning);
@@ -2005,6 +2011,7 @@ body {
 }
 
 .badge-admin { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+.badge-subadmin { background: rgba(59, 130, 246, 0.2); color: #2563eb; }
 .badge-manager { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
 .badge-teacher { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
 .badge-user { background: rgba(59, 130, 246, 0.2); color: var(--primary); }
