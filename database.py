@@ -921,11 +921,11 @@ def get_class_student_ids(class_id: int) -> List[int]:
     return [r["StudentId"] for r in rows]
 
 def get_teacher_options() -> List[Dict[str, Any]]:
-    """수업 담당 선생님으로 지정 가능한 계정(teacher/manager) 목록을 반환한다."""
+    """수업 담당 선생님으로 지정 가능한 계정(teacher/manager/subadmin) 목록을 반환한다."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager') ORDER BY username ASC"
+        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') ORDER BY username ASC"
     )
     rows = cursor.fetchall()
     conn.close()

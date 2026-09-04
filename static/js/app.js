@@ -4783,7 +4783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const teacherSelect = document.getElementById('class-teacher');
             let thtml = '<option value="">-- 담당 선생님 선택 --</option>';
             (tData.teachers || []).forEach(t => {
-                const roleLabel = t.role === 'manager' ? '관리 선생님' : '선생님';
+                const roleLabel = ROLE_LABELS[t.role] || '선생님';
                 thtml += `<option value="${escapeHtml(t.username)}">${escapeHtml(t.username)} (${roleLabel})</option>`;
             });
             teacherSelect.innerHTML = thtml;
@@ -5014,7 +5014,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>';
             (tData.teachers || []).forEach(t => {
                 const sel = t.username === cls.TeacherUsername ? 'selected' : '';
-                const roleLabel = t.role === 'manager' ? '관리 선생님' : '선생님';
+                const roleLabel = ROLE_LABELS[t.role] || '선생님';
                 teacherOpts += `<option value="${escapeHtml(t.username)}" ${sel}>${escapeHtml(t.username)} (${roleLabel})</option>`;
             });
             const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
@@ -6744,7 +6744,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let options = '<option value="">전체 선생님</option>';
         payrollTeacherOptions = data.teachers || [];
         payrollTeacherOptions.forEach(teacher => {
-            const roleLabel = teacher.role === 'manager' ? '관리 선생님' : '선생님';
+            const roleLabel = ROLE_LABELS[teacher.role] || '선생님';
             options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)} (${roleLabel})</option>`;
         });
         teacherSelect.innerHTML = options;

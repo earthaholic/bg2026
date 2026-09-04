@@ -1335,7 +1335,7 @@ def user_register_studylog(
             raise HTTPException(status_code=400, detail="선택한 수업에 배정되지 않은 학생이 포함되어 있습니다.")
         actual_teacher = class_row["TeacherUsername"] if current_user.get("role") == "teacher" else ((payload.ActualTeacherUsername or "").strip() or class_row["TeacherUsername"])
         teacher = get_user_by_username(actual_teacher)
-        if not teacher or teacher.get("role") not in ("teacher", "manager"):
+        if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
         conn = get_db_connection()
         try:
@@ -1348,7 +1348,7 @@ def user_register_studylog(
         actual_teacher = (payload.ActualTeacherUsername or "").strip()
         if actual_teacher:
             teacher = get_user_by_username(actual_teacher)
-            if not teacher or teacher.get("role") not in ("teacher", "manager"):
+            if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
                 raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
         if payload.PayrollCategoryId:
             conn = get_db_connection()
@@ -1920,7 +1920,7 @@ def _validate_class_payload(payload: ClassRequest) -> None:
         raise HTTPException(status_code=400, detail="수업명은 필수 입력 항목입니다.")
 
     teacher = get_user_by_username(payload.TeacherUsername)
-    if not teacher or teacher["role"] not in ("teacher", "manager"):
+    if not teacher or teacher["role"] not in ("teacher", "manager", "subadmin"):
         raise HTTPException(status_code=400, detail="담당 선생님 계정을 확인해 주세요.")
 
     if payload.DayOfWeek not in DAY_OF_WEEK_VALUES:
@@ -2274,7 +2274,7 @@ def user_batch_register_class_studylogs(
     actual_teacher = (payload.ActualTeacherUsername or "").strip()
     if actual_teacher and actual_teacher != class_row["TeacherUsername"]:
         teacher = get_user_by_username(actual_teacher)
-        if not teacher or teacher["role"] not in ("teacher", "manager"):
+        if not teacher or teacher["role"] not in ("teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail="대체 진행 선생님 계정을 확인해 주세요.")
         if current_user["role"] not in ("admin", "subadmin", "manager"):
             raise HTTPException(status_code=403, detail="다른 선생님을 실제 진행자로 지정하는 작업은 관리 선생님 이상만 가능합니다.")
@@ -2894,7 +2894,7 @@ def transfer_payroll_sessions(
 
     for username, label in ((source_teacher, "현재 담당"), (target_teacher, "이전 대상")):
         user = get_user_by_username(username)
-        if not user or user.get("role") not in ("teacher", "manager"):
+        if not user or user.get("role") not in ("teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail=f"{label} 선생님 계정을 확인해 주세요.")
 
     unique_sessions = []
@@ -2991,7 +2991,7 @@ def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, A
     if not teacher_username:
         raise HTTPException(status_code=400, detail="추가 청구를 등록할 선생님을 선택해 주세요.")
     target_user = get_user_by_username(teacher_username)
-    if not target_user or target_user.get("role") not in ("teacher", "manager"):
+    if not target_user or target_user.get("role") not in ("teacher", "manager", "subadmin"):
         raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
     conn=get_db_connection()
     try:
@@ -3356,7 +3356,7 @@ def user_update_studylog(
 
             if target_teacher:
                 teacher = get_user_by_username(target_teacher)
-                if not teacher or teacher.get("role") not in ("teacher", "manager"):
+                if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
                     raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
             if target_teacher and (target_class_id or target_category_id):
                 conn = get_db_connection()
