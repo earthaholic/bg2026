@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
     let currentMonthlyReportId = null;
+    let monthlyLectureRequestSeq = 0;
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
     const payrollClaimsById = new Map();
@@ -5659,7 +5660,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return studiedDay;
     }
 
-    function generateMonthlyReportText() {
+    function generateMonthlyReportText(skipAutoLecture = false) {
         const studentSelect = document.getElementById('monthly-report-student-select');
         const periodLabelInput = document.getElementById('monthly-report-period-label');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
@@ -5792,6 +5793,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
         resultTextarea.value = lines.join('\n');
         setMonthlyReportSaveState(null);
+        if (!skipAutoLecture) updateMonthlyStartLecture(checkedLogItems);
+    }
+
+    async function updateMonthlyStartLecture(selectedLogs = getSelectedMonthlyLogs()) {
+        const guide = document.getElementById('monthly-report-lecture-guide');
+        const input = document.getElementById('monthly-report-start-lecture');
+        const studentId = document.getElementById('monthly-report-student-select')?.value;
+        const generalDates = selectedLogs
+            .filter(log => !(log.IsSpecial || log.is_special))
+            .map(log => String(log.StudiedDay || log.studied_day || '').slice(0, 10))
+            .filter(Boolean)
+            .sort();
+        const requestSeq = ++monthlyLectureRequestSeq;
+        if (!studentId || !generalDates.length) {
+            if (guide) {
+                guide.className = 'monthly-report-lecture-guide';
+                guide.textContent = '학생과 일반 학습 기록을 선택하면 결제 이력에 맞춰 자동 계산됩니다.';
+            }
+            return;
+        }
+        if (guide) {
+            guide.className = 'monthly-report-lecture-guide';
+            guide.textContent = '결제 이력을 확인하여 강의 번호를 계산하는 중입니다...';
+        }
+        try {
+            const params = new URLSearchParams({ student_id: studentId, first_studied_day: generalDates[0] });
+            const progress = await apiFetch(`/api/user/monthly-report/start-lecture?${params.toString()}`);
+            if (requestSeq !== monthlyLectureRequestSeq) return;
+            if (!progress.has_payment) {
+                if (guide) {
+                    guide.className = 'monthly-report-lecture-guide is-warning';
+                    guide.textContent = '해당 수업일 이전의 결제 정보가 없어 입력값을 유지합니다.';
+                }
+                return;
+            }
+            const nextNumber = Number(progress.start_lecture_num) || 1;
+            if (input && Number(input.value) !== nextNumber) {
+                input.value = String(nextNumber);
+                generateMonthlyReportText(true);
+            }
+            if (guide) {
+                guide.className = 'monthly-report-lecture-guide is-calculated';
+                guide.textContent = `결제 시작일 ${progress.earliest_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작`;
+            }
+        } catch (err) {
+            if (requestSeq !== monthlyLectureRequestSeq) return;
+            if (guide) {
+                guide.className = 'monthly-report-lecture-guide is-warning';
+                guide.textContent = '강의 번호를 자동 계산하지 못해 입력값을 유지합니다.';
+            }
+        }
     }
 
     function setMonthlyReportSaveState(report) {
@@ -6107,7 +6159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnApplyMonthlyLogPeriod.addEventListener('click', () => loadMonthlyReportLogs());
     }
 
-    ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-start-lecture', 'monthly-report-special-teacher'].forEach(id => {
+    ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-special-teacher'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('input', () => generateMonthlyReportText());
@@ -6469,6 +6521,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('input', (e) => {
         if (e.target.classList.contains('currency-input')) formatCurrencyInput(e.target);
     });
+    document.getElementById('monthly-report-start-lecture')?.addEventListener('input', () => generateMonthlyReportText(true));
     let tuitionStudentSearchTimer = null;
     document.getElementById('tuition-student-search')?.addEventListener('input', () => {
         document.getElementById('tuition-student').value = '';

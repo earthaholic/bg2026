@@ -1544,6 +1544,55 @@ def _monthly_report_response(row: Any) -> Dict[str, Any]:
         item["StudyLogSnapshot"] = []
     return item
 
+def _get_monthly_report_start_lecture(student: Dict[str, Any], first_studied_day: str) -> Dict[str, Any]:
+    """선택한 첫 수업일 직전까지 사용한 일반 수업 차시를 기준으로 시작 번호를 계산한다."""
+    try:
+        datetime.strptime(first_studied_day, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="학습 일자가 올바르지 않습니다.")
+
+    student_row_id = student["row_id"]
+    student_id = student.get("Id", student_row_id)
+    student_name = student.get("Name", "")
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT rowid AS row_id, * FROM "TuitionPayments"
+                          WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
+                          ORDER BY "StartDate", rowid''',
+                       (student_row_id, student_id, first_studied_day))
+        payments = [dict(row) for row in cursor.fetchall()]
+        if not payments:
+            return {"has_payment": False, "start_lecture_num": None, "used_before": 0}
+
+        earliest_start = payments[0]["StartDate"]
+        cursor.execute('''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
+                          FROM "StudyLogs"
+                          WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
+                            AND "StudiedDay" >= ? AND "StudiedDay" < ?
+                            AND COALESCE("IsSpecial", 0) = 0
+                          ORDER BY "StudiedDay", rowid''',
+                       (student_row_id, str(student_row_id), student_id, student_name,
+                        earliest_start, first_studied_day))
+        seen_sessions = set()
+        used_before = 0
+        for row in cursor.fetchall():
+            lesson_content = (row["LessonContent"] or "").strip()
+            key = (row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])
+            if key not in seen_sessions:
+                seen_sessions.add(key)
+                used_before += 1
+        total_lessons = sum((payment.get("PaidLessons") or 0) + (payment.get("ServiceLessons") or 0) for payment in payments)
+        return {
+            "has_payment": True,
+            "start_lecture_num": used_before + 1,
+            "used_before": used_before,
+            "total_lessons": total_lessons,
+            "earliest_start": earliest_start
+        }
+    finally:
+        conn.close()
+
 def _get_korean_name_with_yi(name: str) -> str:
     if not name or len(name) == 0:
         return ""
@@ -2297,6 +2346,19 @@ def user_batch_register_class_studylogs(
         "skipped_count": skipped_count,
         "results": results
     }
+
+@app.get("/api/user/monthly-report/start-lecture")
+def user_get_monthly_report_start_lecture(
+    student_id: int = Query(...),
+    first_studied_day: str = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    conn = get_db_connection()
+    try:
+        student = _get_monthly_report_student(conn.cursor(), student_id, current_user)
+    finally:
+        conn.close()
+    return _get_monthly_report_start_lecture(student, first_studied_day)
 
 @app.delete("/api/user/classes/{class_id}/cancellations/{cancellation_id}")
 def user_delete_class_cancellation(

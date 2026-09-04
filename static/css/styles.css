@@ -3072,6 +3072,21 @@ body {
     line-height: 1.4;
 }
 
+.monthly-report-lecture-guide {
+    margin: 0.4rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.monthly-report-lecture-guide.is-calculated {
+    color: var(--success);
+}
+
+.monthly-report-lecture-guide.is-warning {
+    color: var(--warning);
+}
+
 .monthly-report-preview-header,
 .monthly-report-history-header,
 .monthly-report-actions,
