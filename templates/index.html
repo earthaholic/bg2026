@@ -774,7 +774,7 @@
                             <div class="card-header-styled flex-between" style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <h2><i class="fa-solid fa-square-plus"></i> 꿈꾸는봄결 새 학습 기록 등록</h2>
-                                    <p class="subtitle">담당 수업을 먼저 선택한 뒤 학생과 도서, 학습 일자를 순서대로 입력해 주세요. (한 번에 여러 명 선택할 수 있습니다)</p>
+                                    <p class="subtitle">담당 수업을 먼저 선택한 뒤 학생과 도서, 학습 일자를 순서대로 입력해 주세요. (학생과 도서를 각각 여러 개 선택할 수 있습니다)</p>
                                 </div>
                                 <button type="button" id="btn-clear-studylog-cache" class="btn btn-sm btn-outline" title="캐싱된 선택 정보를 초기화합니다">
                                     <i class="fa-solid fa-broom"></i> 선택 초기화
@@ -827,12 +827,12 @@
 
                                 <!-- Section 3: 도서 선택 -->
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 3. 학습 도서 선택</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 3. 학습 도서 선택 (다중 선택 가능)</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
                                             <label>도서 선택 <span class="required">*</span></label>
                                             <div class="picker-input-group">
-                                                <input type="hidden" id="selected-book-id" name="BookId">
+                                                <input type="hidden" id="selected-book-id" name="BookIds">
                                                 <input type="text" id="selected-book-display" class="form-control" placeholder="아래 [도서 검색] 버튼을 클릭하여 도서를 선택하세요" readonly>
                                                 <button type="button" id="btn-open-book-picker" class="btn btn-primary">
                                                     <i class="fa-solid fa-magnifying-glass"></i> 도서 검색
@@ -2239,6 +2239,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260904-subadmin-role"></script>
+    <script src="/static/js/app.js?v=20260904-multi-book-studylog"></script>
 </body>
 </html>

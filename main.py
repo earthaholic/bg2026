@@ -181,7 +181,8 @@ class StudentConsultationRequest(BaseModel):
 class UserStudyLogRegisterRequest(BaseModel):
     StudentId: Optional[int] = None
     StudentIds: Optional[List[int]] = []
-    BookId: int
+    BookId: Optional[int] = None
+    BookIds: Optional[List[int]] = []
     StudiedDay: str
     IsSpecial: Optional[bool] = False
     LessonContent: Optional[str] = ""
@@ -1268,8 +1269,15 @@ def user_register_studylog(
 
     if not target_student_ids:
         raise HTTPException(status_code=400, detail="학습할 학생을 1명 이상 선택해 주세요.")
-    if not payload.BookId or payload.BookId <= 0:
-        raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
+    target_book_ids = []
+    for book_id in payload.BookIds or ([payload.BookId] if payload.BookId else []):
+        if isinstance(book_id, int) and book_id > 0 and book_id not in target_book_ids:
+            target_book_ids.append(book_id)
+    if not target_book_ids:
+        raise HTTPException(status_code=400, detail="학습할 도서를 1권 이상 선택해 주세요.")
+    for book_id in target_book_ids:
+        if _resolve_domain_pk("Books", book_id) is None:
+            raise HTTPException(status_code=400, detail=f"해당 도서를 찾을 수 없습니다. (도서 #{book_id})")
     if not payload.StudiedDay or not payload.StudiedDay.strip():
         raise HTTPException(status_code=400, detail="학습 일자를 입력해 주세요.")
 
@@ -1334,32 +1342,33 @@ def user_register_studylog(
     created_log_ids = []
     try:
         for s_id in target_student_ids:
-            log_data = {
-                "StudentId": s_id,
-                "BookId": payload.BookId,
-                "StudiedDay": studied_day,
-                "IsSpecial": 1 if payload.IsSpecial else 0,
-                "LessonContent": (payload.LessonContent or "").strip(),
-                "Description": (payload.Description or "").strip(),
-                "ClassId": payload.ClassId if class_row else None,
-                "PayrollCategoryId": payroll_category_id,
-                "ActualTeacherUsername": actual_teacher,
-                "SubstituteStatus": "approved" if class_row or payroll_category_id else "",
-                "GradeSnapshot": _student_grade(s_id) if class_row or payroll_category_id else "",
-                "CreatedBy": current_user["username"]
-            }
-            res = insert_table_row("StudyLogs", log_data)
-            log_id = res.get("id")
-            if log_id:
-                created_log_ids.append(log_id)
-                new_snapshot = get_record_snapshot("StudyLogs", log_id)
-                _audit_insert("StudyLogs", log_id, new_snapshot,
-                              current_user["username"], current_user["role"])
+            for book_id in target_book_ids:
+                log_data = {
+                    "StudentId": s_id,
+                    "BookId": book_id,
+                    "StudiedDay": studied_day,
+                    "IsSpecial": 1 if payload.IsSpecial else 0,
+                    "LessonContent": (payload.LessonContent or "").strip(),
+                    "Description": (payload.Description or "").strip(),
+                    "ClassId": payload.ClassId if class_row else None,
+                    "PayrollCategoryId": payroll_category_id,
+                    "ActualTeacherUsername": actual_teacher,
+                    "SubstituteStatus": "approved" if class_row or payroll_category_id else "",
+                    "GradeSnapshot": _student_grade(s_id) if class_row or payroll_category_id else "",
+                    "CreatedBy": current_user["username"]
+                }
+                res = insert_table_row("StudyLogs", log_data)
+                log_id = res.get("id")
+                if log_id:
+                    created_log_ids.append(log_id)
+                    new_snapshot = get_record_snapshot("StudyLogs", log_id)
+                    _audit_insert("StudyLogs", log_id, new_snapshot,
+                                  current_user["username"], current_user["role"])
 
         count = len(created_log_ids)
         return {
             "status": "success",
-            "message": f"{count}명의 학습 기록이 성공적으로 수록되었습니다." if count > 1 else "학습 기록이 성공적으로 수록되었습니다.",
+            "message": f"학습 기록 {count}건이 성공적으로 수록되었습니다.",
             "log_id": created_log_ids[0] if created_log_ids else None,
             "log_ids": created_log_ids,
             "count": count
