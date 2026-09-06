@@ -2967,6 +2967,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Open Book Detail Modal (View Mode)
+    async function loadBookStudents(bookId, section, page = 1) {
+        const results = section.querySelector('.book-students-results');
+        const pagination = section.querySelector('.book-students-pagination');
+        const heading = section.querySelector('.book-students-heading');
+        results.innerHTML = '<p class="text-muted">학생 목록을 불러오는 중...</p>';
+        pagination.replaceChildren();
+        try {
+            const data = await apiFetch(`/api/user/books/${bookId}/students?page=${page}&limit=10`);
+            if (!section.isConnected) return;
+            heading.textContent = `이 도서를 학습한 학생 · ${data.total}명`;
+            if (!data.total) {
+                results.innerHTML = '<p class="text-muted">아직 이 도서를 학습한 학생이 없습니다.</p>';
+                return;
+            }
+            results.innerHTML = `<table class="book-students-table">
+                <thead><tr><th>학생명 / 학교</th><th>현재 학년</th><th>최근 학습일</th><th>횟수</th></tr></thead>
+                <tbody>${data.students.map(s => `<tr>
+                    <td><button type="button" class="book-student-link" data-student-id="${s.row_id}">${escapeHtml(s.Name || '이름 없음')}</button>
+                        ${Number(s.IsClassEnded) ? '<span class="tag-badge">수업 종료</span>' : ''}
+                        <small class="book-student-school">${escapeHtml(s.School || '-')}</small></td>
+                    <td data-label="현재 학년">${escapeHtml(s.Grade || '-')}</td>
+                    <td data-label="최근 학습일">${escapeHtml(s.latest_studied_day || '-')}</td>
+                    <td data-label="횟수">${s.study_count}회</td>
+                </tr>`).join('')}</tbody></table>`;
+            results.scrollTop = 0;
+            results.querySelectorAll('.book-student-link').forEach(button => {
+                button.addEventListener('click', () => openStudentDetailModal(button.dataset.studentId));
+            });
+            const pages = Math.ceil(data.total / data.limit);
+            pagination.innerHTML = `<button type="button" class="btn btn-sm btn-outline" ${page <= 1 ? 'disabled' : ''}>이전</button>
+                <span>${page} / ${pages} 페이지</span>
+                <button type="button" class="btn btn-sm btn-outline" ${page >= pages ? 'disabled' : ''}>다음</button>`;
+            const buttons = pagination.querySelectorAll('button');
+            buttons[0].addEventListener('click', () => loadBookStudents(bookId, section, page - 1));
+            buttons[1].addEventListener('click', () => loadBookStudents(bookId, section, page + 1));
+        } catch (err) {
+            if (!section.isConnected) return;
+            results.innerHTML = '<p class="text-muted">학생 목록을 불러오지 못했습니다.</p><button type="button" class="btn btn-sm btn-outline">다시 시도</button>';
+            results.querySelector('button').addEventListener('click', () => loadBookStudents(bookId, section, page));
+        }
+    }
+
     async function openBookDetailModal(bookId) {
         modalBookDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>도서 상세 정보 조회 중...</p></div>';
         modalBookDetailTitle.innerHTML = `<i class="fa-solid fa-book-open"></i> 도서 상세 정보`;
@@ -3054,6 +3096,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
+                <div class="book-detail-layout">
+                <div class="book-detail-information">
                 <div class="detail-grid">
                     <div class="detail-metric-card">
                         <div class="label">분량 (BookLength)</div>
@@ -3098,9 +3142,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 상세 설명 및 메모</div>
                     <div class="detail-desc-box">${escapeHtml(b.Desc || '등록된 상세 설명이 없습니다.')}</div>
                 </div>
+                </div>
+                <section class="book-detail-students" aria-label="이 도서를 학습한 학생">
+                    <h4 class="detail-section-title book-students-heading">이 도서를 학습한 학생</h4>
+                    <div class="book-students-results" aria-live="polite"></div>
+                    <div class="book-students-pagination"></div>
+                </section>
+                </div>
             `;
 
             modalBookDetailBody.innerHTML = html;
+            loadBookStudents(bookId, modalBookDetailBody.querySelector('.book-detail-students'));
         } catch (err) {
             modalBookDetailBody.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }

@@ -779,6 +779,52 @@ def user_get_book_detail(
     gdrive_files = get_gdrive_files_for_book(book_data.get("Title", ""))
     return {"book": book_data, "gdrive_files": gdrive_files}
 
+@app.get("/api/user/books/{book_id}/students")
+def user_get_book_students(
+    book_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    advance_student_grades()
+    conn = get_db_connection()
+    try:
+        book = conn.execute('SELECT rowid AS row_id, "Id" FROM "Books" WHERE rowid = ? OR "Id" = ?',
+                            (book_id, book_id)).fetchone()
+        if not book:
+            raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
+        # 식별자로 먼저 연결하고, 식별자가 없는 옛 기록만 유일한 이름으로 연결한다.
+        # 여러 학생에 일치하는 모호한 기록은 제외해 중복 집계를 방지한다.
+        query = '''
+            WITH matched AS (
+                SELECT sl.rowid AS log_id, sl.StudiedDay, s.rowid AS student_row_id
+                FROM "StudyLogs" sl JOIN "Students" s
+                  ON (CAST(sl.StudentId AS TEXT) = CAST(s.rowid AS TEXT)
+                      OR CAST(sl.StudentId AS TEXT) = CAST(s.Id AS TEXT)
+                      OR (sl.StudentId = s.Name AND NOT EXISTS (
+                          SELECT 1 FROM "Students" identified
+                          WHERE CAST(sl.StudentId AS TEXT) = CAST(identified.rowid AS TEXT)
+                             OR CAST(sl.StudentId AS TEXT) = CAST(identified.Id AS TEXT))))
+                WHERE sl.BookId = ? OR sl.BookId = ?
+            ), resolved AS (
+                SELECT log_id, StudiedDay, MIN(student_row_id) AS student_row_id
+                FROM matched GROUP BY log_id HAVING COUNT(*) = 1
+            )
+            SELECT s.rowid AS row_id, s.Name, s.Grade, s.School, s.IsClassEnded,
+                   MAX(NULLIF(TRIM(r.StudiedDay), '')) AS latest_studied_day,
+                   COUNT(*) AS study_count
+            FROM resolved r JOIN "Students" s ON s.rowid = r.student_row_id
+            GROUP BY s.rowid
+        '''
+        params = (book['row_id'], book['Id'])
+        total = conn.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0]
+        students = conn.execute(query + ' ORDER BY latest_studied_day DESC, s.Name, s.rowid LIMIT ? OFFSET ?',
+                                params + (limit, (page - 1) * limit)).fetchall()
+        return {"students": [dict(s) for s in students], "total": total, "page": page, "limit": limit}
+    finally:
+        conn.close()
+
+
 # --- User Student Registration & Search APIs ---
 @app.post("/api/user/students")
 def user_register_student(
