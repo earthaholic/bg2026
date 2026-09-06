@@ -2239,19 +2239,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
         try {
             const data = await apiFetch(`/api/user/students/${studentId}/classes`);
-            const options = (special) => {
-                const selected = data.assignments.find(a => Boolean(a.IsSpecial) === special)?.ClassId;
-                return '<option value="">배정 없음</option>' + data.classes.map(c =>
-                    `<option value="${c.Id}" ${c.Id === selected ? 'selected' : ''}>${escapeHtml(c.ClassName)} · ${escapeHtml(c.TeacherUsername || '')} · ${escapeHtml(c.StartTime || '')}</option>`
-                ).join('');
-            };
+            const classLabel = c => `${c.ClassName} · ${c.TeacherUsername || ''} · ${c.StartTime || ''}`;
+            const picker = (kind, label) => `<div class="student-class-picker">
+                <label for="student-${kind}-class-search">${label} 검색</label>
+                <div class="student-class-search-field"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="student-${kind}-class-search" class="form-control" aria-label="${label} 수업 검색" placeholder="수업명 / 담당 선생님 입력" autocomplete="off"></div>
+                <select id="student-${kind}-class" class="form-control" aria-label="${label}" aria-describedby="student-${kind}-class-status"></select>
+                <small id="student-${kind}-class-status" class="text-muted" role="status"></small>
+            </div>`;
             container.innerHTML = `<form class="student-class-assignment-form">
                 <div class="detail-section-title">정규반·특강 배정</div>
-                <div class="form-group"><label for="student-regular-class">정규반</label><select id="student-regular-class" class="form-control">${options(false)}</select></div>
-                <div class="form-group"><label for="student-special-class">특강</label><select id="student-special-class" class="form-control">${options(true)}</select></div>
-                <p class="text-muted">각각 한 수업씩 선택할 수 있습니다. 기존 학습 이력은 변경되지 않습니다.</p>
-                <button type="submit" class="btn btn-sm btn-primary">수업 배정 저장</button>
+                <div class="student-class-picker-grid">${picker('regular', '정규반')}${picker('special', '특강')}</div>
+                <div class="student-class-assignment-footer"><small class="text-muted">각각 1개 배정 · 기존 학습 이력 유지</small><button type="submit" class="btn btn-sm btn-primary">배정 저장</button></div>
             </form>`;
+            ['regular', 'special'].forEach(kind => {
+                const select = container.querySelector(`#student-${kind}-class`);
+                const search = container.querySelector(`#student-${kind}-class-search`);
+                const status = container.querySelector(`#student-${kind}-class-status`);
+                let selected = String(data.assignments.find(a => Boolean(a.IsSpecial) === (kind === 'special'))?.ClassId ?? '');
+                const renderOptions = () => {
+                    const query = search.value.trim().toLocaleLowerCase();
+                    const matches = data.classes.filter(c => `${c.ClassName} ${c.TeacherUsername || ''}`.toLocaleLowerCase().includes(query));
+                    const current = data.classes.find(c => String(c.Id) === selected);
+                    const keepCurrent = current && !matches.includes(current);
+                    const visible = keepCurrent ? [current, ...matches] : matches;
+                    select.innerHTML = '<option value="">배정 없음</option>' + visible.map(c =>
+                        `<option value="${c.Id}">${keepCurrent && c === current ? '[현재 선택] ' : ''}${escapeHtml(classLabel(c))}</option>`
+                    ).join('');
+                    select.value = selected;
+                    status.textContent = `${matches.length ? `수업 ${matches.length}개` : '검색 결과가 없습니다.'}${keepCurrent ? ' · 현재 선택한 수업은 유지됩니다.' : ''}`;
+                };
+                search.addEventListener('input', renderOptions);
+                search.addEventListener('keydown', event => {
+                    if (event.key === 'Enter') { event.preventDefault(); select.focus(); }
+                });
+                select.addEventListener('change', () => { selected = select.value; renderOptions(); });
+                renderOptions();
+            });
             container.querySelector('form').addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const regular = container.querySelector('#student-regular-class').value;
