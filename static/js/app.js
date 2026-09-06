@@ -523,25 +523,46 @@ document.addEventListener('DOMContentLoaded', () => {
         staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
         document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', currentUser.role !== 'teacher'));
 
-        const activeView = document.querySelector('.workspace-view.active')?.id.replace('view-', '') || 'studylog-search';
-        if (isStaff() && ADMIN_ONLY_VIEWS.includes(activeView) && !isAdmin()) {
-            switchView('studylog-search');
-        } else if (isStaff()) {
-            reportActivityView(activeView);
-        }
-        // 일반 선생님은 로그인 직후 학습 기록 검색 화면에서 시작한다.
-        if (!isStaff()) {
-            switchView('studylog-search');
-        }
+        restoreViewFromUrl();
     }
 
-    function switchView(targetView) {
+    function restoreViewFromUrl() {
+        if (!currentUser) return;
+        const params = new URLSearchParams(location.search);
+        // 기존 변경 이력 공유 주소도 계속 지원한다.
+        const legacyAudit = ['username', 'date_from', 'date_to', 'table_name', 'action', 'record_id'].some(key => params.has(key));
+        switchView(params.get('view') || (legacyAudit ? 'audit-log' : 'studylog-search'), { replace: true });
+    }
+
+    window.addEventListener('popstate', restoreViewFromUrl);
+
+    function switchView(targetView, { replace = false } = {}) {
+        if (!currentUser) return;
+        if (![...document.querySelectorAll('.workspace-view')].some(view => view.id === `view-${targetView}`)) {
+            targetView = 'studylog-search';
+        }
         // 권한 가드: 선생님은 등록 뷰, 사이트 관리자 외에는 Studio 뷰 접근 불가
         if (STAFF_ONLY_VIEWS.includes(targetView) && !isStaff()) {
             targetView = 'studylog-search';
         } else if (ADMIN_ONLY_VIEWS.includes(targetView) && !isAdmin()) {
             targetView = 'studylog-search';
         }
+
+        const url = new URL(location.href);
+        const previousView = url.searchParams.get('view');
+        if (previousView !== targetView) {
+            if (previousView || targetView !== 'audit-log') url.search = '';
+            url.searchParams.set('view', targetView);
+        }
+        if (replace) {
+            history.replaceState(null, '', url);
+        } else if (url.href !== location.href) {
+            history.pushState(null, '', url);
+        }
+
+        // 이전 화면의 상세 창이 복원된 화면을 가리지 않도록 닫는다.
+        document.querySelectorAll('.modal-backdrop').forEach(modal => modal.classList.add('hidden'));
+        document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
 
         document.querySelectorAll('.menu-nav-item').forEach(item => {
             item.classList.toggle('active', item.getAttribute('data-view') === targetView);
@@ -6339,6 +6360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (actions.length) params.set('action', actions.join(','));
 
         const urlParams = new URLSearchParams(params.toString());
+        urlParams.set('view', 'audit-log');
         history.replaceState(null, '', `${location.pathname}?${urlParams.toString()}`);
 
         try {
