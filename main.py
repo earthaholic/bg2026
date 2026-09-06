@@ -2101,6 +2101,52 @@ def user_get_class_batch_form(
     students = get_class_students(class_id)
     return {"class_": class_row, "students": students}
 
+@app.get("/api/user/recent-lesson-contents")
+def user_get_recent_lesson_contents(
+    book_ids: List[int] = Query(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """선택한 도서별로 중복을 제외한 최근 수업 내용 5개를 반환한다."""
+    unique_book_ids = list(dict.fromkeys(book_ids))
+    if not unique_book_ids:
+        return {"books": []}
+    if len(unique_book_ids) > 30:
+        raise HTTPException(status_code=400, detail="한 번에 조회할 수 있는 도서는 최대 30권입니다.")
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        books = []
+        for requested_id in unique_book_ids:
+            book = cursor.execute(
+                'SELECT rowid AS row_id, "Id", "Title" FROM "Books" WHERE rowid = ? OR "Id" = ? LIMIT 1',
+                (requested_id, requested_id)
+            ).fetchone()
+            if not book:
+                continue
+            contents = cursor.execute('''
+                SELECT TRIM(COALESCE("LessonContent", '')) AS lesson_content,
+                       MAX("StudiedDay") AS studied_day,
+                       MAX(rowid) AS latest_row_id
+                FROM "StudyLogs"
+                WHERE ("BookId" = ? OR "BookId" = ? OR "BookId" = ?)
+                  AND TRIM(COALESCE("LessonContent", '')) <> ''
+                GROUP BY TRIM(COALESCE("LessonContent", ''))
+                ORDER BY studied_day DESC, latest_row_id DESC
+                LIMIT 5
+            ''', (requested_id, book["row_id"], book["Id"])).fetchall()
+            books.append({
+                "book_id": requested_id,
+                "title": book["Title"] or f"도서 #{requested_id}",
+                "contents": [
+                    {"lesson_content": row["lesson_content"], "studied_day": row["studied_day"] or ""}
+                    for row in contents
+                ]
+            })
+        return {"books": books}
+    finally:
+        conn.close()
+
 @app.get("/api/user/classes/{class_id}/studylog-calendar")
 def user_get_class_studylog_calendar(
     class_id: int,

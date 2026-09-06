@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     const selectedStudylogBooks = new Map();
     const selectedBatchBooks = new Map();
+    let batchRecentLessonsRequestSeq = 0;
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
@@ -2394,6 +2395,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateSelectedBatchBooksUI() {
         updateSelectedBooksUI(selectedBatchBooks, 'batch-book-id', 'batch-book-display', 'preview-batch-book', 'btn-remove-batch-book');
+        loadBatchRecentLessonContents();
+    }
+
+    async function loadBatchRecentLessonContents() {
+        const container = document.getElementById('batch-recent-lesson-contents');
+        if (!container) return;
+        const books = Array.from(selectedBatchBooks.values());
+        const requestSeq = ++batchRecentLessonsRequestSeq;
+        if (!books.length) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+        container.innerHTML = '<div class="batch-recent-lessons-status"><i class="fa-solid fa-circle-notch fa-spin"></i> 도서별 최근 수업 내용을 불러오는 중입니다.</div>';
+        const params = books.map(book => `book_ids=${encodeURIComponent(book.id)}`).join('&');
+        try {
+            const data = await apiFetch(`/api/user/recent-lesson-contents?${params}`);
+            if (requestSeq !== batchRecentLessonsRequestSeq) return;
+            container.innerHTML = (data.books || []).map(book => `
+                <section class="batch-recent-lesson-set">
+                    <h5><i class="fa-solid fa-book"></i> ${escapeHtml(book.title)} <span>최근 수업 내용</span></h5>
+                    ${(book.contents || []).length ? `<div class="batch-recent-lesson-list">${book.contents.map(item => `
+                        <button type="button" class="batch-recent-lesson-item" data-content="${escapeHtml(item.lesson_content)}">
+                            <time>${escapeHtml(item.studied_day || '날짜 없음')}</time>
+                            <span>${escapeHtml(item.lesson_content)}</span>
+                        </button>`).join('')}</div>` : '<p class="batch-recent-lessons-empty">이 도서에 저장된 이전 수업 내용이 없습니다.</p>'}
+                </section>`).join('');
+            container.querySelectorAll('.batch-recent-lesson-item').forEach(button => {
+                button.addEventListener('click', () => {
+                    const textarea = document.getElementById('batch-lesson-content');
+                    if (!textarea) return;
+                    textarea.value = button.getAttribute('data-content') || '';
+                    textarea.focus();
+                });
+            });
+        } catch (err) {
+            if (requestSeq !== batchRecentLessonsRequestSeq) return;
+            container.innerHTML = `<div class="batch-recent-lessons-status error">최근 수업 내용을 불러오지 못했습니다: ${escapeHtml(err.message)}</div>`;
+        }
     }
 
     function updateSelectedBooksUI(selectedBooks, idElementId, displayElementId, previewElementId, removeClass) {
@@ -5530,6 +5571,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bDisp) bDisp.value = '';
         if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
         selectedBatchBooks.clear();
+        loadBatchRecentLessonContents();
         updateBatchBookPickerCount();
         updateBatchRegistrationMode();
     }
@@ -5625,6 +5667,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bDisp) bDisp.value = '';
             if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
             selectedBatchBooks.clear();
+            loadBatchRecentLessonContents();
             updateBatchBookPickerCount();
             loadBatchStudylogCalendar(getBatchMonth(dateVal));
         } catch (err) {

@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260905-monthly-report-save">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260906-batch-content-columns">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1816,13 +1816,19 @@
 
                                 <div class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 3. 수업 내용 (선택)</h4>
-                                    <div id="batch-actual-teacher-section" class="form-group staff-only hidden">
-                                        <label for="batch-actual-teacher">실제 진행 선생님</label>
-                                        <select id="batch-actual-teacher" class="form-control"><option value="">수업 담당 선생님</option></select>
-                                        <div class="text-muted">다른 선생님이 대신 진행한 경우 선택하세요. 등록 즉시 선택한 선생님의 정산에 반영됩니다.</div>
-                                    </div>
-                                    <div class="form-group">
-                                        <textarea id="batch-lesson-content" name="LessonContent" class="form-control" rows="3" placeholder="이번 수업에서 다룬 주요 내용, 진도, 다룬 문제 등을 입력하세요. 모든 학생의 학습 기록에 동일하게 저장됩니다. (선택사항)"></textarea>
+                                    <div class="batch-lesson-content-layout">
+                                        <div class="batch-lesson-content-editor">
+                                            <div id="batch-actual-teacher-section" class="form-group staff-only hidden">
+                                                <label for="batch-actual-teacher">실제 진행 선생님</label>
+                                                <select id="batch-actual-teacher" class="form-control"><option value="">수업 담당 선생님</option></select>
+                                                <div class="text-muted batch-actual-teacher-help">다른 선생님이 대신 진행한 경우 선택하세요. 선택한 선생님의 정산에 바로 반영됩니다.</div>
+                                            </div>
+                                            <div class="form-group batch-lesson-content-field">
+                                                <label for="batch-lesson-content">수업 내용</label>
+                                                <textarea id="batch-lesson-content" name="LessonContent" class="form-control" rows="3" placeholder="이번 수업에서 다룬 주요 내용, 진도, 다룬 문제 등을 입력하세요. 모든 학생의 학습 기록에 동일하게 저장됩니다. (선택사항)"></textarea>
+                                            </div>
+                                        </div>
+                                        <div id="batch-recent-lesson-contents" class="batch-recent-lessons hidden" aria-live="polite"></div>
                                     </div>
                                 </div>
 
@@ -2274,6 +2280,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260905-monthly-picker-last-student"></script>
+    <script src="/static/js/app.js?v=20260906-batch-recent-lessons"></script>
 </body>
 </html>
