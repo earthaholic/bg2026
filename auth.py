@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
+from uuid import uuid4
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from config import settings
@@ -15,11 +16,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "sid": uuid4().hex})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
+def get_current_user(request: Request, token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="유효하지 않은 인증 토큰이거나 토큰이 만료되었습니다.",
@@ -37,6 +38,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
     if user is None:
         raise credentials_exception
     
+    request.state.activity_user = {"id": user["id"], "username": user["username"], "role": user["role"]}
+    request.state.activity_session_id = payload.get("sid", "")
     return user
 
 def get_current_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:

@@ -4034,3 +4034,19 @@ body {
     .payroll-team-total { text-align: left; }
     .payroll-transfer-controls .form-control { min-width: 0; }
 }
+
+/* 사용자 활동 이력 전용 레이아웃 */
+#view-activity-log .filter-row { flex-wrap: wrap; }
+#view-activity-log #activity-filter-form > .filter-row:first-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#view-activity-log .filter-group { min-width: 0; }
+@media (max-width: 1000px) { #view-activity-log #activity-filter-form > .filter-row:first-child { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { #view-activity-log #activity-filter-form > .filter-row:first-child { grid-template-columns: 1fr; } #view-activity-log { overflow-y: auto; } #view-activity-log .book-search-layout { overflow: visible; } #view-activity-log .table-card { min-height: 250px; } }
+#view-activity-log .results-bar { flex-wrap: wrap; gap: .5rem; }
+#view-activity-log .activity-failure { color: var(--danger); font-weight: 600; }
+#activity-detail { margin: auto; width: min(720px, 90vw); max-height: 85vh; overflow-y: auto; border: 1px solid var(--border-color, #ddd); border-radius: 16px; padding: 1.5rem; background: var(--bg-dark); color: var(--text-main); }
+#activity-detail::backdrop { background: rgba(0, 0, 0, .45); }
+#activity-detail .activity-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+#activity-detail dl { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: .8rem 1rem; margin-top: 1.25rem; }
+#activity-detail dt { font-weight: 600; }
+#activity-detail dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { #activity-detail dl { grid-template-columns: 1fr; gap: .4rem; } #activity-detail dd { margin-bottom: .6rem; } }

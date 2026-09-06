@@ -51,11 +51,16 @@ from database import (
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from similarity import normalize_key, classify_match
+from activity import router as activity_router, activity_middleware, init_activity_tables
+from jose import jwt
 
 app = FastAPI(
     title="한국토론교육연구협회 - 꿈꾸는봄결 데이터 관리 시스템",
     version="2.0.0"
 )
+
+app.middleware("http")(activity_middleware)
+app.include_router(activity_router)
 
 # Mount static & template files
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -74,6 +79,7 @@ templates = Jinja2Templates(directory=templates_dir)
 @app.on_event("startup")
 def on_startup():
     init_system_tables()
+    init_activity_tables()
     advance_student_grades()
 
 # Pydantic Schemas
@@ -346,7 +352,8 @@ def index_page(request: Request):
 
 # --- Authentication APIs ---
 @app.post("/api/auth/login")
-def login(payload: LoginRequest):
+def login(payload: LoginRequest, request: Request):
+    request.state.activity_attempted_username = payload.username[:200]
     user = get_user_by_username(payload.username)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(
@@ -355,6 +362,9 @@ def login(payload: LoginRequest):
         )
     
     token = create_access_token(data={"sub": user["username"], "role": user["role"]})
+    request.state.activity_user = {"id": user["id"], "username": user["username"], "role": user["role"]}
+    request.state.activity_session_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])["sid"]
+    request.state.activity_attempted_username = ""
     return {
         "access_token": token,
         "token_type": "bearer",

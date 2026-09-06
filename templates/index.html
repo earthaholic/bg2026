@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260906-batch-content-columns">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260906-activity-logs">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -147,6 +147,10 @@
                     <div class="menu-nav-item staff-only hidden" data-view="audit-log">
                         <i class="fa-solid fa-clock-rotate-left nav-icon"></i>
                         <span>변경 이력 조회</span>
+                    </div>
+
+                    <div class="menu-nav-item admin-only hidden" data-view="activity-log">
+                        <i class="fa-solid fa-user-clock nav-icon"></i><span>사용자 활동 이력</span>
                     </div>
 
                     <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
@@ -1366,6 +1370,34 @@
                     </div>
                 </section>
 
+                <section id="view-activity-log" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="card-header-styled"><div>
+                                <h2><i class="fa-solid fa-user-clock"></i> 사용자 활동 이력</h2>
+                                <p class="subtitle">접속·검색·조회·업무 요청을 확인합니다. 기여량은 별도의 변경 이력에서 확인해 주세요.</p>
+                            </div></div>
+                            <form id="activity-filter-form">
+                                <div class="filter-row">
+                                    <div class="filter-group"><label class="filter-label" for="activity-username">계정</label><select id="activity-username" class="form-control"><option value="">전체 계정</option></select></div>
+                                    <div class="filter-group"><label class="filter-label" for="activity-date-from">시작일 (한국 시간)</label><input id="activity-date-from" type="date" class="form-control" required></div>
+                                    <div class="filter-group"><label class="filter-label" for="activity-date-to">종료일 (한국 시간)</label><input id="activity-date-to" type="date" class="form-control" required></div>
+                                    <div class="filter-group"><label class="filter-label" for="activity-event">활동</label><select id="activity-event" class="form-control"><option value="">전체 활동</option></select></div>
+                                    <div class="filter-group"><label class="filter-label" for="activity-area">업무 영역</label><select id="activity-area" class="form-control"><option value="">전체 영역</option></select></div>
+                                    <div class="filter-group"><label class="filter-label" for="activity-result">결과</label><select id="activity-result" class="form-control"><option value="">전체 결과</option><option value="success">성공</option><option value="failure">실패·권한 거부</option></select></div>
+                                </div>
+                                <div class="filter-row filter-group-actions"><button type="button" id="activity-reset" class="btn btn-outline">필터 초기화</button><button type="submit" class="btn btn-primary">조회</button></div>
+                            </form>
+                        </div>
+                        <div class="results-bar"><span id="activity-summary" role="status">조회 준비 중</span><span class="text-muted">최근 180일 보관 · 업무 요청 건수이며 기여량과 다릅니다.</span></div>
+                        <div class="table-card"><div class="table-responsive"><table class="modern-table">
+                            <thead><tr><th>일시 (한국 시간)</th><th>계정 / 역할</th><th>활동</th><th>업무 영역</th><th>대상</th><th>결과</th><th>상세</th></tr></thead>
+                            <tbody id="activity-body"><tr><td colspan="7" class="empty-state">조회할 기간을 선택해 주세요.</td></tr></tbody>
+                        </table></div></div>
+                        <div class="search-pagination-bar"><span id="activity-page-info">1 / 1 페이지</span><div class="pagination-controls"><button id="activity-prev" class="btn btn-sm btn-outline" disabled>이전</button><button id="activity-next" class="btn btn-sm btn-outline" disabled>다음</button></div></div>
+                    </div>
+                </section>
+
                 <!-- View: 계정별 변경 이력 조회 (Staff Only) -->
                 <section id="view-audit-log" class="workspace-view">
                     <div class="book-search-layout">
@@ -2280,6 +2312,10 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260906-batch-recent-lessons"></script>
+    <dialog id="activity-detail" aria-labelledby="activity-detail-title">
+        <div class="activity-detail-header"><h3 id="activity-detail-title">활동 상세</h3><button id="activity-detail-close" class="btn btn-outline" autofocus>닫기</button></div>
+        <dl id="activity-detail-body"></dl>
+    </dialog>
+    <script src="/static/js/app.js?v=20260906-activity-logs"></script>
 </body>
 </html>

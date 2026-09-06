@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
     const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities', 'audit-log'];
-    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage'];
+    const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'activity-log'];
 
     function isAdmin() {
         return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'subadmin'));
@@ -523,6 +523,12 @@ document.addEventListener('DOMContentLoaded', () => {
         staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
         document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', currentUser.role !== 'teacher'));
 
+        const activeView = document.querySelector('.workspace-view.active')?.id.replace('view-', '') || 'studylog-search';
+        if (isStaff() && ADMIN_ONLY_VIEWS.includes(activeView) && !isAdmin()) {
+            switchView('studylog-search');
+        } else if (isStaff()) {
+            reportActivityView(activeView);
+        }
         // 일반 선생님은 로그인 직후 학습 기록 검색 화면에서 시작한다.
         if (!isStaff()) {
             switchView('studylog-search');
@@ -551,7 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
             dataStudioHeaderBar.classList.add('hidden');
         }
 
-        if (targetView === 'book-search') {
+        reportActivityView(targetView);
+        if (targetView === 'activity-log') {
+            initActivityView();
+        } else if (targetView === 'book-search') {
             loadBookSearchResults();
         } else if (targetView === 'student-search') {
             loadStudentSearchResults();
@@ -604,6 +613,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLogout() {
+        lastActivityView = "";
+        activityVersion++;
+        activityItems = [];
+        activityEl("body").replaceChildren();
+        activityEl("summary").textContent = "";
+        activityEl("detail-body").replaceChildren();
+        activityEl("detail").close();
+        activityEl("filter-form").reset();
+        activityEl("username").options.length = 1;
+        activityEl("page-info").textContent = "1 / 1 페이지";
+        activityEl("prev").disabled = activityEl("next").disabled = true;
         token = null;
         currentUser = null;
         localStorage.removeItem('token');
@@ -649,7 +669,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        btnLogout.addEventListener('click', handleLogout);
+        btnLogout.addEventListener('click', () => {
+            if (token) fetch('/api/auth/logout', {method: 'POST', headers: {Authorization: `Bearer ${token}`}, keepalive: true}).catch(() => {});
+            handleLogout();
+        });
 
         // Sidebar Navigation Clicks
         document.querySelectorAll('.menu-nav-item').forEach(item => {
@@ -700,13 +723,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Book Search & Filter Events
         btnDoBookSearch.addEventListener('click', () => {
             searchPage = 1;
-            loadBookSearchResults();
+            loadBookSearchResults(true);
         });
 
         bookSearchQ.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 searchPage = 1;
-                loadBookSearchResults();
+                loadBookSearchResults(true);
             }
         });
 
@@ -858,13 +881,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Student Search & Filter Events
         btnDoStudentSearch.addEventListener('click', () => {
             studentSearchPage = 1;
-            loadStudentSearchResults();
+            loadStudentSearchResults(true);
         });
 
         studentSearchQ.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 studentSearchPage = 1;
-                loadStudentSearchResults();
+                loadStudentSearchResults(true);
             }
         });
 
@@ -989,14 +1012,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnDoClassSearch) {
             btnDoClassSearch.addEventListener('click', () => {
                 classSearchPage = 1;
-                loadClassSearchResults();
+                loadClassSearchResults(true);
             });
         }
         if (classSearchQ) {
             classSearchQ.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     classSearchPage = 1;
-                    loadClassSearchResults();
+                    loadClassSearchResults(true);
                 }
             });
         }
@@ -1512,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // StudyLog Search Button
         if (e.target.closest('#btn-do-studylog-search')) {
             studylogSearchPage = 1;
-            loadStudyLogSearchResults();
+            loadStudyLogSearchResults(true);
             return;
         }
 
@@ -2039,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load StudyLog Search Results Grid
-    async function loadStudyLogSearchResults() {
+    async function loadStudyLogSearchResults(directSearch = false) {
         if (!token) return;
         try {
             studylogCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div>';
@@ -2054,7 +2077,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (q) queryParams.append('q', q);
             if (date) queryParams.append('studied_day', date);
 
-            const data = await apiFetch(`/api/user/studylogs/search?${queryParams.toString()}`);
+            const data = await apiFetch(`/api/user/studylogs/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
             studylogSearchTotalPages = data.total_pages;
 
             studylogSearchTotalCount.textContent = `총 ${data.total_count} 건의 학습 기록`;
@@ -2697,7 +2720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Book Search Handler
-    async function loadBookSearchResults() {
+    async function loadBookSearchResults(directSearch = false) {
         if (!token) return;
         try {
             bookCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>도서 검색 중...</p></div>';
@@ -2743,7 +2766,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasMillie) queryParams.append('has_millie', 1);
             if (bookUnstudiedStudents.size) queryParams.append('unstudied_student_ids', Array.from(bookUnstudiedStudents.keys()).join(','));
 
-            const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`);
+            const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
             searchTotalPages = data.total_pages;
 
             searchTotalCount.textContent = `총 ${data.total_count} 건의 도서`;
@@ -2843,7 +2866,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Student Search Handler
-    async function loadStudentSearchResults() {
+    async function loadStudentSearchResults(directSearch = false) {
         if (!token) return;
         try {
             studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div></td></tr>';
@@ -2859,7 +2882,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sex) queryParams.append('sex', sex);
             if (studentFilterIncludeEnded && studentFilterIncludeEnded.checked) queryParams.append('include_ended', 'true');
 
-            const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`);
+            const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
             studentSearchTotalPages = data.total_pages;
 
             studentSearchTotalCount.textContent = `총 ${data.total_count} 명의 학생`;
@@ -4886,14 +4909,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 수업 목록 검색
-    async function loadClassSearchResults() {
+    async function loadClassSearchResults(directSearch = false) {
         if (!token || !classCardsGrid) return;
         try {
             classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>수업 검색 중...</p></div>';
             const q = classSearchQ ? classSearchQ.value.trim() : '';
             const params = new URLSearchParams({ page: classSearchPage, limit: classSearchLimit });
             if (q) params.append('q', q);
-            const data = await apiFetch(`/api/user/classes?${params.toString()}`);
+            const data = await apiFetch(`/api/user/classes?${params.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
             classSearchTotalPages = data.total_pages;
             if (classSearchTotalCount) classSearchTotalCount.textContent = `총 ${data.total_count} 건의 수업`;
             if (classSearchPaginationInfo) classSearchPaginationInfo.textContent = `${classSearchPage} / ${classSearchTotalPages} 페이지 (총 ${data.total_count}건)`;
@@ -7301,4 +7324,112 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === modalAuditDetail) modalAuditDetail.classList.add('hidden');
         });
     }
+
+    // 사용자 활동은 변경 이력과 독립적으로 조회한다.
+    let activityPage = 1;
+    let activityTotalPages = 1;
+    let activityItems = [];
+    let activityEvents = {};
+    let activityAreas = {};
+    let activityVersion = 0;
+    let lastActivityView = '';
+    const activityEl = id => document.getElementById(`activity-${id}`);
+    const activityDate = value => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul'}).format(value);
+    const activityTime = value => new Date(value.replace(' ', 'T') + 'Z').toLocaleString('ko-KR', {timeZone: 'Asia/Seoul', hour12: false});
+    const activityScreenName = value => document.querySelector(`.menu-nav-item[data-view="${CSS.escape(value)}"] span`)?.textContent || value;
+
+    function reportActivityView(view) {
+        if (!token || !currentUser || lastActivityView === `${currentUser.username}:${view}`) return;
+        lastActivityView = `${currentUser.username}:${view}`;
+        fetch('/api/user/activity-events', {
+            method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+            body: JSON.stringify({view}), keepalive: true
+        }).catch(() => {});
+    }
+
+    function resetActivityDates() {
+        const now = new Date();
+        activityEl('date-to').value = activityDate(now);
+        activityEl('date-from').value = activityDate(new Date(now.getTime() - 6 * 86400000));
+    }
+
+    async function initActivityView() {
+        if (!isAdmin()) return;
+        if (!activityEl('date-from').value) resetActivityDates();
+        try {
+            const data = await apiFetch('/api/admin/activity-logs/options');
+            if (!isAdmin()) return;
+            activityEvents = data.events;
+            activityAreas = data.areas;
+            for (const [id, options] of [['username', Object.fromEntries(data.users.map(u => [u, u]))], ['event', data.events], ['area', data.areas]]) {
+                const select = activityEl(id);
+                const value = select.value;
+                select.options.length = 1;
+                Object.entries(options).forEach(([key, label]) => select.add(new Option(label, key)));
+                select.value = value;
+            }
+            await loadActivityLogs(1);
+        } catch (err) {
+            activityEl('summary').textContent = err.message;
+        }
+    }
+
+    async function loadActivityLogs(page = 1) {
+        if (!isAdmin()) return;
+        const version = ++activityVersion;
+        const params = new URLSearchParams({page, limit: 30});
+        for (const [id, key] of [['username','username'], ['date-from','date_from'], ['date-to','date_to'], ['event','event'], ['area','area'], ['result','result']]) {
+            if (activityEl(id).value) params.set(key, activityEl(id).value);
+        }
+        activityEl('summary').textContent = '활동 이력을 조회하고 있습니다.';
+        activityEl('prev').disabled = activityEl('next').disabled = true;
+        activityEl('body').innerHTML = '<tr><td colspan="7" class="empty-state">조회 중입니다.</td></tr>';
+        try {
+            const data = await apiFetch(`/api/admin/activity-logs?${params}`);
+            if (version !== activityVersion || !isAdmin()) return;
+            activityPage = data.page;
+            activityTotalPages = data.total_pages;
+            activityItems = data.items;
+            const summary = data.summary;
+            activityEl('summary').textContent = `총 ${summary.total.toLocaleString()}건 · 활동 계정 ${summary.users}명 · 로그인 성공 ${summary.logins}건 · 실패 ${summary.failures}건`;
+            activityEl('body').innerHTML = data.items.length ? data.items.map((row, index) => {
+                const account = row.username || (row.attempted_username ? `${row.attempted_username} (로그인 시도)` : '미인증');
+                const target = row.event === 'VIEW' ? activityScreenName(row.target_id) : row.target_id ? `#${row.target_id}` : '—';
+                const result = row.status_code < 400 ? '성공' : row.status_code === 403 ? '권한 거부' : '실패';
+                return `<tr><td class="text-nowrap">${escapeHtml(activityTime(row.created_at))}</td><td>${escapeHtml(account)}<br><small>${escapeHtml(ROLE_LABELS[row.user_role] || '')}</small></td><td>${escapeHtml(activityEvents[row.event] || row.event)}</td><td>${escapeHtml(activityAreas[row.area] || row.area)}</td><td>${escapeHtml(target)}</td><td class="${row.status_code >= 400 ? 'activity-failure' : ''}">${result} (${row.status_code})</td><td><button class="btn btn-sm btn-outline" data-activity-index="${index}">상세</button></td></tr>`;
+            }).join('') : '<tr><td colspan="7" class="empty-state">조건에 해당하는 활동 이력이 없습니다.</td></tr>';
+            activityEl('page-info').textContent = `${activityPage} / ${activityTotalPages} 페이지`;
+            activityEl('prev').disabled = activityPage <= 1;
+            activityEl('next').disabled = activityPage >= activityTotalPages;
+        } catch (err) {
+            if (version !== activityVersion) return;
+            activityItems = [];
+            activityEl('summary').textContent = err.message;
+            activityEl('body').innerHTML = '<tr><td colspan="7" class="empty-state">조회하지 못했습니다. 필터를 확인한 뒤 다시 조회해 주세요.</td></tr>';
+        }
+    }
+
+    activityEl('filter-form').addEventListener('submit', event => { event.preventDefault(); loadActivityLogs(1); });
+    activityEl('reset').addEventListener('click', () => { activityEl('filter-form').reset(); resetActivityDates(); loadActivityLogs(1); });
+    activityEl('prev').addEventListener('click', () => loadActivityLogs(activityPage - 1));
+    activityEl('next').addEventListener('click', () => loadActivityLogs(activityPage + 1));
+    activityEl('detail-close').addEventListener('click', () => activityEl('detail').close());
+    activityEl('body').addEventListener('click', event => {
+        const button = event.target.closest('[data-activity-index]');
+        if (!button || !isAdmin()) return;
+        const row = activityItems[Number(button.dataset.activityIndex)];
+        if (!row) return;
+        const fields = {
+            '발생 시각': activityTime(row.created_at), '계정': row.username || '미인증',
+            '역할': ROLE_LABELS[row.user_role] || '—', '로그인 시도 계정': row.attempted_username || '—',
+            '활동': activityEvents[row.event], '업무 영역': activityAreas[row.area],
+            '대상': row.event === 'VIEW' ? activityScreenName(row.target_id) : row.target_id || '—',
+            '결과': `${row.status_code < 400 ? '성공' : '실패'} (${row.status_code})`,
+            '처리 시간': `${row.duration_ms} ms`, '기록 출처': row.source === 'client' ? '화면 진입 (클라이언트 보고)' : '서버 처리 결과',
+            '요청': `${row.method} ${row.route}`, '필터 종류 (값 미저장)': row.metadata.filter_keys?.join(', ') || '없음',
+            '요청 ID': row.request_id, '로그인 세션 ID': row.session_id || '없음 (기존 로그인 또는 미인증)'
+        };
+        activityEl('detail-body').innerHTML = Object.entries(fields).map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value || '—'))}</dd>`).join('');
+        activityEl('detail').showModal();
+    });
 });
