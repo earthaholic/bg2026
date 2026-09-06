@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 
     // Role Helpers
-    const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
+    const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '봄결 선생님', external_teacher: '선생님' };
     const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities', 'audit-log'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'activity-log'];
 
@@ -521,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const staffOnlyItems = document.querySelectorAll('.staff-only');
         adminOnlyItems.forEach(el => el.classList.toggle('hidden', !isAdmin()));
         staffOnlyItems.forEach(el => el.classList.toggle('hidden', !isStaff()));
-        document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', currentUser.role !== 'teacher'));
+        document.querySelectorAll('[data-view="book-material-request"]').forEach(el => el.classList.toggle('hidden', !['teacher', 'external_teacher'].includes(currentUser?.role)));
 
         const activeView = document.querySelector('.workspace-view.active')?.id.replace('view-', '') || 'studylog-search';
         if (isStaff() && ADMIN_ONLY_VIEWS.includes(activeView) && !isAdmin()) {
@@ -1423,7 +1423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const studentPickerOpener = e.target.closest('#btn-open-student-picker, #selected-student-display, #btn-open-picker-monthly-student');
         if (studentPickerOpener) {
             activeStudentPickerTarget = studentPickerOpener.id === 'btn-open-picker-monthly-student' ? 'monthly' : 'studylog';
-            if (activeStudentPickerTarget === 'studylog' && currentUser?.role === 'teacher' && !document.getElementById('studylog-class')?.value) {
+            if (activeStudentPickerTarget === 'studylog' && ['teacher', 'external_teacher'].includes(currentUser?.role) && !document.getElementById('studylog-class')?.value) {
                 alert('담당 수업을 먼저 선택해 주세요.');
                 return;
             }
@@ -1720,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const q = inputQ ? inputQ.value.trim() : '';
             const queryParams = new URLSearchParams();
             if (q) queryParams.set('q', q);
-            if (activeStudentPickerTarget === 'studylog' && currentUser?.role === 'teacher') {
+            if (activeStudentPickerTarget === 'studylog' && ['teacher', 'external_teacher'].includes(currentUser?.role)) {
                 const classId = document.getElementById('studylog-class')?.value;
                 if (classId) queryParams.set('class_id', classId);
             }
@@ -1967,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const classId = parseInt(document.getElementById('studylog-class')?.value || '0') || null;
         const actualTeacherUsername = document.getElementById('studylog-actual-teacher')?.value || '';
         const payrollCategoryId = parseInt(document.getElementById('studylog-payroll-category')?.value || '0') || null;
-        if (currentUser?.role === 'teacher' && !classId) {
+        if (['teacher', 'external_teacher'].includes(currentUser?.role) && !classId) {
             if (userStudyLogMsg) {
                 userStudyLogMsg.className = 'alert alert-danger';
                 userStudyLogMsg.textContent = '담당 수업을 선택해 주세요.';
@@ -2628,12 +2628,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const classData = await apiFetch('/api/user/classes?limit=100');
             const teacherData = isStaff() ? await apiFetch('/api/user/teachers-options') : { teachers: [currentUser] };
             const categoryData = isStaff() ? await apiFetch('/api/user/payroll/categories') : { categories: [] };
-            const emptyLabel = currentUser?.role === 'teacher' ? '담당 수업을 선택해 주세요' : '정산에 연결하지 않음';
+            const emptyLabel = ['teacher', 'external_teacher'].includes(currentUser?.role) ? '담당 수업을 선택해 주세요' : '정산에 연결하지 않음';
             classSelect.innerHTML = `<option value="">${emptyLabel}</option>` + (classData.classes || []).map(cls =>
                 `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
             ).join('');
             classSelect.value = selectedClass;
-            document.getElementById('studylog-class-required')?.classList.toggle('hidden', currentUser?.role !== 'teacher');
+            document.getElementById('studylog-class-required')?.classList.toggle('hidden', !['teacher', 'external_teacher'].includes(currentUser?.role));
             const actualTeacherSelect = document.getElementById('studylog-actual-teacher');
             actualTeacherSelect.dataset.options = JSON.stringify(teacherData.teachers || []);
             const payrollCategorySelect = document.getElementById('studylog-payroll-category');
@@ -2655,14 +2655,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let teachers = [];
         try { teachers = JSON.parse(teacherSelect.dataset.options || '[]'); } catch (_) { teachers = []; }
         const targetTeacher = classId ? assignedTeacher : selectedTeacher;
-        teacherSelect.disabled = currentUser?.role === 'teacher';
+        teacherSelect.disabled = ['teacher', 'external_teacher'].includes(currentUser?.role);
         teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
             `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
         ).join('');
         const selectedCategory = categorySelect.value;
         let categories = [];
         try { categories = JSON.parse(categorySelect.dataset.options || '[]'); } catch (_) { categories = []; }
-        categorySelect.disabled = Boolean(classId) || currentUser?.role === 'teacher';
+        categorySelect.disabled = Boolean(classId) || ['teacher', 'external_teacher'].includes(currentUser?.role);
         categorySelect.innerHTML = classId
             ? '<option value="">연결된 수업 카테고리 사용</option>'
             : '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
@@ -3044,6 +3044,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
             }
+
+            if (!['admin', 'subadmin', 'manager', 'teacher'].includes(currentUser?.role)) gdriveSectionHtml = '';
 
             let html = `
                 <div class="detail-header-block">
@@ -4542,7 +4544,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <select class="select-user-role" data-user-id="${u.id}" data-username="${username}">
                         <option value="subadmin" ${u.role === 'subadmin' ? 'selected' : ''}>부관리자</option>
                         <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>관리 선생님</option>
-                        <option value="teacher" ${u.role === 'teacher' ? 'selected' : ''}>선생님</option>
+                        <option value="teacher" ${u.role === 'teacher' ? 'selected' : ''}>봄결 선생님</option>
+                        <option value="external_teacher" ${u.role === 'external_teacher' ? 'selected' : ''}>선생님</option>
                     </select>
                     <button class="btn btn-sm btn-danger btn-user-delete" data-user-id="${u.id}" data-username="${username}" style="margin-left: 0.3rem;">
                         <i class="fa-solid fa-trash-can"></i> 삭제
@@ -4589,7 +4592,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openUserCreateModal() {
         formUserCreate.reset();
-        selectUserCreateRole.value = 'teacher';
+        selectUserCreateRole.value = 'external_teacher';
         userCreateMsg.classList.add('hidden');
         modalUserCreate.classList.remove('hidden');
         inputUserCreateUsername.focus();

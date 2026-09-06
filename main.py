@@ -418,7 +418,7 @@ def save_book_material_rate(payload: BookMaterialPayRateRequest, current_user: D
 
 @app.post("/api/user/book-material-requests")
 def create_book_material_request(payload: BookMaterialRequestCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
-    if current_user.get("role") != "teacher":
+    if current_user.get("role") not in ("teacher", "external_teacher"):
         raise HTTPException(status_code=403, detail="도서·자료 요청은 일반 선생님 계정으로 등록해 주세요.")
     if payload.RequestType not in ("new_book", "material_add") or payload.BookCategory not in BOOK_MATERIAL_CATEGORIES:
         raise HTTPException(status_code=400, detail="요청 유형 또는 도서 분류를 확인해 주세요.")
@@ -453,7 +453,7 @@ def list_book_material_requests(status_filter: Optional[str] = Query(None, alias
         sql = '''SELECT r.*, b."Title" AS "BookTitle" FROM "BookMaterialRequests" r
                  LEFT JOIN "Books" b ON r."BookId"=b.rowid OR r."BookId"=b."Id"'''
         conditions, params = [], []
-        if current_user["role"] == "teacher":
+        if current_user["role"] in ("teacher", "external_teacher"):
             conditions.append('r."RequestedBy"=?'); params.append(current_user["username"])
         if status_filter:
             conditions.append('r."Status"=?'); params.append(status_filter)
@@ -762,7 +762,8 @@ def user_get_book_detail(
         raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
     
     book_data = dict(row)
-    gdrive_files = get_gdrive_files_for_book(book_data.get("Title", ""))
+    gdrive_files = (get_gdrive_files_for_book(book_data.get("Title", ""))
+                    if current_user.get("role") in ("admin", "subadmin", "manager", "teacher") else [])
     return {"book": book_data, "gdrive_files": gdrive_files}
 
 # --- User Student Registration & Search APIs ---
@@ -850,7 +851,7 @@ def user_search_students(
         conditions.append('(COALESCE("IsClassEnded", 0) = 0)')
 
     # 일반 선생님은 본인 수업에 배정된 학생만 조회할 수 있다.
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         conditions.append('''EXISTS (
             SELECT 1
             FROM "ClassStudents" cs
@@ -1072,7 +1073,7 @@ def user_get_students_options(
     if not include_ended:
         conditions.append('(COALESCE("IsClassEnded", 0) = 0)')
     # 일반 선생님은 본인 수업에 배정된 학생만 선택할 수 있다.
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         conditions.append('''EXISTS (
             SELECT 1
             FROM "ClassStudents" cs
@@ -1128,7 +1129,7 @@ def picker_search_students(
         params.append(class_id)
 
     # 일반 선생님은 본인 수업에 배정된 학생만 검색할 수 있다.
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         conds.append('''EXISTS (
             SELECT 1
             FROM "ClassStudents" cs
@@ -1330,7 +1331,7 @@ def user_register_studylog(
     class_row = None
     actual_teacher = ""
     payroll_category_id = None
-    if current_user.get("role") == "teacher" and not payload.ClassId:
+    if current_user.get("role") in ("teacher", "external_teacher") and not payload.ClassId:
         raise HTTPException(status_code=400, detail="일반 선생님은 본인 담당 수업을 선택해야 합니다.")
     if payload.ClassId:
         class_row = _get_accessible_class(payload.ClassId, current_user)
@@ -1343,9 +1344,9 @@ def user_register_studylog(
         invalid_students = [sid for sid in target_student_ids if sid not in allowed_student_ids]
         if invalid_students:
             raise HTTPException(status_code=400, detail="선택한 수업에 배정되지 않은 학생이 포함되어 있습니다.")
-        actual_teacher = class_row["TeacherUsername"] if current_user.get("role") == "teacher" else ((payload.ActualTeacherUsername or "").strip() or class_row["TeacherUsername"])
+        actual_teacher = class_row["TeacherUsername"] if current_user.get("role") in ("teacher", "external_teacher") else ((payload.ActualTeacherUsername or "").strip() or class_row["TeacherUsername"])
         teacher = get_user_by_username(actual_teacher)
-        if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
+        if not teacher or teacher.get("role") not in ("teacher", "external_teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
         conn = get_db_connection()
         try:
@@ -1358,7 +1359,7 @@ def user_register_studylog(
         actual_teacher = (payload.ActualTeacherUsername or "").strip()
         if actual_teacher:
             teacher = get_user_by_username(actual_teacher)
-            if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
+            if not teacher or teacher.get("role") not in ("teacher", "external_teacher", "manager", "subadmin"):
                 raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
         if payload.PayrollCategoryId:
             conn = get_db_connection()
@@ -1462,7 +1463,7 @@ def user_search_studylogs(
         params.append(f"%{studied_day.strip()}%")
 
     # 일반 선생님은 본인 수업에 배정된 학생의 학습 기록만 조회할 수 있다.
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         conditions.append('''EXISTS (
             SELECT 1
             FROM "ClassStudents" cs
@@ -1571,7 +1572,7 @@ def _get_monthly_report_student(cursor, student_id: int, current_user: Dict[str,
     if not student:
         raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
     student_data = dict(student)
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         cursor.execute('''SELECT 1 FROM "ClassStudents" cs JOIN "Classes" c ON c."Id" = cs."ClassId"
                           WHERE c."TeacherUsername" = ? AND (cs."StudentId" = ? OR cs."StudentId" = ?) LIMIT 1''',
                        (current_user["username"], student_data["row_id"], student_data.get("Id", student_data["row_id"])))
@@ -1772,7 +1773,7 @@ def user_get_monthly_report_studylogs(
     s_name = student.get('Name', '')
 
     # 일반 선생님은 본인 수업에 배정된 학생의 월말보고만 조회할 수 있다.
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         cursor.execute('''
             SELECT 1
             FROM "ClassStudents" cs
@@ -1839,7 +1840,7 @@ def user_list_monthly_reports(
         student = _get_monthly_report_student(cursor, student_id, current_user)
         where.append('mr."StudentId" = ?')
         params.append(student["row_id"])
-    if current_user.get("role") == "teacher":
+    if current_user.get("role") in ("teacher", "external_teacher"):
         where.append('EXISTS (SELECT 1 FROM "ClassStudents" cs JOIN "Classes" c ON c."Id" = cs."ClassId" WHERE c."TeacherUsername" = ? AND (cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"))')
         params.append(current_user["username"])
     sql = '''SELECT mr.*, s."Name" AS "StudentName" FROM "MonthlyReports" mr
@@ -1920,7 +1921,7 @@ def _get_accessible_class(class_id: int, current_user: Dict[str, Any]) -> Dict[s
     class_row = get_class_by_id(class_id)
     if not class_row:
         raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
-    if current_user["role"] == "teacher" and class_row["TeacherUsername"] != current_user["username"]:
+    if current_user["role"] in ("teacher", "external_teacher") and class_row["TeacherUsername"] != current_user["username"]:
         raise HTTPException(status_code=403, detail="본인 수업만 조회할 수 있습니다.")
     return class_row
 
@@ -1930,7 +1931,7 @@ def _validate_class_payload(payload: ClassRequest) -> None:
         raise HTTPException(status_code=400, detail="수업명은 필수 입력 항목입니다.")
 
     teacher = get_user_by_username(payload.TeacherUsername)
-    if not teacher or teacher["role"] not in ("teacher", "manager", "subadmin"):
+    if not teacher or teacher["role"] not in ("teacher", "external_teacher", "manager", "subadmin"):
         raise HTTPException(status_code=400, detail="담당 선생님 계정을 확인해 주세요.")
 
     if payload.DayOfWeek not in DAY_OF_WEEK_VALUES:
@@ -1978,7 +1979,7 @@ def user_list_classes(
     limit: int = Query(30, ge=1, le=100),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    teacher_username = current_user["username"] if current_user["role"] == "teacher" else None
+    teacher_username = current_user["username"] if current_user["role"] in ("teacher", "external_teacher") else None
     rows, total_count = search_classes(q=q, page=page, limit=limit, teacher_username=teacher_username)
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
     return {
@@ -2330,7 +2331,7 @@ def user_batch_register_class_studylogs(
     actual_teacher = (payload.ActualTeacherUsername or "").strip()
     if actual_teacher and actual_teacher != class_row["TeacherUsername"]:
         teacher = get_user_by_username(actual_teacher)
-        if not teacher or teacher["role"] not in ("teacher", "manager", "subadmin"):
+        if not teacher or teacher["role"] not in ("teacher", "external_teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail="대체 진행 선생님 계정을 확인해 주세요.")
         if current_user["role"] not in ("admin", "subadmin", "manager"):
             raise HTTPException(status_code=403, detail="다른 선생님을 실제 진행자로 지정하는 작업은 관리 선생님 이상만 가능합니다.")
@@ -2520,7 +2521,7 @@ def get_special_pay_rates(current_user: Dict[str, Any] = Depends(get_current_use
 @app.get("/api/user/payroll")
 def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(get_current_user)):
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
-    teacher = current_user["username"] if current_user["role"] == "teacher" else (teacher_username or None)
+    teacher = current_user["username"] if current_user["role"] in ("teacher", "external_teacher") else (teacher_username or None)
     rows=_payroll_rows(month, teacher)
     totals={}
     for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
@@ -2950,7 +2951,7 @@ def transfer_payroll_sessions(
 
     for username, label in ((source_teacher, "현재 담당"), (target_teacher, "이전 대상")):
         user = get_user_by_username(username)
-        if not user or user.get("role") not in ("teacher", "manager", "subadmin"):
+        if not user or user.get("role") not in ("teacher", "external_teacher", "manager", "subadmin"):
             raise HTTPException(status_code=400, detail=f"{label} 선생님 계정을 확인해 주세요.")
 
     unique_sessions = []
@@ -3047,7 +3048,7 @@ def create_payroll_claim(payload: PayrollClaimRequest, current_user: Dict[str, A
     if not teacher_username:
         raise HTTPException(status_code=400, detail="추가 청구를 등록할 선생님을 선택해 주세요.")
     target_user = get_user_by_username(teacher_username)
-    if not target_user or target_user.get("role") not in ("teacher", "manager", "subadmin"):
+    if not target_user or target_user.get("role") not in ("teacher", "external_teacher", "manager", "subadmin"):
         raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
     conn=get_db_connection()
     try:
@@ -3412,7 +3413,7 @@ def user_update_studylog(
 
             if target_teacher:
                 teacher = get_user_by_username(target_teacher)
-                if not teacher or teacher.get("role") not in ("teacher", "manager", "subadmin"):
+                if not teacher or teacher.get("role") not in ("teacher", "external_teacher", "manager", "subadmin"):
                     raise HTTPException(status_code=400, detail="실제 진행 선생님 계정을 확인해 주세요.")
             if target_teacher and (target_class_id or target_category_id):
                 conn = get_db_connection()
@@ -3649,10 +3650,10 @@ def admin_create_user(
         raise HTTPException(status_code=400, detail="아이디는 필수 입력 항목입니다.")
     if len(payload.password) < 4:
         raise HTTPException(status_code=400, detail="비밀번호는 4자 이상 입력해 주세요.")
-    if payload.role not in ("subadmin", "manager", "teacher"):
+    if payload.role not in ("subadmin", "manager", "teacher", "external_teacher"):
         raise HTTPException(
             status_code=400,
-            detail="발급 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
+            detail="발급 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 봄결 선생님(teacher), 선생님(external_teacher)입니다."
         )
 
     try:
@@ -3694,10 +3695,10 @@ def admin_update_user_role(
     payload: UserRoleUpdateRequest,
     current_admin: Dict[str, Any] = Depends(get_current_admin)
 ):
-    if payload.role not in ("subadmin", "manager", "teacher"):
+    if payload.role not in ("subadmin", "manager", "teacher", "external_teacher"):
         raise HTTPException(
             status_code=400,
-            detail="변경 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
+            detail="변경 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 봄결 선생님(teacher), 선생님(external_teacher)입니다."
         )
 
     user = _resolve_target_user(user_id)

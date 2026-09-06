@@ -23,23 +23,23 @@ def init_system_tables():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher')),
+            role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher', 'external_teacher')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # 구버전 역할 제약에 subadmin이 없으면 데이터 보존 마이그레이션
+    # 구버전 역할 제약에 external_teacher가 없으면 데이터 보존 마이그레이션
     cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='_app_users'")
     row = cursor.fetchone()
     existing_ddl = (row['sql'] or '') if row else ''
-    if existing_ddl and 'subadmin' not in existing_ddl:
+    if existing_ddl and 'external_teacher' not in existing_ddl:
         cursor.execute("ALTER TABLE _app_users RENAME TO _app_users_legacy")
         cursor.execute("""
             CREATE TABLE _app_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher')),
+                role TEXT NOT NULL CHECK(role IN ('admin', 'subadmin', 'manager', 'teacher', 'external_teacher')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -925,7 +925,7 @@ def get_teacher_options() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') ORDER BY username ASC"
+        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'external_teacher', 'manager', 'subadmin') ORDER BY username ASC"
     )
     rows = cursor.fetchall()
     conn.close()
