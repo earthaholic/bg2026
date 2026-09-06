@@ -1337,6 +1337,21 @@ body {
     gap: 1.5rem;
 }
 
+.student-detail-layout > .student-detail-header {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+}
+
+.student-detail-header .detail-meta-row {
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.student-detail-header .detail-meta-row > span {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
 #student-class-assignment {
     white-space: normal;
     margin-top: 0.75rem;

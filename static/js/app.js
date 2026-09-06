@@ -3361,9 +3361,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let html = `
                 <div class="student-detail-layout">
-                    <!-- Left Column: Student Info & Study History -->
-                    <div class="student-detail-left-col">
-                        <div class="detail-header-block">
+                        <div class="detail-header-block student-detail-header">
                             <div class="detail-title">${escapeHtml(s.Name || '이름 없음')}</div>
                             <div class="detail-meta-row">
                                 <span><i class="fa-solid fa-venus-mars"></i> 성별: <strong>${formatSex(s.Sex)}</strong></span>
@@ -3376,6 +3374,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
 
+                    <div class="student-detail-left-col">
                         ${tuitionHtml}
                         ${isStaff() ? '<div id="student-class-assignment" class="detail-desc-box">수업 배정을 불러오는 중입니다.</div>' : ''}
 
