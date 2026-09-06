@@ -4864,8 +4864,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const names = [];
-        const candidates = filterText ? [...classAllStudentsCache].sort((a, b) => Number(b.row_id) - Number(a.row_id)) : classAllStudentsCache;
-        candidates.forEach(s => {
+        classAllStudentsCache.forEach(s => {
             const sId = s.row_id || s.Id;
             if (selectedSet.has(sId)) {
                 names.push({
