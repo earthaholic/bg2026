@@ -413,6 +413,21 @@ def init_system_tables():
         CREATE INDEX IF NOT EXISTS idx_audit_created_at ON _app_audit_logs(created_at)
     """)
 
+    # Studio/일괄 등록/외부 SQL 변경도 집계 캐시를 무효화한다.
+    cursor.execute("""CREATE TABLE IF NOT EXISTS _app_book_students_version (
+        id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL DEFAULT 0
+    )""")
+    cursor.execute('INSERT OR IGNORE INTO _app_book_students_version (id, version) VALUES (1, 0)')
+    cursor.execute('UPDATE _app_book_students_version SET version = version + 1 WHERE id = 1')
+    for table in ('Books', 'Students', 'StudyLogs'):
+        if not cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+            continue
+        for action in ('INSERT', 'UPDATE', 'DELETE'):
+            cursor.execute(f"""CREATE TRIGGER IF NOT EXISTS "_app_book_students_{table}_{action}"
+                AFTER {action} ON "{table}" BEGIN
+                    UPDATE _app_book_students_version SET version = version + 1 WHERE id = 1;
+                END""")
+
     conn.commit()
     conn.close()
 

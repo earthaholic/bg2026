@@ -3,6 +3,7 @@ import io
 import csv
 import re
 import json
+from threading import RLock
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -665,24 +666,12 @@ def user_search_books(
 
     # Paginated data
     offset = (page - 1) * limit
-    # 학습 이력의 StudentId/BookId는 이전 데이터 호환을 위해 rowid 또는 원본 Id를
-    # 참조할 수 있다. 학생 테이블을 기준으로 EXISTS를 사용해, 같은 학생의 반복 학습은
-    # 한 명으로만 집계한다.
-    data_query = f'''SELECT rowid as row_id, *,
-        (
-            SELECT COUNT(*)
-            FROM "Students" AS s
-            WHERE EXISTS (
-                SELECT 1
-                FROM "StudyLogs" AS sl
-                WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")
-                  AND (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
-            )
-        ) AS "StudyStudentCount"
-        FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'''
+    data_query = f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
     cursor.execute(data_query, params)
-    rows = cursor.fetchall()
+    rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
+    for book in rows:
+        book['StudyStudentCount'] = len(get_cached_book_students(book['row_id'], book['Id']))
 
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
 
@@ -779,23 +768,16 @@ def user_get_book_detail(
     gdrive_files = get_gdrive_files_for_book(book_data.get("Title", ""))
     return {"book": book_data, "gdrive_files": gdrive_files}
 
-@app.get("/api/user/books/{book_id}/students")
-def user_get_book_students(
-    book_id: int,
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=50),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    advance_student_grades()
-    conn = get_db_connection()
-    try:
-        book = conn.execute('SELECT rowid AS row_id, "Id" FROM "Books" WHERE rowid = ? OR "Id" = ?',
-                            (book_id, book_id)).fetchone()
-        if not book:
-            raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
-        # 식별자로 먼저 연결하고, 식별자가 없는 옛 기록만 유일한 이름으로 연결한다.
-        # 여러 학생에 일치하는 모호한 기록은 제외해 중복 집계를 방지한다.
-        query = '''
+
+
+# DB 변경 버전별로 집계 결과를 공유한다. 시간 경과만으로 재계산하지 않는다.
+_book_students_cache = {}
+_book_students_cache_version = None
+_book_students_cache_lock = RLock()
+
+def get_cached_book_students(book_rowid, book_id):
+    global _book_students_cache_version
+    query = '''
             WITH matched AS (
                 SELECT sl.rowid AS log_id, sl.StudiedDay, s.rowid AS student_row_id
                 FROM "StudyLogs" sl JOIN "Students" s
@@ -816,11 +798,46 @@ def user_get_book_students(
             FROM resolved r JOIN "Students" s ON s.rowid = r.student_row_id
             GROUP BY s.rowid
         '''
-        params = (book['row_id'], book['Id'])
-        total = conn.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0]
-        students = conn.execute(query + ' ORDER BY latest_studied_day DESC, s.Name, s.rowid LIMIT ? OFFSET ?',
-                                params + (limit, (page - 1) * limit)).fetchall()
-        return {"students": [dict(s) for s in students], "total": total, "page": page, "limit": limit}
+    with _book_students_cache_lock:
+        conn = get_db_connection()
+        try:
+            # 버전과 집계 데이터를 동일한 읽기 스냅샷에서 확인한다.
+            conn.execute('BEGIN')
+            version = tuple(conn.execute(
+                'SELECT version FROM _app_book_students_version WHERE id = 1'
+            ).fetchone()) + (conn.execute('PRAGMA schema_version').fetchone()[0],)
+            if version != _book_students_cache_version:
+                _book_students_cache.clear()
+                _book_students_cache_version = version
+            key = (book_rowid, book_id)
+            if key not in _book_students_cache:
+                rows = conn.execute(query + ' ORDER BY latest_studied_day DESC, s.Name, s.rowid',
+                                    (book_rowid, book_id)).fetchall()
+                _book_students_cache[key] = [dict(row) for row in rows]
+            return _book_students_cache[key]
+        finally:
+            conn.close()
+
+
+@app.get("/api/user/books/{book_id}/students")
+def user_get_book_students(
+    book_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    advance_student_grades()
+    conn = get_db_connection()
+    try:
+        book = conn.execute('SELECT rowid AS row_id, "Id" FROM "Books" WHERE rowid = ? OR "Id" = ?',
+                            (book_id, book_id)).fetchone()
+        if not book:
+            raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")
+        # 식별자로 먼저 연결하고, 식별자가 없는 옛 기록만 유일한 이름으로 연결한다.
+        # 여러 학생에 일치하는 모호한 기록은 제외해 중복 집계를 방지한다.
+        students = get_cached_book_students(book['row_id'], book['Id'])
+        offset = (page - 1) * limit
+        return {"students": students[offset:offset + limit], "total": len(students), "page": page, "limit": limit}
     finally:
         conn.close()
 
