@@ -665,7 +665,21 @@ def user_search_books(
 
     # Paginated data
     offset = (page - 1) * limit
-    data_query = f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
+    # 학습 이력의 StudentId/BookId는 이전 데이터 호환을 위해 rowid 또는 원본 Id를
+    # 참조할 수 있다. 학생 테이블을 기준으로 EXISTS를 사용해, 같은 학생의 반복 학습은
+    # 한 명으로만 집계한다.
+    data_query = f'''SELECT rowid as row_id, *,
+        (
+            SELECT COUNT(*)
+            FROM "Students" AS s
+            WHERE EXISTS (
+                SELECT 1
+                FROM "StudyLogs" AS sl
+                WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")
+                  AND (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
+            )
+        ) AS "StudyStudentCount"
+        FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'''
     cursor.execute(data_query, params)
     rows = cursor.fetchall()
     conn.close()

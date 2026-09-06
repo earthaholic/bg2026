@@ -2783,7 +2783,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderBookCards(books) {
         if (books.length === 0) {
-            bookCardsGrid.innerHTML = '<tr><td colspan="12" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div></td></tr>';
+            bookCardsGrid.innerHTML = '<tr><td colspan="10" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div></td></tr>';
             return;
         }
 
@@ -2793,13 +2793,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const author = escapeHtml(b.Author || '저자 미상');
             const publisher = escapeHtml(b.Publisher || '출판사 미상');
             const target = escapeHtml(b.Target || '선택안함');
-            const voca = (b.Voca !== null && b.Voca !== undefined && b.Voca !== '') ? `${b.Voca}단계` : '-';
             const length = (b.BookLength !== null && b.BookLength !== undefined && b.BookLength !== '') ? `${b.BookLength}단계` : '-';
             const bookId = b.row_id || b.Id;
 
-            const hasQuiz = !!(b.HasQuiz == 1 || b.HasVocaQuiz == 1);
             const hasReading = !!(b.HasReadingQuestion == 1 || b.HasReadingAnswer == 1 || b.HasReadingQuiz == 1);
-            const hasWriting = !!(b.HasWritingQuestion == 1 || b.HasWritingAnswer == 1 || b.HasWritingQuiz == 1);
             const hasPdf = !!(b.IsPdfExist == 1 || b.HasPdf == 1);
 
             html += `
@@ -2809,23 +2806,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${author}</td>
                     <td>${publisher}</td>
                     <td><span class="tag-badge primary">${target}</span></td>
-                    <td>${voca}</td>
                     <td>${length}</td>
-                    <td class="text-center">
-                        <label class="form-switch sm" title="어휘퀴즈 보유 여부 변경">
-                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasQuiz" ${hasQuiz ? 'checked' : ''}>
-                            <span class="switch-slider"></span>
-                        </label>
-                    </td>
+                    <td class="text-center">${Number(b.StudyStudentCount) || 0}명</td>
                     <td class="text-center">
                         <label class="form-switch sm" title="독서문제 보유 여부 변경">
                             <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasReadingQuestion" ${hasReading ? 'checked' : ''}>
-                            <span class="switch-slider"></span>
-                        </label>
-                    </td>
-                    <td class="text-center">
-                        <label class="form-switch sm" title="글쓰기문제 보유 여부 변경">
-                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasWritingQuestion" ${hasWriting ? 'checked' : ''}>
                             <span class="switch-slider"></span>
                         </label>
                     </td>
