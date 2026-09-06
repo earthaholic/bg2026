@@ -1709,6 +1709,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function recentPickerBadge(item, query, label = '학생') {
+        return !query && item.RecentStudyLogId != null
+            ? `<span class="tag-badge primary" title="최근 등록한 학습 기록 기준">최근 선택한 ${label}</span>` : '';
+    }
+
     // Load Picker Students List
     async function loadPickerStudents() {
         const container = document.getElementById('picker-student-results');
@@ -1725,17 +1730,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (classId) queryParams.set('class_id', classId);
             }
             const data = await apiFetch(`/api/user/picker/students${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-            let students = data.students || [];
-            const lastMonthlyStudentId = activeStudentPickerTarget === 'monthly'
-                ? localStorage.getItem(`monthly-report-picker-last-student:${currentUser?.username || 'default'}`)
-                : null;
-            if (lastMonthlyStudentId) {
-                students = [...students].sort((a, b) => {
-                    const aIsLast = String(a.row_id || a.Id) === lastMonthlyStudentId;
-                    const bIsLast = String(b.row_id || b.Id) === lastMonthlyStudentId;
-                    return Number(bIsLast) - Number(aIsLast);
-                });
-            }
+            if (inputQ.value.trim() !== q) return;
+            const students = data.students || [];
 
             if (students.length === 0) {
                 container.innerHTML = '<div class="empty-state"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
@@ -1750,12 +1746,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const grade = formatGrade(s.Grade);
                 const referrer = formatReferrer(s.Referrer);
                 const isSelected = activeStudentPickerTarget === 'studylog' && selectedStudentsMap.has(sId);
-                const isLastMonthly = activeStudentPickerTarget === 'monthly' && String(sId) === lastMonthlyStudentId;
+
 
                 html += `
                     <div class="picker-item-row ${isSelected ? 'selected' : ''}" data-row-id="${sId}">
                         <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex}) ${isLastMonthly ? '<span class="tag-badge primary">최근 선택</span>' : ''}</div>
+                            <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex}) ${recentPickerBadge(s, q, '학생')}</div>
                             <div class="item-sub">학년: ${grade}${s.Referrer ? ' · 추천: ' + referrer : ''} | ID: #${sId}</div>
                         </div>
                         <button type="button" class="btn btn-sm ${isSelected ? 'btn-success' : 'btn-outline-primary'} btn-select-student-picker"
@@ -1779,7 +1775,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (activeStudentPickerTarget === 'monthly') {
                         const monthlySelect = document.getElementById('monthly-report-student-select');
                         const elModal = document.getElementById('modal-student-picker');
-                        localStorage.setItem(`monthly-report-picker-last-student:${currentUser?.username || 'default'}`, String(id));
                         if (monthlySelect) {
                             monthlySelect.value = String(id);
                             monthlySelect.dispatchEvent(new Event('change'));
@@ -1815,6 +1810,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 검색 중...</div>';
             const q = inputQ ? inputQ.value.trim() : '';
             const data = await apiFetch(`/api/user/picker/books${q ? '?q=' + encodeURIComponent(q) : ''}`);
+            if (inputQ.value.trim() !== q) return;
             const books = data.books || [];
 
             if (books.length === 0) {
@@ -1834,7 +1830,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `
                     <div class="picker-item-row ${isBatchSelected ? 'selected' : ''}">
                         <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title}</div>
+                            <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title} ${recentPickerBadge(b, q, '도서')}</div>
                             <div class="item-sub">저자: ${author} | 출판사: ${publisher} | 분야: ${subject} | ID: #${bId}</div>
                         </div>
                         <button type="button" class="btn btn-sm btn-success btn-select-book-picker"
@@ -2678,16 +2674,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadBookStudyStudentCandidates() {
         const query = bookStudyStudentQ.value.trim();
-        if (!query) {
-            bookStudyStudentResults.innerHTML = '';
-            bookStudyStudentResults.classList.add('hidden');
-            return;
-        }
         try {
             const data = await apiFetch(`/api/user/picker/students?include_ended=true&q=${encodeURIComponent(query)}`);
+            if (bookStudyStudentQ.value.trim() !== query) return;
             const candidates = data.students.filter(student => !bookUnstudiedStudents.has(String(student.row_id)));
             bookStudyStudentResults.innerHTML = candidates.length
-                ? candidates.map(student => `<button type="button" class="book-study-student-result" data-id="${student.row_id}" data-name="${escapeHtml(student.Name || '')}" data-grade="${escapeHtml(student.Grade || '')}"><strong>${escapeHtml(student.Name || '이름 없음')}</strong>${student.Grade ? ` <span>(${escapeHtml(student.Grade)})</span>` : ''}</button>`).join('')
+                ? candidates.map(student => `<button type="button" class="book-study-student-result" data-id="${student.row_id}" data-name="${escapeHtml(student.Name || '')}" data-grade="${escapeHtml(student.Grade || '')}"><strong>${escapeHtml(student.Name || '이름 없음')} ${recentPickerBadge(student, query)}</strong>${student.Grade ? ` <span>(${escapeHtml(student.Grade)})</span>` : ''}</button>`).join('')
                 : '<div class="empty-state-sm">추가할 학생이 없습니다.</div>';
             bookStudyStudentResults.classList.remove('hidden');
         } catch (err) {
@@ -4726,7 +4718,8 @@ document.addEventListener('DOMContentLoaded', () => {
         filterText = (filterText || '').trim().toLowerCase();
         specialIds = specialIds || new Set();
         let html = '';
-        classAllStudentsCache.forEach(s => {
+        const candidates = filterText ? [...classAllStudentsCache].sort((a, b) => Number(b.row_id) - Number(a.row_id)) : classAllStudentsCache;
+        candidates.forEach(s => {
             const sId = s.row_id || s.Id;
             const name = escapeHtml(s.Name || '이름 없음');
             const sex = formatSex(s.Sex);
@@ -4739,7 +4732,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="class-student-checkbox-item">
                     <label class="cs-select" style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; flex: 1; min-width: 0;">
                         <input type="checkbox" class="cs-chk" value="${sId}" ${checked}>
-                        <span style="white-space: nowrap;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${endedTag}</span>
+                        <span style="white-space: nowrap;"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${endedTag} ${recentPickerBadge(s, filterText)}</span>
                     </label>
                     <label class="cs-special" title="이 학생의 이 수업을 특강으로 지정 (배정된 학생만 설정 가능)" style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; flex-shrink: 0; opacity: ${checked ? 1 : 0.45};">
                         <input type="checkbox" class="cs-special-chk" value="${sId}" ${specialChecked} ${specialDisabled} style="accent-color: var(--warning);">
@@ -4764,7 +4757,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const names = [];
-        classAllStudentsCache.forEach(s => {
+        const candidates = filterText ? [...classAllStudentsCache].sort((a, b) => Number(b.row_id) - Number(a.row_id)) : classAllStudentsCache;
+        candidates.forEach(s => {
             const sId = s.row_id || s.Id;
             if (selectedSet.has(sId)) {
                 names.push({
@@ -4838,7 +4832,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tData, sData, cData] = await Promise.all([
                 apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/students-options?include_ended=true'),
+                apiFetch('/api/user/picker/students?include_ended=true&limit=10000'),
                 apiFetch('/api/user/payroll/categories')
             ]);
             const teacherSelect = document.getElementById('class-teacher');
@@ -5062,7 +5056,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tData, sData, cData] = await Promise.all([
                 apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/students-options?include_ended=true'),
+                apiFetch('/api/user/picker/students?include_ended=true&limit=10000'),
                 apiFetch('/api/user/payroll/categories')
             ]);
             classAllStudentsCache = sData.students || [];
@@ -6503,15 +6497,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = document.getElementById('tuition-student-results');
         if (!input || !results) return;
         const query = input.value.trim();
-        if (!query) { results.classList.add('hidden'); results.innerHTML = ''; return; }
         results.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 검색 중...</div>';
         results.classList.remove('hidden');
         try {
             const data = await apiFetch(`/api/user/picker/students?q=${encodeURIComponent(query)}`);
+            if (input.value.trim() !== query) return;
             const students = data.students || [];
             results.innerHTML = students.length ? students.map(s => {
                 const id = s.row_id || s.Id;
-                return `<button type="button" class="picker-result-item btn-select-tuition-student" data-id="${id}" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`;
+                return `<button type="button" class="picker-result-item btn-select-tuition-student" data-id="${id}" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')} ${recentPickerBadge(s, query)}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`;
             }).join('') : '<div class="empty-state"><p>검색 결과가 없습니다.</p></div>';
             results.querySelectorAll('.btn-select-tuition-student').forEach(btn => btn.addEventListener('click', () => {
                 document.getElementById('tuition-student').value = btn.dataset.id;
@@ -6731,19 +6725,23 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
     });
 
+    document.getElementById('tuition-student-search')?.addEventListener('focus', searchTuitionStudents);
+    document.getElementById('student-referrer-search')?.addEventListener('focus', searchStudentReferrer);
+    bookStudyStudentQ?.addEventListener('focus', loadBookStudyStudentCandidates);
+
     let studentReferrerSearchTimer = null;
     async function searchStudentReferrer() {
         const input = document.getElementById('student-referrer-search');
         const results = document.getElementById('student-referrer-results');
         if (!input || !results) return;
         const query = input.value.trim();
-        if (!query) { results.classList.add('hidden'); results.innerHTML = ''; return; }
         results.classList.remove('hidden');
         results.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 검색 중...</div>';
         try {
             const data = await apiFetch(`/api/user/picker/students?q=${encodeURIComponent(query)}`);
+            if (input.value.trim() !== query) return;
             const students = data.students || [];
-            results.innerHTML = students.length ? students.map(s => `<button type="button" class="picker-result-item btn-select-student-referrer" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`).join('') : '<div class="empty-state"><p>검색 결과가 없습니다.</p></div>';
+            results.innerHTML = students.length ? students.map(s => `<button type="button" class="picker-result-item btn-select-student-referrer" data-name="${escapeHtml(s.Name || '')}" data-grade="${escapeHtml(s.Grade || '')}"><strong>${escapeHtml(s.Name || '이름 없음')} ${recentPickerBadge(s, query)}</strong><span>${escapeHtml(s.Grade || '학년 미입력')} · ${escapeHtml(formatSex(s.Sex))}</span></button>`).join('') : '<div class="empty-state"><p>검색 결과가 없습니다.</p></div>';
             results.querySelectorAll('.btn-select-student-referrer').forEach(btn => btn.addEventListener('click', () => {
                 document.getElementById('student-referrer').value = btn.dataset.name;
                 input.value = btn.dataset.name;

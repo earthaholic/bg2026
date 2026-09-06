@@ -1116,6 +1116,7 @@ def user_get_books_options(current_user: Dict[str, Any] = Depends(get_current_us
 # --- Picker Modal Search APIs ---
 @app.get("/api/user/picker/students")
 def picker_search_students(
+    limit: int = Query(25, ge=1, le=10000),
     q: Optional[str] = Query(None),
     include_ended: bool = Query(False),
     class_id: Optional[int] = Query(None),
@@ -1153,7 +1154,11 @@ def picker_search_students(
         params.append(current_user["username"])
 
     where_str = f' WHERE {" AND ".join(conds)}' if conds else ''
-    cursor.execute(f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT 25', params)
+    # 학습 일자가 아닌 등록 순서로 최근 사용 항목을 중복 없이 우선 표시한다.
+    recent_expr = '(SELECT MAX(sl.rowid) FROM "StudyLogs" sl WHERE sl."StudentId" = "Students".rowid OR sl."StudentId" = "Students"."Id")'
+    searching = bool(q and q.strip())
+    order_by = 'rowid DESC' if searching else 'RecentStudyLogId DESC, rowid DESC'
+    cursor.execute(f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId FROM "Students"{where_str} ORDER BY {order_by} LIMIT ?', params + [limit])
     rows = cursor.fetchall()
     conn.close()
     return {"students": [dict(r) for r in rows]}
@@ -1172,7 +1177,11 @@ def picker_search_books(
         where_str = ' WHERE ("Title" LIKE ? OR "Author" LIKE ? OR "Publisher" LIKE ? OR "Subject" LIKE ?)'
         params = [pattern] * 4
 
-    cursor.execute(f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid DESC LIMIT 25', params)
+    # 학습 일자가 아닌 등록 순서로 최근 사용 항목을 중복 없이 우선 표시한다.
+    recent_expr = '(SELECT MAX(sl.rowid) FROM "StudyLogs" sl WHERE sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")'
+    searching = bool(q and q.strip())
+    order_by = 'rowid DESC' if searching else 'RecentStudyLogId DESC, rowid DESC'
+    cursor.execute(f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId FROM "Books"{where_str} ORDER BY {order_by} LIMIT ?', params + [25])
     rows = cursor.fetchall()
     conn.close()
     return {"books": [dict(r) for r in rows]}
