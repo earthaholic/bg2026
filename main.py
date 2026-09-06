@@ -1052,6 +1052,60 @@ def user_get_student_detail(
         result["tuition_progress"] = _get_tuition_progress(s_row_id)
     return result
 
+class StudentClassesRequest(BaseModel):
+    regular_class_id: Optional[int] = None
+    special_class_id: Optional[int] = None
+
+
+@app.get("/api/user/students/{student_id}/classes")
+def user_get_student_classes(student_id: int, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    row_id = _resolve_domain_pk("Students", student_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    conn = get_db_connection()
+    try:
+        student = conn.execute('SELECT "Id" FROM "Students" WHERE rowid = ?', (row_id,)).fetchone()
+        classes = conn.execute('SELECT "Id", "ClassName", "TeacherUsername", "DayOfWeek", "StartTime" FROM "Classes" ORDER BY "ClassName", "Id"').fetchall()
+        assignments = conn.execute('SELECT "ClassId", "IsSpecial" FROM "ClassStudents" WHERE "StudentId" IN (?, ?)', (row_id, student['Id'])).fetchall()
+        return {"classes": [dict(r) for r in classes], "assignments": [dict(r) for r in assignments]}
+    finally:
+        conn.close()
+
+
+@app.put("/api/user/students/{student_id}/classes")
+def user_update_student_classes(student_id: int, payload: StudentClassesRequest,
+                               current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.regular_class_id is not None and payload.regular_class_id == payload.special_class_id:
+        raise HTTPException(status_code=400, detail="같은 수업을 정규반과 특강에 동시에 배정할 수 없습니다.")
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        student = conn.execute('SELECT rowid AS row_id, "Id" FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id)).fetchone()
+        if student is None:
+            raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+        new_assignments = []
+        for class_id, special in ((payload.regular_class_id, 0), (payload.special_class_id, 1)):
+            if class_id is not None:
+                if not conn.execute('SELECT 1 FROM "Classes" WHERE "Id" = ?', (class_id,)).fetchone():
+                    raise HTTPException(status_code=400, detail="선택한 수업이 존재하지 않습니다. 새로고침 후 다시 선택해 주세요.")
+                new_assignments.append({"ClassId": class_id, "IsSpecial": special})
+        keys = (student['row_id'], student['Id'])
+        old_assignments = [dict(r) for r in conn.execute('SELECT "ClassId", "IsSpecial" FROM "ClassStudents" WHERE "StudentId" IN (?, ?) ORDER BY "IsSpecial", "ClassId"', keys)]
+        if old_assignments != new_assignments:
+            conn.execute('DELETE FROM "ClassStudents" WHERE "StudentId" IN (?, ?)', keys)
+            for assignment in new_assignments:
+                conn.execute('INSERT INTO "ClassStudents" ("ClassId", "StudentId", "IsSpecial") VALUES (?, ?, ?)', (assignment['ClassId'], student['row_id'], assignment['IsSpecial']))
+            conn.execute('UPDATE "Students" SET "UpdatedBy" = ?, "UpdatedAt" = ? WHERE rowid = ?', (current_user['username'], datetime.now().strftime('%Y-%m-%d %H:%M:%S'), student['row_id']))
+            # 배정 변경과 감사 이력을 같은 트랜잭션으로 저장한다.
+            conn.execute('''INSERT INTO _app_audit_logs (table_name, record_id, action, old_data, new_data, changed_fields, username, user_role)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                         ('Students', str(student['row_id']), 'UPDATE', json.dumps({'수업 배정': old_assignments}, ensure_ascii=False), json.dumps({'수업 배정': new_assignments}, ensure_ascii=False), json.dumps(['수업 배정'], ensure_ascii=False), current_user['username'], current_user['role']))
+        conn.commit()
+        return {"message": "정규반·특강 배정을 저장했습니다."}
+    finally:
+        conn.close()
+
+
 @app.get("/api/user/students/{student_id}/consultations")
 def user_get_student_consultations(
     student_id: int,

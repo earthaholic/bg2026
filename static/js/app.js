@@ -2234,6 +2234,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadStudentClassAssignment(studentId) {
+        const container = document.getElementById('student-class-assignment');
+        if (!container) return;
+        try {
+            const data = await apiFetch(`/api/user/students/${studentId}/classes`);
+            const options = (special) => {
+                const selected = data.assignments.find(a => Boolean(a.IsSpecial) === special)?.ClassId;
+                return '<option value="">배정 없음</option>' + data.classes.map(c =>
+                    `<option value="${c.Id}" ${c.Id === selected ? 'selected' : ''}>${escapeHtml(c.ClassName)} · ${escapeHtml(c.TeacherUsername || '')} · ${escapeHtml(c.StartTime || '')}</option>`
+                ).join('');
+            };
+            container.innerHTML = `<form class="student-class-assignment-form">
+                <div class="detail-section-title">정규반·특강 배정</div>
+                <div class="form-group"><label for="student-regular-class">정규반</label><select id="student-regular-class" class="form-control">${options(false)}</select></div>
+                <div class="form-group"><label for="student-special-class">특강</label><select id="student-special-class" class="form-control">${options(true)}</select></div>
+                <p class="text-muted">각각 한 수업씩 선택할 수 있습니다. 기존 학습 이력은 변경되지 않습니다.</p>
+                <button type="submit" class="btn btn-sm btn-primary">수업 배정 저장</button>
+            </form>`;
+            container.querySelector('form').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const regular = container.querySelector('#student-regular-class').value;
+                const special = container.querySelector('#student-special-class').value;
+                if (regular && regular === special) return showToast('같은 수업을 정규반과 특강에 동시에 배정할 수 없습니다.', 'warning');
+                const button = container.querySelector('button');
+                button.disabled = true;
+                try {
+                    const result = await apiFetch(`/api/user/students/${studentId}/classes`, {
+                        method: 'PUT', body: JSON.stringify({ regular_class_id: regular ? Number(regular) : null, special_class_id: special ? Number(special) : null })
+                    });
+                    showToast(result.message, 'success');
+                } catch (err) { showToast(err.message, 'error'); }
+                finally { button.disabled = false; }
+            });
+        } catch (err) {
+            container.innerHTML = `<p class="text-danger">수업 배정을 불러오지 못했습니다: ${escapeHtml(err.message)}</p>`;
+        }
+    }
+
     async function toggleStudyLogSpecial(logId, newVal, btnEl) {
         try {
             await apiFetch(`/api/user/studylogs/${logId}`, {
@@ -3316,6 +3354,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
 
                         ${tuitionHtml}
+                        ${isStaff() ? '<div id="student-class-assignment" class="detail-desc-box">수업 배정을 불러오는 중입니다.</div>' : ''}
 
                         <div class="student-referrals-section">
                             <div class="detail-section-title"><i class="fa-solid fa-user-group"></i> 피추천인 (${referredStudents.length}명)</div>
@@ -3376,6 +3415,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             modalStudentDetailBody.innerHTML = html;
+            if (isStaff()) loadStudentClassAssignment(studentId);
 
             modalStudentDetailBody.querySelectorAll('.student-studylog-item').forEach(item => {
                 item.addEventListener('click', () => {
