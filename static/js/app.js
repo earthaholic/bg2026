@@ -339,6 +339,34 @@ document.addEventListener('DOMContentLoaded', () => {
     let pendingUserPwId = null;
     let pendingUserDeleteId = null;
 
+    // 상세 대화상자 조회 결과만 메모리에 보관하며 페이지별 요청도 구분한다.
+    const detailCache = new Map();
+    const DETAIL_CACHE_TTL = 60 * 1000;
+    const DETAIL_CACHE_LIMIT = 100;
+
+    async function fetchDetail(url) {
+        const now = Date.now();
+        let entry = detailCache.get(url);
+        if (!entry || entry.expiresAt <= now) {
+            detailCache.delete(url);
+            entry = { expiresAt: Infinity, promise: null };
+            entry.promise = apiFetch(url).then(data => {
+                entry.expiresAt = Date.now() + DETAIL_CACHE_TTL;
+                return data;
+            }).catch(error => {
+                // 무효화 후 새로 시작한 요청은 이전 요청 실패로 지우지 않는다.
+                if (detailCache.get(url) === entry) detailCache.delete(url);
+                throw error;
+            });
+            detailCache.set(url, entry);
+            if (detailCache.size > DETAIL_CACHE_LIMIT) {
+                detailCache.delete(detailCache.keys().next().value);
+            }
+        }
+        // 편집 폼에서 응답 객체를 변경해도 캐시 원본은 유지한다.
+        return JSON.parse(JSON.stringify(await entry.promise));
+    }
+
     // API Helper
     async function apiFetch(url, options = {}) {
         options.headers = options.headers || {};
@@ -357,6 +385,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!res.ok) {
             throw new Error(data.detail || '요청 처리 중 오류가 발생했습니다.');
+        }
+        if (!['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) {
+            detailCache.clear();
         }
         return data;
     }
@@ -634,6 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLogout() {
+        detailCache.clear();
         lastActivityView = "";
         activityVersion++;
         activityItems = [];
@@ -2289,7 +2321,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudyLogDetail.classList.remove('hidden');
 
         try {
-            const data = await apiFetch(`/api/user/studylogs/${logId}`);
+            const data = await fetchDetail(`/api/user/studylogs/${logId}`);
             const l = data.studylog;
 
             if (isStaff()) {
@@ -2971,11 +3003,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = section.querySelector('.book-students-results');
         const pagination = section.querySelector('.book-students-pagination');
         const heading = section.querySelector('.book-students-heading');
+        const requestId = Symbol();
+        section.studentRequestId = requestId;
         results.innerHTML = '<p class="text-muted">학생 목록을 불러오는 중...</p>';
         pagination.replaceChildren();
         try {
-            const data = await apiFetch(`/api/user/books/${bookId}/students?page=${page}&limit=10`);
-            if (!section.isConnected) return;
+            const data = await fetchDetail(`/api/user/books/${bookId}/students?page=${page}&limit=10`);
+            if (!section.isConnected || section.studentRequestId !== requestId) return;
             heading.textContent = `이 도서를 학습한 학생 · ${data.total}명`;
             if (!data.total) {
                 results.innerHTML = '<p class="text-muted">아직 이 도서를 학습한 학생이 없습니다.</p>';
@@ -3003,7 +3037,7 @@ document.addEventListener('DOMContentLoaded', () => {
             buttons[0].addEventListener('click', () => loadBookStudents(bookId, section, page - 1));
             buttons[1].addEventListener('click', () => loadBookStudents(bookId, section, page + 1));
         } catch (err) {
-            if (!section.isConnected) return;
+            if (!section.isConnected || section.studentRequestId !== requestId) return;
             results.innerHTML = '<p class="text-muted">학생 목록을 불러오지 못했습니다.</p><button type="button" class="btn btn-sm btn-outline">다시 시도</button>';
             results.querySelector('button').addEventListener('click', () => loadBookStudents(bookId, section, page));
         }
@@ -3016,7 +3050,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalBookDetail.classList.remove('hidden');
 
         try {
-            const data = await apiFetch(`/api/user/books/${bookId}`);
+            const data = await fetchDetail(`/api/user/books/${bookId}`);
             const b = data.book;
             currentDetailBook = b;
 
@@ -3166,7 +3200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudentDetail.classList.remove('hidden');
 
         try {
-            const data = await apiFetch(`/api/user/students/${studentId}`);
+            const data = await fetchDetail(`/api/user/students/${studentId}`);
             const s = data.student;
 
             let actionsHtml = `
@@ -3372,7 +3406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudentConsultationsBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>상담 기록 조회 중...</p></div>';
         modalStudentConsultations.classList.remove('hidden');
         try {
-            const data = await apiFetch(`/api/user/students/${studentId}/consultations`);
+            const data = await fetchDetail(`/api/user/students/${studentId}/consultations`);
             renderStudentConsultations(studentId, studentName, data.consultations || []);
         } catch (err) {
             modalStudentConsultationsBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
