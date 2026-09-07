@@ -1286,8 +1286,11 @@ def picker_search_students(
 @app.get("/api/user/picker/books")
 def picker_search_books(
     q: Optional[str] = Query(None),
+    class_id: Optional[int] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    if class_id is not None:
+        _get_accessible_class(class_id, current_user)
     conn = get_db_connection()
     cursor = conn.cursor()
     where_str = ""
@@ -1301,7 +1304,13 @@ def picker_search_books(
     recent_expr = '(SELECT MAX(sl.rowid) FROM "StudyLogs" sl WHERE sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")'
     searching = bool(q and q.strip())
     order_by = 'rowid DESC' if searching else 'RecentStudyLogId DESC, rowid DESC'
-    cursor.execute(f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId FROM "Books"{where_str} ORDER BY {order_by} LIMIT ?', params + [25])
+    planned_expr = 'NULL'
+    select_params = []
+    if class_id is not None:
+        planned_expr = '(SELECT p."SortOrder" FROM "ClassPlannedBooks" p WHERE p."ClassId" = ? AND p."BookId" = "Books".rowid AND p."IsBreak" = 0)'
+        select_params = [class_id]
+        order_by = '(PlannedOrder IS NULL), PlannedOrder, ' + order_by
+    cursor.execute(f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId, {planned_expr} AS PlannedOrder FROM "Books"{where_str} ORDER BY {order_by} LIMIT ?', select_params + params + [25])
     rows = cursor.fetchall()
     conn.close()
     return {"books": [dict(r) for r in rows]}

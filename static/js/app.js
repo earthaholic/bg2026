@@ -1980,8 +1980,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 검색 중...</div>';
             const q = inputQ ? inputQ.value.trim() : '';
-            const data = await apiFetch(`/api/user/picker/books${q ? '?q=' + encodeURIComponent(q) : ''}`);
-            if (inputQ.value.trim() !== q) return;
+            const pickerTarget = activeBookPickerTarget;
+            const pickerClassId = pickerTarget === 'batch' ? classBatchSelect.value : '';
+            const params = new URLSearchParams();
+            if (q) params.set('q', q);
+            if (pickerClassId) params.set('class_id', pickerClassId);
+            const data = await apiFetch(`/api/user/picker/books?${params}`);
+            if (inputQ.value.trim() !== q || activeBookPickerTarget !== pickerTarget || (pickerTarget === 'batch' && classBatchSelect.value !== pickerClassId)) return;
             const books = data.books || [];
 
             if (books.length === 0) {
@@ -2001,7 +2006,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `
                     <div class="picker-item-row ${isBatchSelected ? 'selected' : ''}">
                         <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title} ${recentPickerBadge(b, q, '도서')}</div>
+                            <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title} ${b.PlannedOrder != null ? '<span class="badge badge-info">예정 수업 내역</span>' : recentPickerBadge(b, q, '도서')}</div>
                             <div class="item-sub">저자: ${author} | 출판사: ${publisher} | 분야: ${subject} | ID: #${bId}</div>
                         </div>
                         <button type="button" class="btn btn-sm btn-success btn-select-book-picker"
