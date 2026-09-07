@@ -4220,3 +4220,28 @@ body {
 .planned-book-drag { cursor: grab; touch-action: none; user-select: none; }
 .planned-book-drag:active { cursor: grabbing; }
 .planned-book-dragging { background: var(--bg-selection); outline: 2px solid var(--primary); outline-offset: -2px; }
+
+#planned-book-rows tr.planned-book-selected > td { background: var(--bg-selection); }
+#planned-book-rows tr.planned-book-selected { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* 수업 상세: 왼쪽 수업 정보, 오른쪽 예정 수업 내역 */
+#modal-class-detail .modal-card:has(.class-detail-layout) { width: min(1500px, calc(100vw - 2rem)); max-width: 1500px; }
+.class-detail-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2.4fr); gap: 1.5rem; min-height: 0; }
+.class-detail-summary { min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1.25rem; }
+.class-detail-summary .detail-meta-row { flex-direction: column; align-items: flex-start; }
+.class-detail-layout .planned-books-section { margin: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; padding-left: 1.5rem; border-left: 1px solid var(--border-color); }
+.planned-lessons-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.class-detail-layout .planned-books-section > .text-muted { margin: 0; }
+.class-detail-layout .planned-books-section .table-responsive { margin: 0; overflow: auto; min-height: 0; flex: 1; }
+.class-detail-layout .planned-books-section thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-table-header); }
+.class-detail-layout .planned-books-section td { padding: 0.75rem; }
+.class-detail-layout .planned-books-section td:nth-child(3) { white-space: normal; min-width: 130px; }
+@media (min-width: 1000px) {
+    #modal-class-detail .detail-modal-body:has(.class-detail-layout) { overflow: hidden; }
+    .class-detail-layout { height: 70vh; }
+}
+@media (max-width: 999px) {
+    .class-detail-layout { grid-template-columns: minmax(0, 1fr); }
+    .class-detail-layout .planned-books-section { padding-left: 0; border-left: 0; padding-top: 1.25rem; border-top: 1px solid var(--border-color); }
+    .class-detail-layout .planned-books-section .table-responsive { max-height: 55vh; }
+}

@@ -2165,8 +2165,8 @@ def _get_class_planned_books(class_id: int):
     conn = get_db_connection()
     try:
         return [dict(row) for row in conn.execute('''
-            SELECT p."Id" AS "PlannedId", p."BookId", p."PlannedDay", b."Title", b."Author", b."Publisher"
-            FROM "ClassPlannedBooks" p JOIN "Books" b ON b.rowid = p."BookId"
+            SELECT p."Id" AS "PlannedId", p."BookId", p."PlannedDay", p."IsBreak", b."Title", b."Author", b."Publisher"
+            FROM "ClassPlannedBooks" p LEFT JOIN "Books" b ON b.rowid = p."BookId"
             WHERE p."ClassId" = ? ORDER BY p."SortOrder", p."Id"
         ''', (class_id,))]
     finally:
@@ -2204,6 +2204,23 @@ def user_add_class_planned_books(class_id: int, payload: ClassPlannedBooksReques
         conn.close()
 
 
+@app.post("/api/user/classes/{class_id}/planned-books/breaks")
+def user_add_planned_break(class_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    conn = get_db_connection()
+    try:
+        with conn:
+            cursor = conn.execute('''
+                INSERT INTO "ClassPlannedBooks" ("ClassId", "BookId", "IsBreak", "SortOrder")
+                SELECT ?, NULL, 1, COALESCE(MAX("SortOrder"), 0) + 1 FROM "ClassPlannedBooks" WHERE "ClassId" = ?
+            ''', (class_id, class_id))
+            row = dict(conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "Id" = ?', (cursor.lastrowid,)).fetchone())
+        _audit_insert("ClassPlannedBooks", row["Id"], row, current_user["username"], current_user["role"])
+        return {"status": "success", "PlannedId": row["Id"]}
+    finally:
+        conn.close()
+
+
 class PlannedBookDateRequest(BaseModel):
     PlannedDay: str = ""
 
@@ -2220,19 +2237,60 @@ def user_reorder_class_planned_books(class_id: int, payload: PlannedBookOrderReq
     try:
         with conn:
             conn.execute("BEGIN IMMEDIATE")
-            rows = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ?', (class_id,)).fetchall()
+            rows = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ? ORDER BY "SortOrder", "Id"', (class_id,)).fetchall()
             ids = payload.PlannedIds
             if len(ids) != len(set(ids)) or set(ids) != {row["Id"] for row in rows}:
-                raise HTTPException(status_code=409, detail="예정 도서 목록이 변경되었습니다. 수업 상세를 다시 열어 주세요.")
-            conn.executemany('UPDATE "ClassPlannedBooks" SET "SortOrder" = ? WHERE "ClassId" = ? AND "Id" = ?',
-                             [(index, class_id, planned_id) for index, planned_id in enumerate(ids)])
+                raise HTTPException(status_code=409, detail="예정 수업 내역이 변경되었습니다. 수업 상세를 다시 열어 주세요.")
+            # 날짜는 도서가 아닌 기존 순서의 슬롯에 유지한다.
+            slot_dates = [row["PlannedDay"] for row in rows]
+            conn.executemany('UPDATE "ClassPlannedBooks" SET "SortOrder" = ?, "PlannedDay" = ? WHERE "ClassId" = ? AND "Id" = ?',
+                             [(index, slot_dates[index], class_id, planned_id) for index, planned_id in enumerate(ids)])
         positions = {planned_id: index for index, planned_id in enumerate(ids)}
         for row in rows:
             old = dict(row)
-            new = dict(old, SortOrder=positions[row["Id"]])
-            if old["SortOrder"] != new["SortOrder"]:
+            new = dict(old, SortOrder=positions[row["Id"]], PlannedDay=slot_dates[positions[row["Id"]]])
+            if old != new:
                 _audit_update("ClassPlannedBooks", row["Id"], old, new, current_user["username"], current_user["role"])
-        return {"status": "success"}
+        return {"status": "success", "dates": [{"PlannedId": planned_id, "PlannedDay": slot_dates[index]} for index, planned_id in enumerate(ids)]}
+    finally:
+        conn.close()
+
+
+class PlannedBookWeeklyDatesRequest(BaseModel):
+    AnchorId: int
+    PlannedIds: List[int]
+    AnchorDay: str
+
+
+@app.put("/api/user/classes/{class_id}/planned-books/weekly-dates")
+def user_fill_planned_book_weekly_dates(class_id: int, payload: PlannedBookWeeklyDatesRequest,
+                                        current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ? ORDER BY "SortOrder", "Id"', (class_id,)).fetchall()
+            ids = [row["Id"] for row in rows]
+            if ids != payload.PlannedIds or payload.AnchorId not in ids:
+                raise HTTPException(status_code=409, detail="예정 수업 내역이 변경되었습니다. 수업 상세를 다시 열어 주세요.")
+            index = ids.index(payload.AnchorId)
+            anchor = rows[index]
+            if anchor["PlannedDay"] != payload.AnchorDay:
+                raise HTTPException(status_code=409, detail="기준 날짜가 변경되었습니다. 수업 상세를 다시 열어 주세요.")
+            try:
+                day = datetime.strptime(anchor["PlannedDay"] or "", "%Y-%m-%d").date()
+                updates = [(row, (day + timedelta(weeks=offset)).isoformat())
+                           for offset, row in enumerate(rows[index + 1:], 1)]
+            except (ValueError, OverflowError):
+                raise HTTPException(status_code=400, detail="기준 항목의 예정일을 확인해 주세요. 자동 입력 날짜는 9999년을 넘을 수 없습니다.")
+            conn.executemany('UPDATE "ClassPlannedBooks" SET "PlannedDay" = ? WHERE "Id" = ?',
+                             [(day_text, row["Id"]) for row, day_text in updates])
+        for row, day_text in updates:
+            old = dict(row)
+            if old["PlannedDay"] != day_text:
+                _audit_update("ClassPlannedBooks", row["Id"], old, dict(old, PlannedDay=day_text), current_user["username"], current_user["role"])
+        return {"dates": [{"PlannedId": row["Id"], "PlannedDay": day_text} for row, day_text in updates]}
     finally:
         conn.close()
 
@@ -2254,7 +2312,7 @@ def user_update_class_planned_book(class_id: int, planned_id: int, payload: Plan
         with conn:
             old = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ? AND "Id" = ?', (class_id, planned_id)).fetchone()
             if not old:
-                raise HTTPException(status_code=404, detail="학습 예정 도서를 찾을 수 없습니다.")
+                raise HTTPException(status_code=404, detail="예정 수업 내역을 찾을 수 없습니다.")
             conn.execute('UPDATE "ClassPlannedBooks" SET "PlannedDay" = ? WHERE "Id" = ?', (day, planned_id))
         new = dict(old)
         new["PlannedDay"] = day
@@ -2275,7 +2333,7 @@ def user_delete_class_planned_book(class_id: int, planned_id: int,
             count = conn.execute('DELETE FROM "ClassPlannedBooks" WHERE "ClassId" = ? AND "Id" = ?',
                                  (class_id, planned_id)).rowcount
         if not count:
-            raise HTTPException(status_code=404, detail="학습 예정 도서를 찾을 수 없습니다.")
+            raise HTTPException(status_code=404, detail="예정 수업 내역을 찾을 수 없습니다.")
         _audit_delete("ClassPlannedBooks", planned_id, dict(old), current_user["username"], current_user["role"])
         return {"status": "success"}
     finally:

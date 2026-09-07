@@ -206,6 +206,21 @@ def init_system_tables():
         cursor.execute('UPDATE "ClassPlannedBooks" SET "SortOrder" = "Id"')
     if "PlannedDay" not in planned_columns:
         cursor.execute("ALTER TABLE \"ClassPlannedBooks\" ADD COLUMN \"PlannedDay\" TEXT DEFAULT ''")
+    # 휴강 행은 도서 없이 저장하며 기존 예정 수업 데이터는 보존한다.
+    if "IsBreak" not in planned_columns:
+        cursor.execute('DROP TRIGGER IF EXISTS cleanup_planned_books_after_book_delete')
+        cursor.execute("""
+            CREATE TABLE "ClassPlannedBooks_new" (
+                "Id" INTEGER PRIMARY KEY, "ClassId" INTEGER NOT NULL,
+                "BookId" INTEGER, "SortOrder" INTEGER NOT NULL DEFAULT 0,
+                "PlannedDay" TEXT DEFAULT '', "IsBreak" INTEGER NOT NULL DEFAULT 0,
+                CHECK (("IsBreak" = 1 AND "BookId" IS NULL) OR ("IsBreak" = 0 AND "BookId" IS NOT NULL)),
+                UNIQUE("ClassId", "BookId")
+            )
+        """)
+        cursor.execute('INSERT INTO "ClassPlannedBooks_new" ("Id", "ClassId", "BookId", "SortOrder", "PlannedDay") SELECT "Id", "ClassId", "BookId", "SortOrder", "PlannedDay" FROM "ClassPlannedBooks"')
+        cursor.execute('DROP TABLE "ClassPlannedBooks"')
+        cursor.execute('ALTER TABLE "ClassPlannedBooks_new" RENAME TO "ClassPlannedBooks"')
     if cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='Books'").fetchone():
         cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS cleanup_planned_books_after_book_delete
