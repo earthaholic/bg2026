@@ -4192,3 +4192,11 @@ body {
 #activity-detail dt { font-weight: 600; }
 #activity-detail dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) { #activity-detail dl { grid-template-columns: 1fr; gap: .4rem; } #activity-detail dd { margin-bottom: .6rem; } }
+
+/* 도서 검색 목록 다중 선택 및 복사 */
+#view-book-search .results-bar { flex-wrap: wrap; }
+#view-book-search .book-selection-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+#view-book-search .book-selection-cell { width: 3rem; text-align: center; }
+#view-book-search .book-selection-cell input { width: 1rem; height: 1rem; cursor: pointer; }
+#view-book-search .book-row-selected { background-color: var(--primary-light, #eef2ff); }
+.book-clipboard-buffer { position: fixed; left: -9999px; top: 0; }

@@ -163,6 +163,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const searchTotalCount = document.getElementById('search-total-count');
     const bookCardsGrid = document.getElementById('book-cards-grid');
+    const bookSelectAll = document.getElementById('book-select-all');
+    const bookCopyButton = document.getElementById('btn-copy-selected-books');
+    const bookCopyStatus = document.getElementById('book-copy-status');
+    let selectableBooks = [];
+    const selectedBookIds = new Set();
+
+    function updateBookSelection() {
+        document.getElementById('book-selection-count').textContent = `${selectedBookIds.size}권 선택`;
+        bookCopyButton.disabled = selectedBookIds.size === 0;
+        bookSelectAll.disabled = selectableBooks.length === 0;
+        bookSelectAll.checked = selectableBooks.length > 0 && selectedBookIds.size === selectableBooks.length;
+        bookSelectAll.indeterminate = selectedBookIds.size > 0 && !bookSelectAll.checked;
+        bookCopyStatus.textContent = '';
+        bookCardsGrid.querySelectorAll('.book-select-checkbox').forEach(checkbox => {
+            checkbox.checked = selectedBookIds.has(checkbox.dataset.bookId);
+            checkbox.closest('tr').classList.toggle('book-row-selected', checkbox.checked);
+        });
+    }
+
+    bookCardsGrid.addEventListener('change', event => {
+        const checkbox = event.target.closest('.book-select-checkbox');
+        if (!checkbox) return;
+        if (checkbox.checked) selectedBookIds.add(checkbox.dataset.bookId);
+        else selectedBookIds.delete(checkbox.dataset.bookId);
+        updateBookSelection();
+    });
+    bookSelectAll.addEventListener('change', () => {
+        selectedBookIds.clear();
+        if (bookSelectAll.checked) selectableBooks.forEach(book => selectedBookIds.add(String(book.row_id || book.Id)));
+        updateBookSelection();
+    });
+    bookCopyButton.addEventListener('click', async () => {
+        const books = selectableBooks.filter(book => selectedBookIds.has(String(book.row_id || book.Id)));
+        if (!books.length) return;
+        const text = books.map(book => [book.Title || '제목 없음', book.Author || '저자 미상', book.Publisher || '출판사 미상']
+            .map(value => String(value).replace(/[\r\n]+/g, ' ').trim()).join('/')).join('\n');
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.className = 'book-clipboard-buffer';
+                document.body.appendChild(textarea);
+                try {
+                    textarea.select();
+                    if (!document.execCommand('copy')) throw new Error('복사 실패');
+                } finally {
+                    textarea.remove();
+                    bookCopyButton.focus();
+                }
+            }
+            bookCopyStatus.textContent = `${books.length}권을 복사했습니다.`;
+        } catch (err) {
+            bookCopyStatus.textContent = '복사하지 못했습니다. 브라우저의 클립보드 권한을 확인해 주세요.';
+        }
+    });
+
     const searchPaginationInfo = document.getElementById('search-pagination-info');
     const btnSearchPrev = document.getElementById('btn-search-prev');
     const btnSearchNext = document.getElementById('btn-search-next');
@@ -2834,7 +2892,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadBookSearchResults(directSearch = false) {
         if (!token) return;
         try {
-            bookCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>도서 검색 중...</p></div>';
+            selectableBooks = [];
+            selectedBookIds.clear();
+            updateBookSelection();
+            bookCardsGrid.innerHTML = '<tr><td colspan="11" class="text-center p-4">도서 검색 중...</td></tr>';
 
             const q = bookSearchQ.value.trim();
             const target = getSelectedTargetCheckboxes();
@@ -2888,13 +2949,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderBookCards(data.books);
         } catch (err) {
-            bookCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
+            bookCardsGrid.innerHTML = `<tr><td colspan="11" class="text-center p-4 alert alert-danger">${escapeHtml(err.message)}</td></tr>`;
         }
     }
 
     function renderBookCards(books) {
+        selectableBooks = books;
+        selectedBookIds.clear();
+        updateBookSelection();
         if (books.length === 0) {
-            bookCardsGrid.innerHTML = '<tr><td colspan="10" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div></td></tr>';
+            bookCardsGrid.innerHTML = '<tr><td colspan="11" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>검색 조건에 일치하는 도서가 없습니다.</p></div></td></tr>';
             return;
         }
 
@@ -2912,6 +2976,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             html += `
                 <tr data-book-id="${bookId}">
+                    <td class="book-selection-cell"><input type="checkbox" class="book-select-checkbox" data-book-id="${bookId}" aria-label="${title} 선택"></td>
                     <td><strong>#${bookId}</strong></td>
                     <td class="fw-semibold text-primary cell-clickable btn-open-book-detail" data-book-id="${bookId}">${title}</td>
                     <td>${author}</td>
