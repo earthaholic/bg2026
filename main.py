@@ -2460,7 +2460,7 @@ def user_get_class_batch_form(
 ):
     class_row = _get_accessible_class(class_id, current_user)
     students = get_class_students(class_id)
-    return {"class_": class_row, "students": students}
+    return {"class_": class_row, "students": students, "planned_books": _get_class_planned_books(class_id)}
 
 @app.get("/api/user/recent-lesson-contents")
 def user_get_recent_lesson_contents(

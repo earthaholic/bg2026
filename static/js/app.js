@@ -46,6 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeBookPickerTarget = 'studylog'; // 도서 picker 대상 ('studylog' | 'batch')
     const selectedStudylogBooks = new Map();
     const selectedBatchBooks = new Map();
+    let batchPlannedBooks = [];
+    let batchFormRequestSeq = 0;
     let batchRecentLessonsRequestSeq = 0;
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
@@ -2654,8 +2656,34 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSelectedBooksUI(selectedStudylogBooks, 'selected-book-id', 'selected-book-display', 'preview-selected-book', 'btn-remove-studylog-book');
     }
 
+    function renderBatchPlannedBooks() {
+        const container = document.getElementById('batch-planned-book-options');
+        if (!container) return;
+        const books = batchPlannedBooks.filter(book => !book.IsBreak && book.BookId != null);
+        container.innerHTML = books.length ? books.map(book => {
+            const selected = selectedBatchBooks.has(String(book.BookId));
+            return `<button type="button" class="batch-planned-book-option ${selected ? 'selected' : ''}" data-book-id="${Number(book.BookId)}" aria-pressed="${selected}">
+                <span class="batch-planned-book-title">${escapeHtml(book.Title || '제목 없음')}</span>
+                <span class="text-muted">${escapeHtml(book.Author || '저자 미상')} / ${escapeHtml(book.Publisher || '출판사 미상')}</span>
+                <span>${escapeHtml(book.PlannedDay || '예정일 미지정')} · ${selected ? '선택됨 · 해제' : '선택'}</span>
+            </button>`;
+        }).join('') : '<p class="text-muted">예정 수업 내역에 도서가 없습니다. 도서 검색으로 선택해 주세요.</p>';
+        container.querySelectorAll('[data-book-id]').forEach(button => {
+            button.addEventListener('click', () => {
+                const id = button.dataset.bookId;
+                const book = books.find(item => String(item.BookId) === id);
+                if (selectedBatchBooks.has(id)) selectedBatchBooks.delete(id);
+                else selectedBatchBooks.set(id, { id: Number(id), title: book.Title || '제목 없음', author: book.Author || '', publisher: book.Publisher || '' });
+                updateSelectedBatchBooksUI();
+                updateBatchBookPickerCount();
+                container.querySelector(`[data-book-id="${Number(id)}"]`)?.focus();
+            });
+        });
+    }
+
     function updateSelectedBatchBooksUI() {
         updateSelectedBooksUI(selectedBatchBooks, 'batch-book-id', 'batch-book-display', 'preview-batch-book', 'btn-remove-batch-book');
+        renderBatchPlannedBooks();
         loadBatchRecentLessonContents();
     }
 
@@ -5764,9 +5792,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 일괄 등록 뷰: 수업 상세 + 학생 테이블 로드
     async function loadClassBatchForm(classId) {
         activeBatchClassId = classId;
+        const requestSeq = ++batchFormRequestSeq;
+        batchPlannedBooks = [];
+        document.getElementById('batch-planned-book-options').textContent = '예정 수업 내역을 불러오는 중입니다...';
         if (classBatchResult) classBatchResult.classList.add('hidden');
         try {
             const data = await apiFetch(`/api/user/classes/${classId}/batch-form`);
+            if (requestSeq !== batchFormRequestSeq) return;
+            batchPlannedBooks = data.planned_books || [];
+            renderBatchPlannedBooks();
             const cls = data.class_;
             const students = data.students || [];
             if (batchClassName) batchClassName.textContent = cls.ClassName || '-';
@@ -5780,6 +5814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBatchStudentsTable(students);
             loadBatchStudylogCalendar(getBatchMonth(batchStudiedDay.value));
         } catch (err) {
+            if (requestSeq !== batchFormRequestSeq) return;
             resetBatchRegView();
             if (classBatchInfo) classBatchInfo.classList.remove('hidden');
             if (batchClassName) batchClassName.textContent = '조회 오류';
@@ -6079,6 +6114,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function resetBatchRegView() {
+        batchFormRequestSeq++;
+        batchPlannedBooks = [];
+        renderBatchPlannedBooks();
         activeBatchClassId = null;
         if (classBatchInfo) classBatchInfo.classList.add('hidden');
         if (classBatchRegCard) classBatchRegCard.classList.add('hidden');
@@ -6194,6 +6232,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bDisp) bDisp.value = '';
             if (bPrev) { bPrev.innerHTML = ''; bPrev.classList.add('hidden'); }
             selectedBatchBooks.clear();
+            renderBatchPlannedBooks();
             loadBatchRecentLessonContents();
             updateBatchBookPickerCount();
             loadBatchStudylogCalendar(getBatchMonth(dateVal));

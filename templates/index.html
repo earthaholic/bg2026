@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260907-planned-picker">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260907-inline-planned-picker">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1803,12 +1803,16 @@
 
                                 <div id="batch-book-section" class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-book"></i> 1. 학습 도서 선택</h4>
+                                    <div class="batch-planned-books">
+                                        <p class="text-muted">예정 수업 내역의 도서를 바로 선택하세요. 여러 권을 선택할 수 있습니다.</p>
+                                        <div id="batch-planned-book-options" class="batch-planned-book-options"></div>
+                                    </div>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
                                             <label>도서 선택 <span class="required">*</span></label>
                                             <div class="picker-input-group">
                                                 <input type="hidden" id="batch-book-id" name="BookIds">
-                                                <input type="text" id="batch-book-display" class="form-control" placeholder="[도서 검색]에서 한 권 이상 선택하세요" readonly>
+                                                <input type="text" id="batch-book-display" class="form-control" placeholder="예정 도서 또는 [도서 검색]에서 한 권 이상 선택하세요" readonly>
                                                 <button type="button" id="btn-open-batch-book-picker" class="btn btn-primary" data-picker-target="batch">
                                                     <i class="fa-solid fa-magnifying-glass"></i> 도서 검색
                                                 </button>
@@ -2334,6 +2338,6 @@
         <div class="activity-detail-header"><h3 id="activity-detail-title">활동 상세</h3><button id="activity-detail-close" class="btn btn-outline" autofocus>닫기</button></div>
         <dl id="activity-detail-body"></dl>
     </dialog>
-    <script src="/static/js/app.js?v=20260907-planned-picker"></script>
+    <script src="/static/js/app.js?v=20260907-inline-planned-picker"></script>
 </body>
 </html>
