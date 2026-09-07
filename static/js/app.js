@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalLogin = document.getElementById('modal-login');
     const formLogin = document.getElementById('form-login');
     const loginErrorMsg = document.getElementById('login-error-msg');
-    
+
     const userProfileBadge = document.getElementById('user-profile-badge');
     const badgeUsername = document.getElementById('badge-username');
     const badgeRole = document.getElementById('badge-role');
@@ -973,6 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bookStudentSearchTimer = setTimeout(loadBookStudyStudentCandidates, 200);
         });
         bookStudyClassSelect.addEventListener('change', async () => {
+            const feedback = createActionFeedback();
             const classId = bookStudyClassSelect.value;
             if (!classId) return;
             try {
@@ -985,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchPage = 1;
                 await loadBookSearchResults();
             } catch (err) {
-                alert(`수업 학생을 추가하지 못했습니다: ${err.message}`);
+                feedback.show(`수업 학생을 추가하지 못했습니다: ${err.message}`, 'error');
             } finally {
                 bookStudyClassSelect.value = '';
             }
@@ -1369,6 +1370,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadBookMaterialRequests(forReview = false) {
+        const feedback = createActionFeedback();
         const body = document.getElementById(forReview ? 'book-material-review-body' : 'book-material-request-body');
         if (!body) return;
         try {
@@ -1385,14 +1387,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 body.querySelectorAll('.btn-material-approve').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'approved')));
                 body.querySelectorAll('.btn-material-reject').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'rejected')));
             }
-        } catch (err) { body.innerHTML = `<tr><td colspan="7" class="text-center">${escapeHtml(err.message)}</td></tr>`; }
+        } catch (err) {
+            feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="text-center">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     async function reviewBookMaterialRequest(id, status) {
+        const feedback = createActionFeedback();
         const RejectReason = status === 'rejected' ? window.prompt('반려 사유를 입력해 주세요.') : '';
         if (status === 'rejected' && !RejectReason) return;
-        try { const result = await apiFetch(`/api/user/book-material-requests/${id}/review`, { method: 'POST', body: JSON.stringify({ Status: status, RejectReason }) }); showToast(result.message, 'success'); await loadBookMaterialRequests(true); }
-        catch (err) { alert(err.message); }
+        try { const result = await apiFetch(`/api/user/book-material-requests/${id}/review`, { method: 'POST', body: JSON.stringify({ Status: status, RejectReason }) }); feedback.show(result.message, 'success'); await loadBookMaterialRequests(true); }
+        catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function submitBookMaterialRate(e) {
@@ -1402,9 +1406,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadBookMaterialRates() {
+        const feedback = createActionFeedback();
         const body = document.getElementById('book-material-rate-body'); if (!body) return;
         try { const data = await apiFetch('/api/user/book-material-rates'); body.innerHTML = data.rates.length ? data.rates.map(rate => `<tr><td>${rate.BookCategory === 'picture' ? '그림책' : '일반 도서'}</td><td>${Number(rate.UnitAmount).toLocaleString()}원</td><td>${escapeHtml(rate.EffectiveFrom)}</td></tr>`).join('') : '<tr><td colspan="3" class="text-center p-4">설정된 단가가 없습니다.</td></tr>'; }
-        catch (err) { body.innerHTML = `<tr><td colspan="3">${escapeHtml(err.message)}</td></tr>`; }
+        catch (err) {
+            feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="3">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     // User Student Registration Handler
@@ -1592,12 +1598,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global Event Delegation for Pickers & StudyLog Modals
     document.addEventListener('click', (e) => {
+        const feedback = createActionFeedback(e);
         // Open Student Picker Modal
         const studentPickerOpener = e.target.closest('#btn-open-student-picker, #selected-student-display, #btn-open-picker-monthly-student');
         if (studentPickerOpener) {
             activeStudentPickerTarget = studentPickerOpener.id === 'btn-open-picker-monthly-student' ? 'monthly' : 'studylog';
             if (activeStudentPickerTarget === 'studylog' && currentUser?.role === 'teacher' && !document.getElementById('studylog-class')?.value) {
-                alert('담당 수업을 먼저 선택해 주세요.');
+                feedback.show('담당 수업을 먼저 선택해 주세요.', 'warning');
                 return;
             }
             const modal = document.getElementById('modal-student-picker');
@@ -1889,6 +1896,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load Picker Students List
     async function loadPickerStudents() {
+        const feedback = createActionFeedback();
         const container = document.getElementById('picker-student-results');
         const inputQ = document.getElementById('input-picker-student-q');
         if (!container) return;
@@ -1969,12 +1977,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         } catch (err) {
+            feedback.show(err.message, 'error');
             container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
     }
 
     // Load Picker Books List
     async function loadPickerBooks() {
+        const feedback = createActionFeedback();
         const container = document.getElementById('picker-book-results');
         const inputQ = document.getElementById('input-picker-book-q');
         if (!container) return;
@@ -2035,6 +2045,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         } catch (err) {
+            feedback.show(err.message, 'error');
             container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
     }
@@ -2240,6 +2251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load StudyLog Search Results Grid
     async function loadStudyLogSearchResults(directSearch = false) {
+        const feedback = createActionFeedback();
         if (!token) return;
         try {
             studylogCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div>';
@@ -2267,34 +2279,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudyLogCards(data.studylogs);
         } catch (err) {
+            feedback.show(err.message, 'error');
             studylogCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
         }
     }
 
-    function showToast(message, type = 'info') {
-        let container = document.getElementById('toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toast-container';
-            container.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none;';
-            document.body.appendChild(container);
-        }
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.cssText = 'padding:10px 16px; background:#1e293b; color:#fff; border-radius:6px; border-left:4px solid #3b82f6; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:0.875rem; pointer-events:auto; transition:all 0.3s ease;';
-        if (type === 'success') toast.style.borderLeftColor = '#10b981';
-        if (type === 'warning') toast.style.borderLeftColor = '#f59e0b';
-        if (type === 'danger' || type === 'error') toast.style.borderLeftColor = '#ef4444';
-        toast.innerHTML = escapeHtml(message);
-        container.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
-            setTimeout(() => toast.remove(), 300);
-        }, 2500);
-    }
+
 
     async function toggleBookField(bookId, field, newVal, chkEl) {
+        const feedback = createActionFeedback(chkEl);
         try {
             const payload = { data: {} };
             payload.data[field] = newVal;
@@ -2302,14 +2295,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'PUT',
                 body: JSON.stringify(payload)
             });
-            showToast('도서 보유 자료 정보가 업데이트되었습니다.', 'success');
+            feedback.show('도서 보유 자료 정보가 업데이트되었습니다.', 'success');
         } catch (err) {
             chkEl.checked = !chkEl.checked;
-            alert('도서 정보 수정 실패: ' + err.message);
+            feedback.show('도서 정보 수정 실패: ' + err.message, 'error');
         }
     }
 
     async function toggleStudentEnded(studentId, newVal, btnEl) {
+        const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/students/${studentId}`, {
                 method: 'PUT',
@@ -2323,13 +2317,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnEl.className = 'btn-toggle-status is-active btn-toggle-student-ended';
                 btnEl.innerHTML = '<i class="fa-solid fa-circle-play"></i> 진행 중';
             }
-            showToast('학생 수업 종료 상태가 변경되었습니다.', 'success');
+            feedback.show('학생 수업 종료 상태가 변경되었습니다.', 'success');
         } catch (err) {
-            alert('수업 종료 상태 변경 실패: ' + err.message);
+            feedback.show('수업 종료 상태 변경 실패: ' + err.message, 'error');
         }
     }
 
     async function toggleStudentSex(studentId, newSex, btnEl) {
+        const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/students/${studentId}`, {
                 method: 'PUT',
@@ -2338,13 +2333,14 @@ document.addEventListener('DOMContentLoaded', () => {
             btnEl.setAttribute('data-current-sex', newSex);
             btnEl.textContent = newSex;
             btnEl.className = `badge btn-toggle-student-sex ${newSex === '남' ? 'badge-info' : 'badge-danger'}`;
-            showToast(`학생 성별이 ${newSex}(으)로 변경되었습니다.`, 'success');
+            feedback.show(`학생 성별이 ${newSex}(으)로 변경되었습니다.`, 'success');
         } catch (err) {
-            alert('학생 성별 변경 실패: ' + err.message);
+            feedback.show('학생 성별 변경 실패: ' + err.message, 'error');
         }
     }
 
     async function toggleClassEnded(classId, newVal, btnEl) {
+        const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/classes/${classId}`, {
                 method: 'PUT',
@@ -2358,9 +2354,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnEl.className = 'btn-toggle-status is-active btn-toggle-class-ended';
                 btnEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> 수업 진행 중';
             }
-            showToast('수업 종료 상태가 변경되었습니다.', 'success');
+            feedback.show('수업 종료 상태가 변경되었습니다.', 'success');
         } catch (err) {
-            alert('수업 상태 변경 실패: ' + err.message);
+            feedback.show('수업 상태 변경 실패: ' + err.message, 'error');
         }
     }
 
@@ -2406,18 +2402,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOptions();
             });
             container.querySelector('form').addEventListener('submit', async (event) => {
+                const feedback = createActionFeedback(event);
                 event.preventDefault();
                 const regular = container.querySelector('#student-regular-class').value;
                 const special = container.querySelector('#student-special-class').value;
-                if (regular && regular === special) return showToast('같은 수업을 정규반과 특강에 동시에 배정할 수 없습니다.', 'warning');
+                if (regular && regular === special) return feedback.show('같은 수업을 정규반과 특강에 동시에 배정할 수 없습니다.', 'warning');
                 const button = container.querySelector('button');
                 button.disabled = true;
                 try {
                     const result = await apiFetch(`/api/user/students/${studentId}/classes`, {
                         method: 'PUT', body: JSON.stringify({ regular_class_id: regular ? Number(regular) : null, special_class_id: special ? Number(special) : null })
                     });
-                    showToast(result.message, 'success');
-                } catch (err) { showToast(err.message, 'error'); }
+                    feedback.show(result.message, 'success');
+                } catch (err) { feedback.show(err.message, 'error'); }
                 finally { button.disabled = false; }
             });
         } catch (err) {
@@ -2426,6 +2423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function toggleStudyLogSpecial(logId, newVal, btnEl) {
+        const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/studylogs/${logId}`, {
                 method: 'PUT',
@@ -2439,9 +2437,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnEl.className = 'btn-toggle-status is-normal btn-toggle-studylog-special';
                 btnEl.innerHTML = '<i class="fa-regular fa-star"></i> 일반';
             }
-            showToast('학습 기록 특강 여부가 변경되었습니다.', 'success');
+            feedback.show('학습 기록 특강 여부가 변경되었습니다.', 'success');
         } catch (err) {
-            alert('특강 여부 변경 실패: ' + err.message);
+            feedback.show('특강 여부 변경 실패: ' + err.message, 'error');
         }
     }
 
@@ -2587,7 +2585,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                         <h4 style="font-size: 1.1rem; color: var(--success); margin-bottom: 0.4rem;">${bTitle}</h4>
                         <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.6rem;">저자: ${bAuthor} | 출판사: ${bPublisher} | 주제/분야: ${bSubject}</p>
-                        
+
                         <div class="book-spec-grid" style="margin-top: 0.75rem;">
                             <div class="spec-box"><span class="spec-label">분량</span><span class="spec-value">${l.BookLength || 0} 단계</span></div>
                             <div class="spec-box"><span class="spec-label">어휘</span><span class="spec-value">${l.Voca || 0} 단계</span></div>
@@ -2615,10 +2613,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const saveStudiedDayButton = document.getElementById('btn-save-studylog-studied-day');
             if (saveStudiedDayButton) {
                 saveStudiedDayButton.addEventListener('click', async () => {
+                    const feedback = createActionFeedback();
                     const input = document.getElementById('input-studylog-studied-day');
                     const newStudiedDay = input.value;
                     if (!newStudiedDay) {
-                        showToast('학습 수행 일자를 선택해 주세요.', 'warning');
+                        feedback.show('학습 수행 일자를 선택해 주세요.', 'warning');
                         return;
                     }
                     try {
@@ -2627,12 +2626,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             method: 'PUT',
                             body: JSON.stringify({ data: { StudiedDay: newStudiedDay } })
                         });
-                        showToast('학습 수행 일자를 수정했습니다.', 'success');
+                        feedback.show('학습 수행 일자를 수정했습니다.', 'success');
                         await openStudyLogDetailModal(l.row_id || l.Id);
                         await loadStudyLogSearchResults();
                         await loadRecentStudyLogs();
                     } catch (err) {
-                        showToast(err.message, 'danger');
+                        feedback.show(err.message, 'danger');
                         saveStudiedDayButton.disabled = false;
                     }
                 });
@@ -2828,12 +2827,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateEditAssignmentOptions(false);
         document.getElementById('btn-cancel-edit-studylog').addEventListener('click', () => openStudyLogDetailModal(logId));
         document.getElementById('form-edit-studylog-detail').addEventListener('submit', async event => {
+            const feedback = createActionFeedback(event);
             event.preventDefault();
             const classId = parseInt(editClassSelect.value || '0') || null;
             const actualTeacherUsername = editTeacherSelect.value || '';
             const payrollCategoryId = parseInt(editCategorySelect.value || '0') || null;
             if (!classId && payrollCategoryId && !actualTeacherUsername) {
-                showToast('정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.', 'warning');
+                feedback.show('정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.', 'warning');
                 return;
             }
             const data = {
@@ -2847,10 +2847,10 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             try {
                 await apiFetch(`/api/user/studylogs/${log.row_id || log.Id}`, { method: 'PUT', body: JSON.stringify({ data }) });
-                showToast('학습 기록을 수정했습니다.', 'success');
+                feedback.show('학습 기록을 수정했습니다.', 'success');
                 await Promise.all([openStudyLogDetailModal(logId), loadStudyLogSearchResults(), loadRecentStudyLogs()]);
             } catch (err) {
-                showToast(err.message, 'danger');
+                feedback.show(err.message, 'danger');
             }
         });
     }
@@ -2860,6 +2860,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudyLogDeleteConfirm.classList.remove('hidden');
 
         btnSubmitStudyLogDeleteConfirm.onclick = async () => {
+            const feedback = createActionFeedback();
             const pkVal = l.row_id || l.Id;
 
             try {
@@ -2870,13 +2871,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalStudyLogDeleteConfirm.classList.add('hidden');
                 modalStudyLogDetail.classList.add('hidden');
 
-                alert(`학습 기록 (ID: #${pkVal})이 성공적으로 삭제되었습니다.`);
+                feedback.show(`학습 기록 (ID: #${pkVal})이 성공적으로 삭제되었습니다.`, 'success');
 
                 await loadStudyLogSearchResults();
                 await loadRecentStudyLogs();
                 if (currentTable === 'StudyLogs') await loadTableData();
             } catch (err) {
-                alert(`삭제 실패: ${err.message}`);
+                feedback.show(`삭제 실패: ${err.message}`, 'error');
             }
         };
     }
@@ -2983,6 +2984,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Book Search Handler
     async function loadBookSearchResults(directSearch = false) {
+        const feedback = createActionFeedback();
         if (!token) return;
         try {
             selectableBooks = [];
@@ -3042,6 +3044,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderBookCards(data.books);
         } catch (err) {
+            feedback.show(err.message, 'error');
             bookCardsGrid.innerHTML = `<tr><td colspan="11" class="text-center p-4 alert alert-danger">${escapeHtml(err.message)}</td></tr>`;
         }
     }
@@ -3121,6 +3124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Student Search Handler
     async function loadStudentSearchResults(directSearch = false) {
+        const feedback = createActionFeedback();
         if (!token) return;
         try {
             studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div></td></tr>';
@@ -3147,6 +3151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudentCards(data.students);
         } catch (err) {
+            feedback.show(err.message, 'error');
             studentCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
     }
@@ -3639,7 +3644,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderStudentConsultations(studentId, studentName, consultations) {
-        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form"><div class="form-group"><label for="student-consultation-content">새 상담 기록</label><textarea id="student-consultation-content" class="form-control" rows="4" placeholder="상담 내용을 입력하세요." required></textarea></div><button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> 기록 추가</button></form>` : '';
+        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form"><div class="form-group"><label for="student-consultation-content">새 상담 기록</label><textarea id="student-consultation-content" class="form-control" rows="4" placeholder="상담 내용을 입력하세요." required></textarea></div><button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> 기록 추가</button>
+</form>` : '';
         const listHtml = consultations.length ? consultations.map(item => `
             <article class="consultation-item" data-consultation-id="${item.row_id || item.Id}">
                 <div class="consultation-item-header"><span><i class="fa-regular fa-clock"></i> ${escapeHtml(item.CreatedAt || '작성 시각 없음')}${item.CreatedBy ? ` · ${escapeHtml(item.CreatedBy)}` : ''}</span>${isStaff() ? '<span><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></span>' : ''}</div>
@@ -3650,13 +3656,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const reload = () => openStudentConsultationsModal(studentId, studentName);
         const form = document.getElementById('student-consultation-form');
         if (form) form.addEventListener('submit', async event => {
+            const feedback = createActionFeedback(event);
             event.preventDefault();
             const content = document.getElementById('student-consultation-content').value.trim();
             if (!content) return;
             try {
                 await apiFetch(`/api/user/students/${studentId}/consultations`, { method: 'POST', body: JSON.stringify({ Content: content }) });
-                showToast('상담 기록을 추가했습니다.', 'success'); reload();
-            } catch (err) { showToast(err.message, 'danger'); }
+                feedback.show('상담 기록을 추가했습니다.', 'success'); reload();
+            } catch (err) { feedback.show(err.message, 'danger'); }
         });
 
         modalStudentConsultationsBody.querySelectorAll('.btn-edit-consultation').forEach(button => button.addEventListener('click', () => {
@@ -3667,21 +3674,23 @@ document.addEventListener('DOMContentLoaded', () => {
             button.closest('.consultation-item-header').querySelector('span:last-child').innerHTML = '';
             itemEl.querySelector('.btn-cancel-consultation').addEventListener('click', reload);
             itemEl.querySelector('.btn-save-consultation').addEventListener('click', async () => {
+                const feedback = createActionFeedback();
                 const content = itemEl.querySelector('.consultation-edit-input').value.trim();
-                if (!content) return showToast('상담 기록을 입력해 주세요.', 'warning');
+                if (!content) return feedback.show('상담 기록을 입력해 주세요.', 'warning');
                 try {
                     await apiFetch(`/api/user/consultations/${itemEl.dataset.consultationId}`, { method: 'PUT', body: JSON.stringify({ Content: content }) });
-                    showToast('상담 기록을 수정했습니다.', 'success'); reload();
-                } catch (err) { showToast(err.message, 'danger'); }
+                    feedback.show('상담 기록을 수정했습니다.', 'success'); reload();
+                } catch (err) { feedback.show(err.message, 'danger'); }
             });
         }));
 
         modalStudentConsultationsBody.querySelectorAll('.btn-delete-consultation').forEach(button => button.addEventListener('click', async () => {
-            if (!confirm('이 상담 기록을 삭제하시겠습니까?')) return;
+            const feedback = createActionFeedback();
+            if (!(await feedback.confirm('이 상담 기록을 삭제하시겠습니까?'))) return;
             try {
                 await apiFetch(`/api/user/consultations/${button.closest('.consultation-item').dataset.consultationId}`, { method: 'DELETE' });
-                showToast('상담 기록을 삭제했습니다.', 'success'); reload();
-            } catch (err) { showToast(err.message, 'danger'); }
+                feedback.show('상담 기록을 삭제했습니다.', 'success'); reload();
+            } catch (err) { feedback.show(err.message, 'danger'); }
         }));
     }
 
@@ -3925,6 +3934,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputConfirmDeleteStudentName.oninput = checkMatch;
 
         btnSubmitStudentDeleteConfirm.onclick = async () => {
+            const feedback = createActionFeedback();
             if (inputConfirmDeleteStudentName.value.trim() !== expectedName) return;
 
             const pkVal = s.row_id || s.Id;
@@ -3937,13 +3947,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalStudentDeleteConfirm.classList.add('hidden');
                 modalStudentDetail.classList.add('hidden');
 
-                alert(`'${expectedName}' 학생이 성공적으로 삭제되었습니다.`);
+                feedback.show(`'${expectedName}' 학생이 성공적으로 삭제되었습니다.`, 'success');
 
                 await loadStudentSearchResults();
                 await loadRecentStudents();
                 if (currentTable === 'Students') await loadTableData();
             } catch (err) {
-                alert(`삭제 실패: ${err.message}`);
+                feedback.show(`삭제 실패: ${err.message}`, 'error');
             }
         };
     }
@@ -3955,7 +3965,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let html = `
             <form id="form-modal-edit-student" class="modal-edit-form">
-                <div id="modal-edit-student-alert" class="alert hidden"></div>
+
 
                 <div class="form-section">
                     <h4 class="section-title"><i class="fa-solid fa-user"></i> 기본 인적사항 수정</h4>
@@ -4006,6 +4016,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" id="btn-cancel-modal-edit-student" class="btn btn-outline">취소</button>
                     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 수정 내용 저장</button>
                 </div>
+                <div id="modal-edit-student-alert" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
             </form>
         `;
 
@@ -4085,6 +4096,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputConfirmDeleteTitle.oninput = checkMatch;
 
         btnSubmitDeleteConfirm.onclick = async () => {
+            const feedback = createActionFeedback();
             if (inputConfirmDeleteTitle.value.trim() !== expectedTitle) return;
 
             const pkVal = b.row_id || b.Id;
@@ -4097,13 +4109,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalDeleteConfirm.classList.add('hidden');
                 modalBookDetail.classList.add('hidden');
 
-                alert(`'${expectedTitle}' 도서가 성공적으로 삭제되었습니다.`);
+                feedback.show(`'${expectedTitle}' 도서가 성공적으로 삭제되었습니다.`, 'success');
 
                 await loadBookSearchResults();
                 await loadRecentBooks();
                 if (currentTable === 'Books') await loadTableData();
             } catch (err) {
-                alert(`삭제 실패: ${err.message}`);
+                feedback.show(`삭제 실패: ${err.message}`, 'error');
             }
         };
     }
@@ -4124,7 +4136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let html = `
             <form id="form-modal-edit-book" class="modal-edit-form">
-                <div id="modal-edit-alert" class="alert hidden"></div>
+
 
                 <div class="form-section">
                     <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 기본 정보 수정</h4>
@@ -4243,6 +4255,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" id="btn-cancel-modal-edit" class="btn btn-outline">취소</button>
                     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 수정 내용 저장</button>
                 </div>
+                <div id="modal-edit-alert" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
             </form>
         `;
 
@@ -4415,6 +4428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load Table Data
     async function loadTableData() {
+        const feedback = createActionFeedback();
         try {
             tableBody.innerHTML = '<tr><td colspan="100" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>데이터 로딩 중...</p></td></tr>';
 
@@ -4427,6 +4441,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTableData(data.rows);
             updatePaginationUI(data.total_count);
         } catch (err) {
+            feedback.show(err.message, 'error');
             tableBody.innerHTML = `<tr><td colspan="100" class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
     }
@@ -4557,7 +4572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleExportTableCsv() {
         if (!currentTable) return;
         const url = `/api/tables/${currentTable}/export-csv?q=${encodeURIComponent(searchQuery)}`;
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `${currentTable}_export.csv`;
@@ -4568,10 +4583,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Batch Delete Selected Rows
     async function handleBatchDelete() {
+        const feedback = createActionFeedback();
         if (selectedPkValues.size === 0) return;
 
         const count = selectedPkValues.size;
-        if (!confirm(`선택한 ${count}개의 레코드를 삭제하시겠습니까?`)) return;
+        if (!(await feedback.confirm(`선택한 ${count}개의 레코드를 삭제하시겠습니까?`))) return;
 
         const pkColObj = tableSchema.find(c => c.pk === 1) || tableSchema[0];
         const pkCol = pkColObj.name;
@@ -4588,15 +4604,16 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadTables();
             await loadTableData();
         } catch (err) {
-            alert(`다중 삭제 실패: ${err.message}`);
+            feedback.show(`다중 삭제 실패: ${err.message}`, 'error');
         }
     }
 
     // SQL Console Handlers
     async function handleRunSql() {
+        const feedback = createActionFeedback();
         const query = sqlQueryInput.value.trim();
         if (!query) {
-            alert('실행할 SQL 쿼리를 입력해 주세요.');
+            feedback.show('실행할 SQL 쿼리를 입력해 주세요.', 'warning');
             return;
         }
 
@@ -4658,9 +4675,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleExportSqlCsv() {
+        const feedback = createActionFeedback();
         const query = sqlQueryInput.value.trim();
         if (!query) {
-            alert('내보낼 SQL 쿼리를 입력해 주세요.');
+            feedback.show('내보낼 SQL 쿼리를 입력해 주세요.', 'warning');
             return;
         }
 
@@ -4689,7 +4707,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            alert(`SQL CSV 다운로드 오류: ${err.message}`);
+            feedback.show(`SQL CSV 다운로드 오류: ${err.message}`, 'error');
         }
     }
 
@@ -4715,7 +4733,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableSchema.forEach(col => {
             const fieldGroup = document.createElement('div');
             fieldGroup.className = 'form-group';
-            
+
             const isPk = col.pk === 1;
             const value = rowData[col.name] !== undefined && rowData[col.name] !== null ? rowData[col.name] : '';
 
@@ -4767,11 +4785,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleDeleteRow(rowData) {
+        const feedback = createActionFeedback();
         const pkColObj = tableSchema.find(c => c.pk === 1) || tableSchema[0];
         const pkCol = pkColObj.name;
         const pkVal = rowData[pkCol];
 
-        if (!confirm(`정말로 레코드 (${pkCol} = ${pkVal})를 삭제하시겠습니까?`)) return;
+        if (!(await feedback.confirm(`정말로 레코드 (${pkCol} = ${pkVal})를 삭제하시겠습니까?`))) return;
 
         try {
             await apiFetch(`/api/tables/${currentTable}/row`, {
@@ -4782,7 +4801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadTables();
             await loadTableData();
         } catch (err) {
-            alert(`삭제 실패: ${err.message}`);
+            feedback.show(`삭제 실패: ${err.message}`, 'error');
         }
     }
 
@@ -4814,11 +4833,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- User Account Management (Admin Only) ---
 
     async function loadUserAccounts() {
+        const feedback = createActionFeedback();
         try {
             userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
             const data = await apiFetch('/api/admin/users');
             renderUserAccounts(data.users);
         } catch (err) {
+            feedback.show(err.message, 'error');
             userManageBody.innerHTML = `<tr><td colspan="4" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
     }
@@ -4905,6 +4926,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleUserCreate(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         userCreateMsg.classList.add('hidden');
 
@@ -4932,7 +4954,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, password, role })
             });
 
-            alert(result.message);
+            feedback.show(result.message, 'success');
             modalUserCreate.classList.add('hidden');
             await loadUserAccounts();
         } catch (err) {
@@ -4952,6 +4974,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleUserPasswordReset(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         userPwMsg.classList.add('hidden');
 
@@ -4969,7 +4992,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ password })
             });
 
-            alert(result.message);
+            feedback.show(result.message, 'success');
             modalUserPassword.classList.add('hidden');
             await loadUserAccounts();
         } catch (err) {
@@ -4980,8 +5003,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleUserRoleChange(userId, username, newRole) {
+        const feedback = createActionFeedback();
         const roleLabel = ROLE_LABELS[newRole] || newRole;
-        if (!confirm(`'${username}' 계정의 역할을 ${roleLabel}(으)로 변경하시겠습니까?`)) {
+        if (!(await feedback.confirm(`'${username}' 계정의 역할을 ${roleLabel}(으)로 변경하시겠습니까?`))) {
             await loadUserAccounts();
             return;
         }
@@ -4992,10 +5016,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ role: newRole })
             });
 
-            alert(result.message);
+            feedback.show(result.message, 'success');
             await loadUserAccounts();
         } catch (err) {
-            alert(err.message);
+            feedback.show(err.message, 'error');
             await loadUserAccounts();
         }
     }
@@ -5018,6 +5042,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleUserDelete(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         if (btnSubmitUserDelete.disabled) return;
 
@@ -5026,12 +5051,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'DELETE'
             });
 
-            alert(result.message);
+            feedback.show(result.message, 'success');
             modalUserDelete.classList.add('hidden');
             await loadUserAccounts();
             await loadTables();
         } catch (err) {
-            alert(err.message);
+            feedback.show(err.message, 'error');
         }
     }
 
@@ -5220,6 +5245,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 수업 목록 검색
     async function loadClassSearchResults(directSearch = false) {
+        const feedback = createActionFeedback();
         if (!token || !classCardsGrid) return;
         try {
             classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>수업 검색 중...</p></div>';
@@ -5235,6 +5261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnClassSearchNext) btnClassSearchNext.disabled = (classSearchPage >= classSearchTotalPages);
             renderClassCards(data.classes);
         } catch (err) {
+            feedback.show(err.message, 'error');
             classCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
     }
@@ -5402,6 +5429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const fillDatesButton = document.getElementById('btn-fill-planned-dates');
             const addBreakButton = document.getElementById('btn-add-planned-break');
             addBreakButton.addEventListener('click', async () => {
+                const feedback = createActionFeedback();
                 if (addBreakButton.disabled) return;
                 orderSaving = true;
                 plannedCopyButton.disabled = true;
@@ -5411,7 +5439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await apiFetch(`/api/user/classes/${classId}/planned-books/breaks`, { method: 'POST' });
                     await openClassDetailModal(classId);
                 } catch (err) {
-                    document.getElementById('planned-copy-status').textContent = err.message;
+                    feedback.show(err.message, 'error');
                     orderSaving = false;
                     plannedCopyButton.disabled = !data.planned_books.length;
                     plannedRows.querySelectorAll('button, input').forEach(control => { control.disabled = false; });
@@ -5438,6 +5466,7 @@ document.addEventListener('DOMContentLoaded', () => {
             plannedRows.addEventListener('focusin', selectPlannedRow);
             plannedRows.addEventListener('click', selectPlannedRow);
             fillDatesButton.addEventListener('click', async () => {
+                const feedback = createActionFeedback();
                 if (fillDatesButton.disabled) return;
                 const anchor = data.planned_books.find(book => Number(book.PlannedId) === selectedPlannedId);
                 orderSaving = true;
@@ -5445,7 +5474,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plannedRows.querySelectorAll('button, input').forEach(control => { control.disabled = true; });
                 updatePlannedSelection();
                 const status = document.getElementById('planned-copy-status');
-                status.textContent = '예정일을 자동 입력하는 중입니다...';
+                feedback.show('예정일을 자동 입력하는 중입니다...', 'info');
                 try {
                     const result = await apiFetch(`/api/user/classes/${classId}/planned-books/weekly-dates`, {
                         method: 'PUT', body: JSON.stringify({ AnchorId: selectedPlannedId, AnchorDay: anchor.PlannedDay, PlannedIds: data.planned_books.map(book => Number(book.PlannedId)) })
@@ -5454,9 +5483,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         data.planned_books.find(book => Number(book.PlannedId) === Number(item.PlannedId)).PlannedDay = item.PlannedDay;
                         plannedRows.querySelector(`[data-planned-id="${Number(item.PlannedId)}"] .planned-book-date`).value = item.PlannedDay;
                     });
-                    status.textContent = `${result.dates.length}건의 예정일을 1주 간격으로 저장했습니다.`;
+                    feedback.show(`${result.dates.length}건의 예정일을 1주 간격으로 저장했습니다.`, 'info');
                 } catch (err) {
-                    status.textContent = err.message;
+                    feedback.show(err.message, 'error');
                 } finally {
                     orderSaving = false;
                     plannedCopyButton.disabled = false;
@@ -5477,6 +5506,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showPlannedSlotDates();
             };
             async function savePlannedOrder() {
+                const feedback = createActionFeedback();
                 const ids = Array.from(plannedRows.querySelectorAll('[data-planned-id]'), row => Number(row.dataset.plannedId));
                 if (ids.every((id, index) => id === Number(data.planned_books[index].PlannedId))) return;
                 orderSaving = true;
@@ -5484,7 +5514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plannedRows.querySelectorAll('button, input').forEach(control => { control.disabled = true; });
                 const status = document.getElementById('planned-copy-status');
                 updatePlannedSelection();
-                status.textContent = '예정 수업 순서를 저장하는 중입니다...';
+                feedback.show('예정 수업 순서를 저장하는 중입니다...', 'info');
                 try {
                     const result = await apiFetch(`/api/user/classes/${classId}/planned-books/order`, {
                         method: 'PUT', body: JSON.stringify({ PlannedIds: ids })
@@ -5495,10 +5525,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         books.get(Number(item.PlannedId)).PlannedDay = item.PlannedDay;
                         plannedRows.querySelector(`[data-planned-id="${Number(item.PlannedId)}"] .planned-book-date`).value = item.PlannedDay || '';
                     });
-                    status.textContent = '예정 수업 순서를 저장했습니다.';
+                    feedback.show('예정 수업 순서를 저장했습니다.', 'info');
                 } catch (err) {
                     restorePlannedOrder();
-                    status.textContent = err.message;
+                    feedback.show(err.message, 'error');
                 } finally {
                     orderSaving = false;
                     plannedCopyButton.disabled = false;
@@ -5559,6 +5589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             modalClassDetailBody.querySelectorAll('.planned-book-date').forEach(input => {
                 input.addEventListener('change', async () => {
+                    const feedback = createActionFeedback();
                     const book = data.planned_books.find(item => Number(item.PlannedId) === Number(input.dataset.id));
                     if (!input.checkValidity()) { input.reportValidity(); return; }
                     input.disabled = true;
@@ -5569,10 +5600,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             method: 'PUT', body: JSON.stringify({ PlannedDay: input.value })
                         });
                         book.PlannedDay = result.PlannedDay;
-                        document.getElementById('planned-copy-status').textContent = '수업 예정일을 저장했습니다.';
+                        feedback.show('수업 예정일을 저장했습니다.', 'success');
                     } catch (err) {
                         input.value = book.PlannedDay || '';
-                        document.getElementById('planned-copy-status').textContent = err.message;
+                        feedback.show(err.message, 'error');
                     } finally {
                         input.disabled = false;
                         plannedCopyButton.disabled = !!modalClassDetailBody.querySelector('.planned-book-date:disabled');
@@ -5582,12 +5613,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             modalClassDetailBody.querySelectorAll('.btn-remove-planned-book').forEach(button => {
                 button.addEventListener('click', async () => {
+                    const feedback = createActionFeedback();
                     button.disabled = true;
                     try {
                         await apiFetch(`/api/user/classes/${classId}/planned-books/${button.dataset.id}`, { method: 'DELETE' });
                         await openClassDetailModal(classId);
                     } catch (err) {
-                        document.getElementById('planned-copy-status').textContent = err.message;
+                        feedback.show(err.message, 'error');
                         button.disabled = false;
                     }
                 });
@@ -5632,7 +5664,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             modalClassDetailBody.innerHTML = `
                 <form id="form-modal-edit-class" class="modal-edit-form">
-                    <div id="modal-class-edit-alert" class="alert hidden"></div>
+
                     <div class="form-section">
                         <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 수업 기본 정보 수정</h4>
                         <div class="form-grid">
@@ -5675,6 +5707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" id="btn-cancel-modal-edit-class" class="btn btn-outline">취소</button>
                         <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 수정 내용 저장</button>
                     </div>
+                    <div id="modal-class-edit-alert" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                 </form>
             `;
             document.getElementById('btn-cancel-modal-edit-class').addEventListener('click', () => openClassDetailModal(classId));
@@ -5746,16 +5779,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleClassDeleteSubmit() {
+        const feedback = createActionFeedback();
         if (btnSubmitClassDeleteConfirm.disabled) return;
         try {
             const result = await apiFetch(`/api/user/classes/${pendingClassDeleteId}`, { method: 'DELETE' });
-            alert(result.message);
+            feedback.show(result.message, 'success');
             modalClassDeleteConfirm.classList.add('hidden');
             modalClassDetail.classList.add('hidden');
             pendingClassDeleteId = null;
             await loadClassSearchResults();
         } catch (err) {
-            alert(err.message);
+            feedback.show(err.message, 'error');
         }
     }
 
@@ -5901,15 +5935,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ).join('');
     }
 
-    function showClassRateMessage(message, isError = false) {
-        const el = document.getElementById('class-rate-msg');
-        if (!el) return;
-        el.className = `alert ${isError ? 'alert-danger' : 'alert-success'}`;
-        el.textContent = message;
-        el.classList.remove('hidden');
-    }
+
 
     async function loadClassRateSettings() {
+        const feedback = createActionFeedback('#rate-category-name');
         try {
             const [categoriesData, ratesData, specialRatesData, classesData] = await Promise.all([
                 apiFetch('/api/user/payroll/categories'), apiFetch('/api/user/payroll/rates'), apiFetch('/api/user/payroll/special-rates'), apiFetch('/api/user/classes?limit=100')
@@ -5931,39 +5960,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const today = new Date().toISOString().slice(0, 10);
             if (!document.getElementById('rate-effective-from').value) document.getElementById('rate-effective-from').value = today;
             if (!document.getElementById('special-rate-date').value) document.getElementById('special-rate-date').value = today;
-        } catch (err) { showClassRateMessage(err.message, true); }
+        } catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function submitClassCategory(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         const name = document.getElementById('rate-category-name').value.trim();
-        try { await apiFetch(`/api/user/payroll/categories?name=${encodeURIComponent(name)}`, { method: 'POST' }); e.target.reset(); showClassRateMessage('수업 카테고리를 등록했습니다.'); await loadClassRateSettings(); }
-        catch (err) { showClassRateMessage(err.message, true); }
+        try { await apiFetch(`/api/user/payroll/categories?name=${encodeURIComponent(name)}`, { method: 'POST' }); e.target.reset(); feedback.show('수업 카테고리를 등록했습니다.', 'success'); await loadClassRateSettings(); }
+        catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function saveClassCategoryAssignment(classId) {
+        const feedback = createActionFeedback(`.btn-save-class-category[data-class-id="${classId}"]`);
         const select = document.querySelector(`.class-category-assignment[data-class-id="${classId}"]`);
         const categoryId = Number(select?.value || 0);
-        if (!categoryId) { showClassRateMessage('저장할 수업 카테고리를 선택해 주세요.', true); return; }
+        if (!categoryId) { feedback.show('저장할 수업 카테고리를 선택해 주세요.', 'error'); return; }
         try {
             const result = await apiFetch(`/api/user/classes/${classId}/category`, { method: 'PUT', body: JSON.stringify({ CategoryId: categoryId }) });
-            showClassRateMessage(result.message);
+            feedback.show(result.message, 'success');
             await loadClassRateSettings();
-        } catch (err) { showClassRateMessage(err.message, true); }
+        } catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function submitClassPayRate(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         const payload = { CategoryId: Number(document.getElementById('rate-category').value), GradeGroup: document.getElementById('rate-grade-group').value, UnitAmount: Number(document.getElementById('rate-unit-amount').value), EffectiveFrom: document.getElementById('rate-effective-from').value };
-        try { await apiFetch('/api/user/payroll/rates', { method: 'POST', body: JSON.stringify(payload) }); showClassRateMessage('일반 수업 단가를 저장했습니다.'); await loadClassRateSettings(); }
-        catch (err) { showClassRateMessage(err.message, true); }
+        try { await apiFetch('/api/user/payroll/rates', { method: 'POST', body: JSON.stringify(payload) }); feedback.show('일반 수업 단가를 저장했습니다.', 'success'); await loadClassRateSettings(); }
+        catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function submitSpecialPayRate(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         const payload = { UnitAmount: Number(document.getElementById('special-rate-amount').value), EffectiveFrom: document.getElementById('special-rate-date').value };
-        try { await apiFetch('/api/user/payroll/special-rates', { method: 'POST', body: JSON.stringify(payload) }); showClassRateMessage('특강 학생수당 단가를 저장했습니다.'); await loadClassRateSettings(); }
-        catch (err) { showClassRateMessage(err.message, true); }
+        try { await apiFetch('/api/user/payroll/special-rates', { method: 'POST', body: JSON.stringify(payload) }); feedback.show('특강 학생수당 단가를 저장했습니다.', 'success'); await loadClassRateSettings(); }
+        catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function loadBatchStudylogCalendar(month = getBatchMonth(batchStudiedDay?.value)) {
@@ -6080,13 +6113,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteBatchCancellation(cancellationId, date) {
-        if (!activeBatchClassId || !window.confirm(`${date} 휴강 등록을 해제하시겠습니까?`)) return;
+        const feedback = createActionFeedback();
+        if (!activeBatchClassId || !(await feedback.confirm(`${date} 휴강 등록을 해제하시겠습니까?`))) return;
         try {
             const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/cancellations/${cancellationId}`, { method: 'DELETE' });
-            alert(result.message);
+            feedback.show(result.message, 'success');
             loadBatchStudylogCalendar(getBatchMonth(date));
         } catch (err) {
-            alert(err.message);
+            feedback.show(err.message, 'error');
         }
     }
 
@@ -6142,19 +6176,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function confirmBatchStudylogDate(classId, date) {
+        const feedback = createActionFeedback('#btn-submit-class-batch');
         const warning = await apiFetch(`/api/user/classes/${classId}/studylog-date-warning?studied_day=${encodeURIComponent(date)}`);
         if (!warning.should_warn) return true;
-        return window.confirm(
-            `날짜를 다시 확인해 주세요.\n\n${warning.two_weeks_ago_day}에는 이 수업 학생의 학습 기록이 ${warning.two_weeks_ago_count}건 있지만, ` +
-            `${warning.previous_week_day}에는 기록이 없습니다.\n\n선택한 ${date}로 일괄 등록하시겠습니까?`
-        );
+        return (await feedback.confirm(`날짜를 다시 확인해 주세요.\n\n${warning.two_weeks_ago_day}에는 이 수업 학생의 학습 기록이 ${warning.two_weeks_ago_count}건 있지만, ` +
+            `${warning.previous_week_day}에는 기록이 없습니다.\n\n선택한 ${date}로 일괄 등록하시겠습니까?`));
     }
 
     // 일괄 학습 기록 등록 제출 (공통 수업 내용, 학생별 참석·특강·메모)
     async function handleBatchStudyLogSubmit(e) {
+        const feedback = createActionFeedback(e);
         e.preventDefault();
         if (classBatchResult) classBatchResult.classList.add('hidden');
-        if (!activeBatchClassId) { alert('먼저 수업을 선택해 주세요.'); return; }
+        if (!activeBatchClassId) { feedback.show('먼저 수업을 선택해 주세요.', 'warning'); return; }
         const isCancelled = !!batchIsCancelled?.checked;
         const dateVal = batchStudiedDay ? batchStudiedDay.value : '';
         if (!dateVal) {
@@ -6165,7 +6199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (isCancelled) {
             const reason = document.getElementById('batch-cancellation-reason')?.value.trim() || '';
-            if (!window.confirm(`${dateVal} 수업을 휴강으로 등록하시겠습니까?\n휴강은 학생별 학습 이력이나 도서 기록을 만들지 않습니다.`)) return;
+            if (!(await feedback.confirm(`${dateVal} 수업을 휴강으로 등록하시겠습니까?\n휴강은 학생별 학습 이력이나 도서 기록을 만들지 않습니다.`))) return;
             try {
                 const result = await apiFetch(`/api/user/classes/${activeBatchClassId}/studylogs`, {
                     method: 'POST',
@@ -6516,6 +6550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadMonthlyReportLogs() {
+        const feedback = createActionFeedback();
         const studentSelect = document.getElementById('monthly-report-student-select');
         const container = document.getElementById('monthly-report-logs-container');
         const dateFromInput = document.getElementById('monthly-report-log-date-from');
@@ -6525,14 +6560,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const studentId = studentSelect.value;
         if (!studentId) {
-            showToast('학생을 선택해 주세요.', 'warning');
+            feedback.show('학생을 선택해 주세요.', 'warning');
             return;
         }
 
         const dateFrom = dateFromInput ? dateFromInput.value : '';
         const dateTo = dateToInput ? dateToInput.value : '';
         if (dateFrom && dateTo && dateFrom > dateTo) {
-            showToast('학습 시작일은 종료일보다 늦을 수 없습니다.', 'warning');
+            feedback.show('학습 시작일은 종료일보다 늦을 수 없습니다.', 'warning');
             return;
         }
 
@@ -6562,6 +6597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             generateMonthlyReportText();
 
         } catch (err) {
+            feedback.show(err.message, 'error');
             container.innerHTML = `<div class="alert alert-danger">학습 기록 로딩 실패: ${err.message}</div>`;
         }
     }
@@ -6672,12 +6708,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveMonthlyReport(status) {
+        const feedback = createActionFeedback();
         const studentId = document.getElementById('monthly-report-student-select')?.value;
         const yearMonth = document.getElementById('monthly-report-year-month')?.value;
         const content = document.getElementById('monthly-report-result-text')?.value.trim();
-        if (!studentId) return showToast('학생을 선택해 주세요.', 'warning');
-        if (!yearMonth) return showToast('저장할 보고 월을 선택해 주세요.', 'warning');
-        if (!content) return showToast('저장할 문자 내용을 입력해 주세요.', 'warning');
+        if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
+        if (!yearMonth) return feedback.show('저장할 보고 월을 선택해 주세요.', 'warning');
+        if (!content) return feedback.show('저장할 문자 내용을 입력해 주세요.', 'warning');
         const buttons = [document.getElementById('btn-save-monthly-draft'), document.getElementById('btn-save-monthly-completed')];
         buttons.forEach(button => { if (button) button.disabled = true; });
         try {
@@ -6693,10 +6730,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
             setMonthlyReportSaveState(data.report);
-            showToast(status === 'completed' ? '월말보고를 저장 완료했습니다.' : '월말보고를 임시 저장했습니다.', 'success');
+            feedback.show(status === 'completed' ? '월말보고를 저장 완료했습니다.' : '월말보고를 임시 저장했습니다.', 'success');
             await loadSavedMonthlyReports();
         } catch (err) {
-            showToast(`월말보고 저장 실패: ${err.message}`, 'error');
+            feedback.show(`월말보고 저장 실패: ${err.message}`, 'error');
         } finally {
             buttons.forEach(button => { if (button) button.disabled = false; });
         }
@@ -6737,6 +6774,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadSavedMonthlyReport(reportId) {
+        const feedback = createActionFeedback();
         try {
             const data = await apiFetch(`/api/user/monthly-reports/${reportId}`);
             const report = data.report;
@@ -6749,9 +6787,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMonthlyReportLogItems(currentMonthlyLogs, true);
             document.getElementById('monthly-report-result-text').value = report.Content || '';
             setMonthlyReportSaveState(report);
-            showToast('저장된 월말보고를 불러왔습니다.', 'success');
+            feedback.show('저장된 월말보고를 불러왔습니다.', 'success');
         } catch (err) {
-            showToast(`월말보고 불러오기 실패: ${err.message}`, 'error');
+            feedback.show(`월말보고 불러오기 실패: ${err.message}`, 'error');
         }
     }
 
@@ -6812,17 +6850,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCopyMonthlyReport = document.getElementById('btn-copy-monthly-report');
     if (btnCopyMonthlyReport) {
         btnCopyMonthlyReport.addEventListener('click', () => {
+            const feedback = createActionFeedback();
             const textarea = document.getElementById('monthly-report-result-text');
             if (!textarea || !textarea.value.trim()) {
-                showToast('복사할 문자 내용이 없습니다.', 'warning');
+                feedback.show('복사할 문자 내용이 없습니다.', 'warning');
                 return;
             }
             navigator.clipboard.writeText(textarea.value).then(() => {
-                showToast('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
+                feedback.show('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
             }).catch(err => {
                 textarea.select();
                 document.execCommand('copy');
-                showToast('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
+                feedback.show('월말 보고 문자가 클립보드에 복사되었습니다!', 'success');
             });
         });
     }
@@ -6892,6 +6931,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadAuditLogs() {
+        const feedback = createActionFeedback();
         const params = new URLSearchParams();
         params.set('page', auditLogPage);
         params.set('limit', auditLogLimit);
@@ -6911,6 +6951,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/admin/audit-logs?${params.toString()}`);
             renderAuditLogs(data);
         } catch (err) {
+            feedback.show(err.message, 'error');
             auditLogBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
     }
@@ -7043,6 +7084,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('monthly-report-result-text')?.addEventListener('input', () => setMonthlyReportSaveState(null));
 
     async function loadTuitionPaymentView() {
+        const feedback = createActionFeedback('#tuition-student-search');
         const studentInput = document.getElementById('tuition-student-search');
         if (!studentInput) return;
         if (!document.getElementById('tuition-start-date').value) {
@@ -7054,7 +7096,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const settingData = await apiFetch('/api/user/tuition-fee-settings');
             tuitionSettingsCache = settingData.settings || [];
             await loadTuitionPayments();
-        } catch (err) { showToast(`기본 수업료를 불러오지 못했습니다: ${err.message}`, 'error'); }
+        } catch (err) { feedback.show(`기본 수업료를 불러오지 못했습니다: ${err.message}`, 'error'); }
     }
 
     async function searchTuitionStudents() {
@@ -7108,6 +7150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadTuitionPayments() {
+        const feedback = createActionFeedback();
         const body = document.getElementById('tuition-payments-body');
         if (!body) return;
         try {
@@ -7117,10 +7160,12 @@ document.addEventListener('DOMContentLoaded', () => {
             body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
             body.querySelectorAll('.btn-edit-tuition').forEach(btn => btn.addEventListener('click', () => editTuitionPayment(btn.dataset.id)));
             body.querySelectorAll('.btn-delete-tuition').forEach(btn => btn.addEventListener('click', async () => {
-                if (!confirm('이 결제 정보를 삭제하시겠습니까?')) return;
-                try { await apiFetch(`/api/user/tuition-payments/${btn.dataset.id}`, { method: 'DELETE' }); await loadTuitionPayments(); showToast('결제 정보가 삭제되었습니다.', 'success'); } catch (err) { alert(err.message); }
+                const feedback = createActionFeedback();
+                if (!(await feedback.confirm('이 결제 정보를 삭제하시겠습니까?'))) return;
+                try { await apiFetch(`/api/user/tuition-payments/${btn.dataset.id}`, { method: 'DELETE' }); await loadTuitionPayments(); feedback.show('결제 정보가 삭제되었습니다.', 'success'); } catch (err) { feedback.show(err.message, 'error'); }
             }));
-        } catch (err) { body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
+        } catch (err) {
+            feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     async function editTuitionPayment(id) {
@@ -7128,6 +7173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadTuitionFeeSettings() {
+        const feedback = createActionFeedback();
         const body = document.getElementById('tuition-settings-body');
         if (!body) return;
         try {
@@ -7138,7 +7184,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fee = setting ? Number(setting.DefaultFee).toLocaleString('ko-KR') : '';
                 return `<tr><td>${type}</td><td>${lessons}차시</td><td><div class="currency-input-wrap"><input class="form-control tuition-setting-fee currency-input" type="text" inputmode="numeric" value="${fee}" data-class-type="${type}" data-paid-lessons="${lessons}" placeholder="금액 입력"><span>원</span></div></td></tr>`;
             })).join('');
-        } catch (err) { body.innerHTML = `<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`; }
+        } catch (err) {
+            feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     document.getElementById('tuition-class-type')?.addEventListener('change', applyDefaultTuitionFee);
@@ -7162,6 +7209,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function loadTuitionPaymentSearch() {
+        const feedback = createActionFeedback();
         const body = document.getElementById('tuition-search-body');
         if (!body) return;
         const q = document.getElementById('tuition-search-q').value.trim();
@@ -7172,7 +7220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const rows = data.payments || [];
             body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
-        } catch (err) { body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
+        } catch (err) {
+            feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
 
     function renderTuitionPaymentDetail(payment, id) {
@@ -7232,6 +7281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         document.getElementById('btn-cancel-edit-tuition').addEventListener('click', () => renderTuitionPaymentDetail(payment, id));
         document.getElementById('form-edit-tuition-payment').addEventListener('submit', async event => {
+            const feedback = createActionFeedback(event);
             event.preventDefault();
             const payload = {
                 StudentId: Number(payment.StudentId),
@@ -7245,11 +7295,11 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             try {
                 await apiFetch(`/api/user/tuition-payments/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-                showToast('결제 정보가 수정되었습니다.', 'success');
+                feedback.show('결제 정보가 수정되었습니다.', 'success');
                 await Promise.all([loadTuitionPayments(), loadTuitionPaymentSearch()]);
                 await showTuitionPaymentDetail(id);
             } catch (err) {
-                showToast(err.message, 'error');
+                feedback.show(err.message, 'error');
             }
         });
     }
@@ -7524,9 +7574,11 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.remove('hidden');
         card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    document.getElementById('btn-load-payroll')?.addEventListener('click', () => loadTeacherPayroll().catch(e => alert(e.message)));
-    document.getElementById('payroll-teacher')?.addEventListener('change', () => { resetPayrollClaimForm(); loadTeacherPayroll().catch(e => alert(e.message)); });
-    document.getElementById('payroll-month')?.addEventListener('change', () => { resetPayrollClaimForm(); loadTeacherPayroll().catch(e => alert(e.message)); });
+    document.getElementById('btn-load-payroll')?.addEventListener('click', () => { const feedback = createActionFeedback('#btn-load-payroll'); loadTeacherPayroll().catch(e => feedback.show(e.message, 'error')); });
+    document.getElementById('payroll-teacher')?.addEventListener('change', () => {
+        const feedback = createActionFeedback(); resetPayrollClaimForm(); loadTeacherPayroll().catch(e => feedback.show(e.message, 'error')); });
+    document.getElementById('payroll-month')?.addEventListener('change', () => {
+        const feedback = createActionFeedback(); resetPayrollClaimForm(); loadTeacherPayroll().catch(e => feedback.show(e.message, 'error')); });
     document.getElementById('payroll-transfer-teacher')?.addEventListener('change', updatePayrollTransferSelection);
     document.getElementById('view-teacher-payroll')?.addEventListener('change', event => {
         const checkbox = event.target.closest('.payroll-session-transfer-checkbox');
@@ -7547,13 +7599,15 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePayrollTransferSelection();
     });
     document.getElementById('btn-transfer-payroll-sessions')?.addEventListener('click', async () => {
+        const feedback = createActionFeedback();
+        try {
         const month = document.getElementById('payroll-month').value;
         const sourceTeacher = document.getElementById('payroll-teacher').value.trim();
         const targetTeacher = document.getElementById('payroll-transfer-teacher').value.trim();
         const sessions = [...payrollSelectedSessions.values()];
         if (!month || !sourceTeacher || !targetTeacher || !sessions.length) return;
         const sessionSummary = sessions.map(item => `${item.ClassName} ${item.StudiedDay}`).join('\n');
-        if (!confirm(`${sourceTeacher} 선생님의 아래 ${sessions.length}개 차시를 ${targetTeacher} 선생님에게 이전할까요?\n\n${sessionSummary}\n\n이전 즉시 두 선생님의 정산 금액이 다시 계산됩니다.`)) return;
+        if (!(await feedback.confirm(`${sourceTeacher} 선생님의 아래 ${sessions.length}개 차시를 ${targetTeacher} 선생님에게 이전할까요?\n\n${sessionSummary}\n\n이전 즉시 두 선생님의 정산 금액이 다시 계산됩니다.`))) return;
         const result = await apiFetch('/api/user/payroll/transfer-sessions', {
             method: 'POST',
             body: JSON.stringify({
@@ -7563,8 +7617,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 Sessions: sessions.map(({ ClassId, StudiedDay }) => ({ ClassId, StudiedDay }))
             })
         });
-        showToast(result.message, 'success');
+        feedback.show(result.message, 'success');
         await loadTeacherPayroll();
+        } catch (err) { feedback.show(err.message, 'error'); }
     });
     async function initUtilitiesView() {
         const month = document.getElementById('utility-backfill-month');
@@ -7612,11 +7667,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadStudyLogCsvRuns() {
+        const feedback = createActionFeedback();
         const body = document.getElementById('studylog-csv-runs-body');
         try {
             const data = await apiFetch('/api/user/utilities/studylog-csv/runs');
             body.innerHTML = data.runs.length ? data.runs.map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(run.username)}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
-        } catch (error) { body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`; }
+        } catch (error) {
+            feedback.show(error.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`; }
     }
 
     document.getElementById('studylog-csv-runs-body')?.addEventListener('click', async event => {
@@ -7629,21 +7686,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-preview-studylog-csv')?.addEventListener('click', async () => {
-        const file = document.getElementById('studylog-csv-file').files[0];
-        if (!file) return showToast('CSV 파일을 선택해 주세요.', 'warning');
-        const bytes = await file.arrayBuffer();
-        let text = new TextDecoder('utf-8').decode(bytes);
-        if (text.includes('\uFFFD')) text = new TextDecoder('euc-kr').decode(bytes);
-        const parsed = parseCsvText(text.replace(/^\uFEFF/, ''));
-        const headers = (parsed.shift() || []).map(value => value.trim());
-        const required = ['이름', '도서', '일자', '수업기록'];
-        if (!required.every(name => headers.includes(name))) return showToast('CSV 헤더는 이름, 도서, 일자, 수업기록이어야 합니다.', 'error');
-        const indexes = Object.fromEntries(required.map(name => [name, headers.indexOf(name)]));
-        const rows = parsed.map((values, index) => ({ row_number: index + 2, student_name: (values[indexes['이름']] || '').trim(), book_title: (values[indexes['도서']] || '').trim(), studied_day: (values[indexes['일자']] || '').trim(), lesson_content: (values[indexes['수업기록']] || '').trim() })).filter(row => row.student_name || row.book_title || row.studied_day || row.lesson_content);
-        if (!rows.length) return showToast('가져올 데이터 행이 없습니다.', 'warning');
-        studyLogCsvFileName = file.name;
-        studyLogCsvPreview = await apiFetch('/api/user/utilities/studylog-csv/preview', { method: 'POST', body: JSON.stringify({ source_file: file.name, rows }) });
-        renderStudyLogCsvPreview();
+        const feedback = createActionFeedback();
+        try {
+            const file = document.getElementById('studylog-csv-file').files[0];
+            if (!file) return feedback.show('CSV 파일을 선택해 주세요.', 'warning');
+            const bytes = await file.arrayBuffer();
+            let text = new TextDecoder('utf-8').decode(bytes);
+            if (text.includes('\uFFFD')) text = new TextDecoder('euc-kr').decode(bytes);
+            const parsed = parseCsvText(text.replace(/^\uFEFF/, ''));
+            const headers = (parsed.shift() || []).map(value => value.trim());
+            const required = ['이름', '도서', '일자', '수업기록'];
+            if (!required.every(name => headers.includes(name))) return feedback.show('CSV 헤더는 이름, 도서, 일자, 수업기록이어야 합니다.', 'error');
+            const indexes = Object.fromEntries(required.map(name => [name, headers.indexOf(name)]));
+            const rows = parsed.map((values, index) => ({ row_number: index + 2, student_name: (values[indexes['이름']] || '').trim(), book_title: (values[indexes['도서']] || '').trim(), studied_day: (values[indexes['일자']] || '').trim(), lesson_content: (values[indexes['수업기록']] || '').trim() })).filter(row => row.student_name || row.book_title || row.studied_day || row.lesson_content);
+            if (!rows.length) return feedback.show('가져올 데이터 행이 없습니다.', 'warning');
+            studyLogCsvFileName = file.name;
+            studyLogCsvPreview = await apiFetch('/api/user/utilities/studylog-csv/preview', { method: 'POST', body: JSON.stringify({ source_file: file.name, rows }) });
+            renderStudyLogCsvPreview();
+        } catch (err) { feedback.show(err.message, 'error'); }
     });
 
     document.getElementById('studylog-csv-preview-body')?.addEventListener('change', event => {
@@ -7658,20 +7718,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-import-studylog-csv')?.addEventListener('click', async () => {
-        const rows = studyLogCsvPreview?.rows || [];
-        const readyCount = rows.filter(row => row.ready).length;
-        if (!readyCount || !confirm(`등록 가능한 ${readyCount}건을 학습 기록에 추가할까요?\n\n확인 필요 ${rows.length - readyCount}건은 실패 사유와 함께 실행 이력에 남습니다. 수업·정산·실제 진행 선생님에는 연결되지 않습니다.`)) return;
-        const button = document.getElementById('btn-import-studylog-csv');
-        button.disabled = true;
-        const result = await apiFetch('/api/user/utilities/studylog-csv/import', { method: 'POST', body: JSON.stringify({ source_file: studyLogCsvFileName, rows }) });
-        showToast(result.message, result.failure_count ? 'warning' : 'success');
-        document.getElementById('studylog-csv-summary').textContent = `실행 완료 · 성공 ${result.success_count}건 · 실패 ${result.failure_count}건 (실행 #${result.run_id})`;
-        await loadStudyLogCsvRuns();
-        studyLogCsvPreview = null;
-        document.getElementById('studylog-csv-preview-card').classList.add('hidden');
+        const feedback = createActionFeedback();
+        try {
+            const rows = studyLogCsvPreview?.rows || [];
+            const readyCount = rows.filter(row => row.ready).length;
+            if (!readyCount || !(await feedback.confirm(`등록 가능한 ${readyCount}건을 학습 기록에 추가할까요?\n\n확인 필요 ${rows.length - readyCount}건은 실패 사유와 함께 실행 이력에 남습니다. 수업·정산·실제 진행 선생님에는 연결되지 않습니다.`))) return;
+            const button = document.getElementById('btn-import-studylog-csv');
+            button.disabled = true;
+            const result = await apiFetch('/api/user/utilities/studylog-csv/import', { method: 'POST', body: JSON.stringify({ source_file: studyLogCsvFileName, rows }) });
+            feedback.show(result.message, result.failure_count ? 'warning' : 'success');
+            document.getElementById('studylog-csv-summary').textContent = `실행 완료 · 성공 ${result.success_count}건 · 실패 ${result.failure_count}건 (실행 #${result.run_id})`;
+            await loadStudyLogCsvRuns();
+            studyLogCsvPreview = null;
+            document.getElementById('studylog-csv-preview-card').classList.add('hidden');
+        } catch (err) {
+            document.getElementById('btn-import-studylog-csv').disabled = false;
+            feedback.show(err.message, 'error');
+        }
     });
 
     async function loadDuplicateBooksPreview() {
+        const feedback = createActionFeedback();
         const summary = document.getElementById('duplicate-books-summary');
         const mergeButton = document.getElementById('btn-merge-duplicate-books');
         const previewCard = document.getElementById('duplicate-books-preview-card');
@@ -7698,6 +7765,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewCard.classList.remove('hidden');
             }
         } catch (error) {
+            feedback.show(error.message, 'error');
             duplicateBooksPreviewData = null;
             summary.textContent = error.message;
         }
@@ -7705,58 +7773,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-refresh-duplicate-books')?.addEventListener('click', () => loadDuplicateBooksPreview());
     document.getElementById('btn-backfill-payroll-class-links')?.addEventListener('click', async () => {
-        const month = document.getElementById('utility-backfill-month').value;
-        if (!month || !confirm(`${month}의 수업 연결이 비어 있는 학습 이력을 자동 연결할까요?\n\n학생별 일반/특강 수업이 각각 정확히 하나인 경우에만 처리하며, 기존 연결은 변경하지 않습니다.`)) return;
-        const result = await apiFetch(`/api/user/payroll/backfill-class-links?month=${encodeURIComponent(month)}`, { method: 'POST' });
-        showToast(`${result.message}${result.unmatched_count ? ` 자동 연결하지 않은 기록 ${result.unmatched_count}건` : ''}`, result.linked_count ? 'success' : 'info');
+        const feedback = createActionFeedback();
+        try {
+            const month = document.getElementById('utility-backfill-month').value;
+            if (!month || !(await feedback.confirm(`${month}의 수업 연결이 비어 있는 학습 이력을 자동 연결할까요?\n\n학생별 일반/특강 수업이 각각 정확히 하나인 경우에만 처리하며, 기존 연결은 변경하지 않습니다.`))) return;
+            const result = await apiFetch(`/api/user/payroll/backfill-class-links?month=${encodeURIComponent(month)}`, { method: 'POST' });
+            feedback.show(`${result.message}${result.unmatched_count ? ` 자동 연결하지 않은 기록 ${result.unmatched_count}건` : ''}`, result.linked_count ? 'success' : 'info');
+        } catch (err) { feedback.show(err.message, 'error'); }
     });
     document.getElementById('btn-merge-duplicate-books')?.addEventListener('click', async () => {
-        const preview = duplicateBooksPreviewData;
-        if (!preview?.duplicate_count) return;
-        if (!confirm(`표시된 수정 목록대로 병합할까요?\n\n중복 그룹: ${preview.group_count}개\n삭제될 도서: ${preview.duplicate_count}권\n수정될 참조: ${preview.reference_count}건\n\n가장 오래된 도서를 남기며, 이 작업은 되돌릴 수 없습니다.`)) return;
-        const button = document.getElementById('btn-merge-duplicate-books');
-        button.disabled = true;
-        const result = await apiFetch('/api/user/utilities/merge-duplicate-books', { method: 'POST' });
-        showToast(result.message, result.deleted_count ? 'success' : 'info');
-        await loadDuplicateBooksPreview();
+        const feedback = createActionFeedback();
+        try {
+            const preview = duplicateBooksPreviewData;
+            if (!preview?.duplicate_count) return;
+            if (!(await feedback.confirm(`표시된 수정 목록대로 병합할까요?\n\n중복 그룹: ${preview.group_count}개\n삭제될 도서: ${preview.duplicate_count}권\n수정될 참조: ${preview.reference_count}건\n\n가장 오래된 도서를 남기며, 이 작업은 되돌릴 수 없습니다.`))) return;
+            const button = document.getElementById('btn-merge-duplicate-books');
+            button.disabled = true;
+            const result = await apiFetch('/api/user/utilities/merge-duplicate-books', { method: 'POST' });
+            feedback.show(result.message, result.deleted_count ? 'success' : 'info');
+            await loadDuplicateBooksPreview();
+        } catch (err) {
+            document.getElementById('btn-merge-duplicate-books').disabled = false;
+            feedback.show(err.message, 'error');
+        }
     });
-    document.getElementById('btn-close-payroll')?.addEventListener('click', async () => { const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`)) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll(); });
+    document.getElementById('btn-close-payroll')?.addEventListener('click', async () => {
+        const feedback = createActionFeedback();
+        try {
+            const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !(await feedback.confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`))) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll();
+        } catch (err) { feedback.show(err.message, 'error'); }
+    });
     document.getElementById('btn-cancel-payroll-claim-edit')?.addEventListener('click', resetPayrollClaimForm);
     document.getElementById('payroll-claims-body')?.addEventListener('click', async event => {
-        const editButton = event.target.closest('.btn-edit-payroll-claim');
-        const deleteButton = event.target.closest('.btn-delete-payroll-claim');
-        const claimId = Number((editButton || deleteButton)?.dataset.id);
-        const claim = payrollClaimsById.get(claimId);
-        if (!claim) return;
-        if (editButton) {
-            startPayrollClaimEdit(claim);
-            return;
-        }
-        if (!confirm(`${claim.TeacherUsername} 선생님의 '${claim.ItemName}' 추가 청구를 삭제할까요?\n\n삭제 즉시 정산 합계에서 제외됩니다.`)) return;
-        const result = await apiFetch(`/api/user/payroll/claims/${claimId}`, { method: 'DELETE' });
-        if (Number(document.getElementById('payroll-claim-id').value) === claimId) resetPayrollClaimForm();
-        await loadTeacherPayroll();
-        showToast(result.message, 'success');
+        const feedback = createActionFeedback(event);
+        try {
+            const editButton = event.target.closest('.btn-edit-payroll-claim');
+            const deleteButton = event.target.closest('.btn-delete-payroll-claim');
+            const claimId = Number((editButton || deleteButton)?.dataset.id);
+            const claim = payrollClaimsById.get(claimId);
+            if (!claim) return;
+            if (editButton) {
+                startPayrollClaimEdit(claim);
+                return;
+            }
+            if (!(await feedback.confirm(`${claim.TeacherUsername} 선생님의 '${claim.ItemName}' 추가 청구를 삭제할까요?\n\n삭제 즉시 정산 합계에서 제외됩니다.`))) return;
+            const result = await apiFetch(`/api/user/payroll/claims/${claimId}`, { method: 'DELETE' });
+            if (Number(document.getElementById('payroll-claim-id').value) === claimId) resetPayrollClaimForm();
+            await loadTeacherPayroll();
+            feedback.show(result.message, 'success');
+        } catch (err) { feedback.show(err.message, 'error'); }
     });
     document.getElementById('form-payroll-claim')?.addEventListener('submit', async e => {
-        e.preventDefault();
-        const claimId = document.getElementById('payroll-claim-id').value;
-        const selectedTeacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : currentUser.username;
-        const payload = {
-            PayrollMonth: document.getElementById('payroll-month').value,
-            ClaimDate: document.getElementById('payroll-claim-date').value,
-            ItemName: document.getElementById('payroll-claim-name').value,
-            Amount: Number(document.getElementById('payroll-claim-amount').value),
-            Description: document.getElementById('payroll-claim-description').value,
-            TeacherUsername: payrollEditingClaimTeacher || selectedTeacher
-        };
-        const result = await apiFetch(claimId ? `/api/user/payroll/claims/${claimId}` : '/api/user/payroll/claims', {
-            method: claimId ? 'PUT' : 'POST',
-            body: JSON.stringify(payload)
-        });
-        resetPayrollClaimForm();
-        await loadTeacherPayroll();
-        showToast(result.message, 'success');
+        const feedback = createActionFeedback(e);
+        try {
+            e.preventDefault();
+            const claimId = document.getElementById('payroll-claim-id').value;
+            const selectedTeacher = isStaff() ? document.getElementById('payroll-teacher').value.trim() : currentUser.username;
+            const payload = {
+                PayrollMonth: document.getElementById('payroll-month').value,
+                ClaimDate: document.getElementById('payroll-claim-date').value,
+                ItemName: document.getElementById('payroll-claim-name').value,
+                Amount: Number(document.getElementById('payroll-claim-amount').value),
+                Description: document.getElementById('payroll-claim-description').value,
+                TeacherUsername: payrollEditingClaimTeacher || selectedTeacher
+            };
+            const result = await apiFetch(claimId ? `/api/user/payroll/claims/${claimId}` : '/api/user/payroll/claims', {
+                method: claimId ? 'PUT' : 'POST',
+                body: JSON.stringify(payload)
+            });
+            resetPayrollClaimForm();
+            await loadTeacherPayroll();
+            feedback.show(result.message, 'success');
+        } catch (err) { feedback.show(err.message, 'error'); }
     });
 
     /* 모든 목록 테이블 공통 정렬 */
@@ -7932,6 +8020,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadActivityLogs(page = 1) {
+        const feedback = createActionFeedback();
         if (!isAdmin()) return;
         const version = ++activityVersion;
         const params = new URLSearchParams({page, limit: 30});
@@ -7960,6 +8049,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activityEl('next').disabled = activityPage >= activityTotalPages;
         } catch (err) {
             if (version !== activityVersion) return;
+            feedback.show(err.message, 'error');
             activityItems = [];
             activityEl('summary').textContent = err.message;
             activityEl('body').innerHTML = '<tr><td colspan="7" class="empty-state">조회하지 못했습니다. 필터를 확인한 뒤 다시 조회해 주세요.</td></tr>';

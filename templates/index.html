@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260907-inline-planned-picker">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260907-action-feedback">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -223,10 +223,12 @@
 
                 <section id="view-book-material-request" class="workspace-view"><div class="book-search-layout">
                     <div class="card form-card"><div class="card-header-styled"><div><h3><i class="fa-solid fa-file-circle-plus"></i> 도서·자료 등록 요청</h3><p class="subtitle">승인되면 도서에 반영되고 승인일 기준 월의 자료 제작 정산에 포함됩니다.</p></div></div>
-                    <form id="form-book-material-request" class="book-form"><div class="form-section"><div class="form-grid"><div class="form-group"><label>요청 유형</label><select id="material-request-type" class="form-control"><option value="material_add">기존 도서 자료 추가</option><option value="new_book">새 도서 등록</option></select></div><div class="form-group"><label>도서 분류</label><select id="material-book-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div></div></div><div id="material-existing-book-fields" class="form-section"><div class="form-group"><label>대상 도서 번호</label><input id="material-book-id" type="number" min="1" class="form-control" placeholder="도서 검색 목록의 번호"></div></div><div id="material-new-book-fields" class="form-section hidden"><div class="form-grid"><div class="form-group"><label>도서명</label><input id="material-new-title" class="form-control"></div><div class="form-group"><label>저자</label><input id="material-new-author" class="form-control"></div><div class="form-group"><label>출판사</label><input id="material-new-publisher" class="form-control"></div></div></div><div class="form-section"><h4 class="section-title">추가할 자료 종류</h4><div class="checkbox-grid"><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasQuiz"><span>어휘 퀴즈</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingQuestion"><span>독서 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingAnswer"><span>독서 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingQuestion"><span>글쓰기 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingAnswer"><span>글쓰기 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasAdvancedMaterial"><span>심화 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasDebateMaterial"><span>토론 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="IsPdfExist"><span>PDF 파일</span></label></div></div><div id="book-material-request-msg" class="alert hidden"></div><div class="form-submit-actions"><button class="btn btn-success btn-lg" type="submit">승인 요청 등록</button></div></form></div>
+                    <form id="form-book-material-request" class="book-form"><div class="form-section"><div class="form-grid"><div class="form-group"><label>요청 유형</label><select id="material-request-type" class="form-control"><option value="material_add">기존 도서 자료 추가</option><option value="new_book">새 도서 등록</option></select></div><div class="form-group"><label>도서 분류</label><select id="material-book-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div></div></div><div id="material-existing-book-fields" class="form-section"><div class="form-group"><label>대상 도서 번호</label><input id="material-book-id" type="number" min="1" class="form-control" placeholder="도서 검색 목록의 번호"></div></div><div id="material-new-book-fields" class="form-section hidden"><div class="form-grid"><div class="form-group"><label>도서명</label><input id="material-new-title" class="form-control"></div><div class="form-group"><label>저자</label><input id="material-new-author" class="form-control"></div><div class="form-group"><label>출판사</label><input id="material-new-publisher" class="form-control"></div></div></div><div class="form-section"><h4 class="section-title">추가할 자료 종류</h4><div class="checkbox-grid"><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasQuiz"><span>어휘 퀴즈</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingQuestion"><span>독서 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingAnswer"><span>독서 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingQuestion"><span>글쓰기 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingAnswer"><span>글쓰기 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasAdvancedMaterial"><span>심화 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasDebateMaterial"><span>토론 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="IsPdfExist"><span>PDF 파일</span></label></div></div><div class="form-submit-actions"><button class="btn btn-success btn-lg" type="submit">승인 요청 등록</button></div><div id="book-material-request-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
+</form></div>
                     <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리 내용</th></tr></thead><tbody id="book-material-request-body"></tbody></table></div></div></div></section>
                 <section id="view-book-material-review" class="workspace-view"><div class="book-search-layout"><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>요청자</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리</th></tr></thead><tbody id="book-material-review-body"></tbody></table></div></div></div></section>
-                <section id="view-book-material-rates" class="workspace-view"><div class="book-search-layout"><div class="card form-card"><form id="form-book-material-rate" class="book-form"><div class="form-grid"><div class="form-group"><label>도서 분류</label><select id="material-rate-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div><div class="form-group"><label>단가</label><input id="material-rate-amount" type="number" min="0" class="form-control" required></div><div class="form-group"><label>적용 시작일</label><input id="material-rate-date" type="date" class="form-control" required></div></div><div id="book-material-rate-msg" class="alert hidden"></div><div class="form-submit-actions"><button class="btn btn-primary" type="submit">단가 저장</button></div></form></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>분류</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="book-material-rate-body"></tbody></table></div></div></div></section>
+                <section id="view-book-material-rates" class="workspace-view"><div class="book-search-layout"><div class="card form-card"><form id="form-book-material-rate" class="book-form"><div class="form-grid"><div class="form-group"><label>도서 분류</label><select id="material-rate-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div><div class="form-group"><label>단가</label><input id="material-rate-amount" type="number" min="0" class="form-control" required></div><div class="form-group"><label>적용 시작일</label><input id="material-rate-date" type="date" class="form-control" required></div></div><div class="form-submit-actions"><button class="btn btn-primary" type="submit">단가 저장</button></div><div id="book-material-rate-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
+</form></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>분류</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="book-material-rate-body"></tbody></table></div></div></div></section>
 
                 <!-- View 1: User Book Registration Form -->
                 <section id="view-book-reg" class="workspace-view">
@@ -389,7 +391,7 @@
                                     </div>
                                 </div>
 
-                                <div id="user-book-msg" class="alert hidden"></div>
+
 
                                 <div class="form-submit-actions">
                                     <button type="button" id="btn-reset-book-form" class="btn btn-outline">
@@ -399,6 +401,7 @@
                                         <i class="fa-solid fa-paper-plane"></i> 새 도서 등록하기
                                     </button>
                                 </div>
+                                <div id="user-book-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
 
@@ -661,7 +664,7 @@
                                     </div>
                                 </div>
 
-                                <div id="user-student-msg" class="alert hidden"></div>
+
 
                                 <div class="form-submit-actions">
                                     <button type="button" id="btn-reset-student-form" class="btn btn-outline">
@@ -671,6 +674,7 @@
                                         <i class="fa-solid fa-user-check"></i> 새 학생 등록하기
                                     </button>
                                 </div>
+                                <div id="user-student-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
 
@@ -791,7 +795,7 @@
                             </div>
 
                             <form id="form-user-studylog-reg" class="book-form">
-                                <div id="user-studylog-msg" class="alert hidden"></div>
+
 
                                 <!-- Section 1: 담당 수업 및 정산 연결 -->
                                 <div class="form-section">
@@ -896,6 +900,7 @@
                                         <i class="fa-solid fa-floppy-disk"></i> 새 학습 기록 수록하기
                                     </button>
                                 </div>
+                                <div id="user-studylog-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
 
@@ -1593,7 +1598,7 @@
                             </div>
 
                             <form id="form-user-class-reg" class="book-form">
-                                <div id="class-reg-msg" class="alert hidden"></div>
+
 
                                 <div class="form-section">
                                     <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 수업 기본 정보</h4>
@@ -1658,6 +1663,7 @@
                                         <i class="fa-solid fa-paper-plane"></i> 새 수업 등록하기
                                     </button>
                                 </div>
+                                <div id="class-reg-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
 
@@ -1682,7 +1688,7 @@
                         <div class="card search-filter-card">
                             <div class="card-header-styled"><h3><i class="fa-solid fa-won-sign"></i> 학생 수업료 결제 등록</h3></div>
                             <form id="form-tuition-payment" class="book-form">
-                                <div id="tuition-payment-msg" class="alert hidden"></div>
+
                                 <div class="form-grid">
                                     <div class="form-group"><label for="tuition-student-search">학생 <span class="required">*</span></label><input id="tuition-student" type="hidden"><div class="picker-input-group"><input id="tuition-student-search" class="form-control" type="search" placeholder="학생 이름을 입력해 검색하세요" autocomplete="off"></div><div id="tuition-student-results" class="picker-results-container hidden"></div><div id="tuition-selected-student" class="text-muted">학생을 검색해 선택해 주세요.</div></div>
                                     <div class="form-group"><label for="tuition-class-type">반 정보 <span class="required">*</span></label><select id="tuition-class-type" class="form-control" required><option value="">-- 반 선택 --</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select></div>
@@ -1695,6 +1701,7 @@
                                 </div>
                                 <div id="tuition-progress-preview" class="alert alert-info hidden"></div>
                                 <div class="form-actions"><button class="btn btn-success btn-lg" type="submit"><i class="fa-solid fa-floppy-disk"></i> 결제 정보 등록</button></div>
+                                <div id="tuition-payment-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
                         <div class="card table-card tuition-payment-history-card"><div class="table-card-header"><h2><i class="fa-solid fa-clock-rotate-left"></i> 결제 이력</h2></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>관리</th></tr></thead><tbody id="tuition-payments-body"></tbody></table></div></div>
@@ -1705,8 +1712,8 @@
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
                             <div class="card-header-styled"><div><h3><i class="fa-solid fa-tags"></i> 수업 카테고리</h3><p class="subtitle">수업 등록 시 선택할 카테고리를 등록하고 조회합니다.</p></div></div>
-                            <form id="form-class-category" class="settings-inline-form"><div class="form-group"><label for="rate-category-name">카테고리명</label><input id="rate-category-name" class="form-control" required placeholder="예: 독서 토론"></div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-plus"></i> 등록</button></form>
-                            <div id="class-rate-msg" class="alert hidden"></div>
+                            <form id="form-class-category" class="settings-inline-form"><div class="form-group"><label for="rate-category-name">카테고리명</label><input id="rate-category-name" class="form-control" required placeholder="예: 독서 토론"></div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-plus"></i> 등록</button>
+</form>
                             <div id="class-category-list" class="settings-chip-list"></div>
                         </div>
                         <div class="card search-filter-card">
@@ -1892,13 +1899,14 @@
                                     <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.4rem;">결석 학생은 <strong>참석</strong> 체크를 해제하세요. 특강은 수업 등록 시 설정한 학생에게 미리 체크되어 있으며, 필요 시 변경할 수 있습니다 (기본값: 일반 수업).</div>
                                 </div>
 
-                                <div id="class-batch-result" class="alert hidden"></div>
+
 
                                 <div class="form-submit-actions">
                                     <button type="submit" id="btn-submit-class-batch" class="btn btn-success btn-lg btn-glow">
                                         <i class="fa-solid fa-floppy-disk"></i> 선택 학생 학습 기록 일괄 등록
                                     </button>
                                 </div>
+                                <div id="class-batch-result" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                             </form>
                         </div>
                     </div>
@@ -1927,10 +1935,11 @@
                         <label for="login-password"><i class="fa-solid fa-lock"></i> 비밀번호</label>
                         <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력" required>
                     </div>
-                    <div id="login-error-msg" class="alert alert-danger hidden"></div>
+
                     <button type="submit" class="btn btn-primary btn-block btn-lg">
                         <i class="fa-solid fa-right-to-bracket"></i> 로그인
                     </button>
+                    <div id="login-error-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert alert-danger hidden"></div>
                 </form>
 
                 <div class="login-hints">
@@ -2144,11 +2153,12 @@
                     <div id="dynamic-form-fields" class="form-fields-grid">
                         <!-- Dynamic Input Controls -->
                     </div>
-                    <div id="crud-error-msg" class="alert alert-danger hidden"></div>
+
                     <div class="modal-actions">
                         <button type="button" id="btn-cancel-crud" class="btn btn-outline">취소</button>
                         <button type="submit" id="btn-save-crud" class="btn btn-primary"><i class="fa-solid fa-check"></i> 저장</button>
                     </div>
+                    <div id="crud-error-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert alert-danger hidden"></div>
                 </form>
             </div>
         </div>
@@ -2163,7 +2173,7 @@
             </div>
             <div class="modal-body">
                 <form id="form-user-create">
-                    <div id="user-create-msg" class="alert hidden"></div>
+
                     <div class="form-group">
                         <label for="input-user-create-username">아이디</label>
                         <input type="text" id="input-user-create-username" class="form-control" placeholder="발급할 계정의 아이디를 입력하세요" required autocomplete="off">
@@ -2186,6 +2196,7 @@
                             <i class="fa-solid fa-paper-plane"></i> 발급하기
                         </button>
                     </div>
+                    <div id="user-create-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                 </form>
             </div>
         </div>
@@ -2200,7 +2211,7 @@
             </div>
             <div class="modal-body">
                 <form id="form-user-password">
-                    <div id="user-pw-msg" class="alert hidden"></div>
+
                     <div class="form-group">
                         <label>대상 계정</label>
                         <p style="font-size: 1.05rem; font-weight: 700; color: var(--primary);">
@@ -2217,6 +2228,7 @@
                             <i class="fa-solid fa-rotate"></i> 초기화
                         </button>
                     </div>
+                    <div id="user-pw-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
                 </form>
             </div>
         </div>
@@ -2338,6 +2350,7 @@
         <div class="activity-detail-header"><h3 id="activity-detail-title">활동 상세</h3><button id="activity-detail-close" class="btn btn-outline" autofocus>닫기</button></div>
         <dl id="activity-detail-body"></dl>
     </dialog>
-    <script src="/static/js/app.js?v=20260907-inline-planned-picker"></script>
+    <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
+    <script src="/static/js/app.js?v=20260907-action-feedback"></script>
 </body>
 </html>
