@@ -517,11 +517,14 @@ def user_register_book(
     payload: UserBookRegisterRequest,
     current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
-    if not payload.Title or not payload.Title.strip():
-        raise HTTPException(status_code=400, detail="도서명(Title)은 필수 입력 항목입니다.")
+    for field, label in (("Title", "도서명"), ("Author", "저자"), ("Publisher", "출판사")):
+        if not (getattr(payload, field) or "").strip():
+            raise HTTPException(status_code=400, detail=f"{label}은(는) 필수 입력 항목입니다.")
 
     book_data = payload.dict()
     book_data["Title"] = book_data["Title"].strip()
+    book_data["Author"] = book_data["Author"].strip()
+    book_data["Publisher"] = book_data["Publisher"].strip()
     book_data["CreatedBy"] = current_user["username"]
 
     try:

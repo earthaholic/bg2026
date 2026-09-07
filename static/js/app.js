@@ -1190,9 +1190,9 @@ document.addEventListener('DOMContentLoaded', () => {
             Desc: (formData.get('Desc') || '').trim()
         };
 
-        if (!payload.Title) {
+        if (!payload.Title || !payload.Author || !payload.Publisher) {
             userBookMsg.className = 'alert alert-danger';
-            userBookMsg.textContent = '도서명(Title)은 필수 입력 항목입니다.';
+            userBookMsg.textContent = '도서명, 저자, 출판사는 필수 입력 항목입니다.';
             userBookMsg.classList.remove('hidden');
             return;
         }
