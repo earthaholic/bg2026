@@ -2155,7 +2155,103 @@ def user_get_class_detail(
 ):
     class_row = _get_accessible_class(class_id, current_user)
     students = get_class_students(class_id)
-    return {"class_": class_row, "students": students}
+    return {"class_": class_row, "students": students, "planned_books": _get_class_planned_books(class_id)}
+
+class ClassPlannedBooksRequest(BaseModel):
+    BookIds: List[int]
+
+
+def _get_class_planned_books(class_id: int):
+    conn = get_db_connection()
+    try:
+        return [dict(row) for row in conn.execute('''
+            SELECT p."Id" AS "PlannedId", p."BookId", p."PlannedDay", b."Title", b."Author", b."Publisher"
+            FROM "ClassPlannedBooks" p JOIN "Books" b ON b.rowid = p."BookId"
+            WHERE p."ClassId" = ? ORDER BY p."Id"
+        ''', (class_id,))]
+    finally:
+        conn.close()
+
+
+@app.post("/api/user/classes/{class_id}/planned-books")
+def user_add_class_planned_books(class_id: int, payload: ClassPlannedBooksRequest,
+                                 current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    if not payload.BookIds or len(payload.BookIds) > 500:
+        raise HTTPException(status_code=400, detail="도서를 1~500권 선택해 주세요.")
+    conn = get_db_connection()
+    try:
+        with conn:
+            book_ids = set()
+            for book_id in payload.BookIds:
+                row = conn.execute('SELECT rowid FROM "Books" WHERE rowid = ? OR "Id" = ? ORDER BY (rowid = ?) DESC LIMIT 1',
+                                   (book_id, book_id, book_id)).fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="선택한 도서를 찾을 수 없습니다. 다시 검색해 주세요.")
+                book_ids.add(row[0])
+            added = 0
+            created = []
+            for book_id in sorted(book_ids):
+                cursor = conn.execute('INSERT OR IGNORE INTO "ClassPlannedBooks" ("ClassId", "BookId") VALUES (?, ?)',
+                                      (class_id, book_id))
+                added += cursor.rowcount
+                if cursor.rowcount:
+                    created.append({"Id": cursor.lastrowid, "ClassId": class_id, "BookId": book_id})
+        for row in created:
+            _audit_insert("ClassPlannedBooks", row["Id"], row, current_user["username"], current_user["role"])
+        return {"added_count": added, "duplicate_count": len(book_ids) - added}
+    finally:
+        conn.close()
+
+
+class PlannedBookDateRequest(BaseModel):
+    PlannedDay: str = ""
+
+
+@app.put("/api/user/classes/{class_id}/planned-books/{planned_id}")
+def user_update_class_planned_book(class_id: int, planned_id: int, payload: PlannedBookDateRequest,
+                                   current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    day = payload.PlannedDay
+    if day:
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+                raise ValueError()
+            datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="올바른 수업 예정일을 입력해 주세요.")
+    conn = get_db_connection()
+    try:
+        with conn:
+            old = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ? AND "Id" = ?', (class_id, planned_id)).fetchone()
+            if not old:
+                raise HTTPException(status_code=404, detail="학습 예정 도서를 찾을 수 없습니다.")
+            conn.execute('UPDATE "ClassPlannedBooks" SET "PlannedDay" = ? WHERE "Id" = ?', (day, planned_id))
+        new = dict(old)
+        new["PlannedDay"] = day
+        _audit_update("ClassPlannedBooks", planned_id, dict(old), new, current_user["username"], current_user["role"])
+        return {"status": "success", "PlannedDay": day}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/user/classes/{class_id}/planned-books/{planned_id}")
+def user_delete_class_planned_book(class_id: int, planned_id: int,
+                                   current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    conn = get_db_connection()
+    try:
+        with conn:
+            old = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ? AND "Id" = ?', (class_id, planned_id)).fetchone()
+            count = conn.execute('DELETE FROM "ClassPlannedBooks" WHERE "ClassId" = ? AND "Id" = ?',
+                                 (class_id, planned_id)).rowcount
+        if not count:
+            raise HTTPException(status_code=404, detail="학습 예정 도서를 찾을 수 없습니다.")
+        _audit_delete("ClassPlannedBooks", planned_id, dict(old), current_user["username"], current_user["role"])
+        return {"status": "success"}
+    finally:
+        conn.close()
+
 
 @app.post("/api/user/classes")
 def user_register_class(
@@ -3050,6 +3146,13 @@ def merge_duplicate_books(current_user: Dict[str, Any] = Depends(get_current_sta
                 placeholders = ",".join("?" for _ in aliases)
                 for table_name in reference_tables:
                     quoted_table = table_name.replace('"', '""')
+                    if table_name == "ClassPlannedBooks":
+                        conn.execute(
+                            f'UPDATE OR IGNORE "ClassPlannedBooks" SET "BookId" = ? WHERE "BookId" IN ({placeholders})',
+                            [survivor_id, *aliases]
+                        )
+                        conn.execute(f'DELETE FROM "ClassPlannedBooks" WHERE "BookId" IN ({placeholders})', list(aliases))
+                        continue
                     if table_name == "StudyLogs":
                         affected_logs = conn.execute(
                             f'SELECT rowid AS row_id, * FROM "StudyLogs" WHERE "BookId" IN ({placeholders})',

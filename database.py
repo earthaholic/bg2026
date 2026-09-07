@@ -191,6 +191,25 @@ def init_system_tables():
             UNIQUE("ClassId", "StudentId")
         )
     """)
+    # 수업별 예정 도서는 등록 순서로 보관한다.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "ClassPlannedBooks" (
+            "Id" INTEGER PRIMARY KEY,
+            "ClassId" INTEGER NOT NULL,
+            "BookId" INTEGER NOT NULL,
+            UNIQUE("ClassId", "BookId")
+        )
+    """)
+    planned_columns = {row[1] for row in cursor.execute('PRAGMA table_info("ClassPlannedBooks")')}
+    if "PlannedDay" not in planned_columns:
+        cursor.execute("ALTER TABLE \"ClassPlannedBooks\" ADD COLUMN \"PlannedDay\" TEXT DEFAULT ''")
+    if cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='Books'").fetchone():
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS cleanup_planned_books_after_book_delete
+            AFTER DELETE ON "Books" BEGIN
+                DELETE FROM "ClassPlannedBooks" WHERE "BookId" = OLD.rowid;
+            END
+        """)
     # 휴강은 학습 이력과 달리 도서·학생에 귀속되지 않는 수업 단위 일정이다.
     # StudyLogs에 가짜 도서/학생 행을 만들지 않고 별도 테이블에 보관한다.
     cursor.execute("""
@@ -799,6 +818,7 @@ def delete_class(class_id: int) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('DELETE FROM "ClassStudents" WHERE "ClassId" = ?', (class_id,))
+    cursor.execute('DELETE FROM "ClassPlannedBooks" WHERE "ClassId" = ?', (class_id,))
     cursor.execute('DELETE FROM "Classes" WHERE "Id" = ?', (class_id,))
     conn.commit()
     rowcount = cursor.rowcount

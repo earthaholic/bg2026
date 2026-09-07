@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateBookSelection() {
         document.getElementById('book-selection-count').textContent = `${selectedBookIds.size}권 선택`;
         bookCopyButton.disabled = selectedBookIds.size === 0;
+        document.getElementById("btn-plan-selected-books").disabled = selectedBookIds.size === 0;
         bookSelectAll.disabled = selectableBooks.length === 0;
         bookSelectAll.checked = selectableBooks.length > 0 && selectedBookIds.size === selectableBooks.length;
         bookSelectAll.indeterminate = selectedBookIds.size > 0 && !bookSelectAll.checked;
@@ -197,8 +198,21 @@ document.addEventListener('DOMContentLoaded', () => {
     bookCopyButton.addEventListener('click', async () => {
         const books = selectableBooks.filter(book => selectedBookIds.has(String(book.row_id || book.Id)));
         if (!books.length) return;
-        const text = books.map(book => [book.Title || '제목 없음', book.Author || '저자 미상', book.Publisher || '출판사 미상']
-            .map(value => String(value).replace(/[\r\n]+/g, ' ').trim()).join('/')).join('\n');
+        await copyBookList(books, bookCopyStatus, bookCopyButton);
+    });
+
+    async function copyBookList(books, statusElement, focusButton, planned = false) {
+        const text = books.map(book => {
+            const info = [book.Title || '제목 없음', book.Author || '저자 미상', book.Publisher || '출판사 미상']
+                .map(value => String(value).replace(/[\r\n]+/g, ' ').trim()).join('/');
+            let prefix = '';
+            if (planned && book.PlannedDay) {
+                const [year, month, day] = book.PlannedDay.split('-').map(Number);
+                const weekday = ['일', '월', '화', '수', '목', '금', '토'][new Date(year, month - 1, day).getDay()];
+                prefix = `${month}/${day}(${weekday}) `;
+            }
+            return prefix + info;
+        }).join('\n');
         try {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(text);
@@ -212,12 +226,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!document.execCommand('copy')) throw new Error('복사 실패');
                 } finally {
                     textarea.remove();
-                    bookCopyButton.focus();
+                    focusButton.focus();
                 }
             }
-            bookCopyStatus.textContent = `${books.length}권을 복사했습니다.`;
+            statusElement.textContent = `${books.length}권을 복사했습니다.`;
         } catch (err) {
-            bookCopyStatus.textContent = '복사하지 못했습니다. 브라우저의 클립보드 권한을 확인해 주세요.';
+            statusElement.textContent = '복사하지 못했습니다. 브라우저의 클립보드 권한을 확인해 주세요.';
+        }
+    }
+
+    const plannedDialog = document.getElementById('planned-books-dialog');
+    const plannedClassSelect = document.getElementById('planned-class-select');
+    const plannedStatus = document.getElementById('planned-books-status');
+    const plannedSubmit = document.getElementById('btn-save-planned-books');
+    let pendingPlannedBookIds = [];
+    document.getElementById('btn-close-planned-books').addEventListener('click', () => plannedDialog.close());
+    document.getElementById('btn-plan-selected-books').addEventListener('click', async () => {
+        pendingPlannedBookIds = Array.from(selectedBookIds, Number);
+        if (!pendingPlannedBookIds.length) return;
+        plannedClassSelect.innerHTML = '<option value="">수업을 불러오는 중...</option>';
+        plannedSubmit.disabled = true;
+        plannedStatus.textContent = `${pendingPlannedBookIds.length}권을 추가할 수업을 선택해 주세요.`;
+        plannedDialog.showModal();
+        try {
+            const classes = [];
+            let page = 1;
+            let data;
+            do {
+                data = await apiFetch(`/api/user/classes?page=${page++}&limit=100`);
+                classes.push(...data.classes);
+            } while (page <= data.total_pages);
+            plannedClassSelect.innerHTML = '<option value="">수업 선택</option>' + classes.map(cls =>
+                `<option value="${Number(cls.Id)}">${escapeHtml(cls.ClassName)} · ${escapeHtml(cls.TeacherUsername)} · ${escapeHtml(cls.DayOfWeek)} ${escapeHtml(cls.StartTime || '')}${cls.IsEnded ? ' (종료)' : ''}</option>`).join('');
+            plannedSubmit.disabled = !classes.length;
+            if (!classes.length) plannedStatus.textContent = '등록 가능한 수업이 없습니다.';
+        } catch (err) {
+            plannedStatus.textContent = err.message;
+        }
+    });
+    document.getElementById('planned-books-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!plannedClassSelect.value) return;
+        plannedSubmit.disabled = true;
+        try {
+            const result = await apiFetch(`/api/user/classes/${plannedClassSelect.value}/planned-books`, {
+                method: 'POST', body: JSON.stringify({ BookIds: pendingPlannedBookIds })
+            });
+            bookCopyStatus.textContent = `${result.added_count}권을 학습 예정 도서에 추가했습니다.${result.duplicate_count ? ` (기존 등록 ${result.duplicate_count}권 제외)` : ''}`;
+            plannedDialog.close();
+        } catch (err) {
+            plannedStatus.textContent = err.message;
+        } finally {
+            plannedSubmit.disabled = false;
         }
     });
 
@@ -5273,10 +5333,58 @@ document.addEventListener('DOMContentLoaded', () => {
                         </table>
                     </div>
                 </div>
+                <div class="planned-books-section">
+                    <div class="detail-section-title">학습 예정 도서 (${(data.planned_books || []).length}권)</div>
+                    <button type="button" id="btn-copy-planned-books" class="btn btn-sm btn-outline" ${(data.planned_books || []).length ? '' : 'disabled'}><i class="fa-solid fa-copy"></i> 목록 복사</button>
+                    <span id="planned-copy-status" role="status" aria-live="polite"></span>
+                    <div class="table-responsive"><table class="modern-table">
+                        <thead><tr><th>수업 예정일</th><th>도서명</th><th>저자</th><th>출판사</th><th>관리</th></tr></thead>
+                        <tbody>${(data.planned_books || []).map(book => `<tr>
+                            <td><input type="date" class="form-control planned-book-date" aria-label="${escapeHtml(book.Title || '도서')} 수업 예정일" data-id="${Number(book.PlannedId)}" value="${escapeHtml(book.PlannedDay || '')}" max="9999-12-31"></td>
+                            <td>${escapeHtml(book.Title || '제목 없음')}</td><td>${escapeHtml(book.Author || '저자 미상')}</td><td>${escapeHtml(book.Publisher || '출판사 미상')}</td>
+                            <td><button type="button" class="btn btn-xs btn-danger btn-remove-planned-book" data-id="${Number(book.PlannedId)}">목록에서 삭제</button></td>
+                        </tr>`).join('') || '<tr><td colspan="5" class="empty-state">학습 예정 도서가 없습니다. 도서 검색에서 선택한 도서를 추가해 주세요.</td></tr>'}</tbody>
+                    </table></div>
+                </div>
                 <div class="modal-actions" style="margin-top: 1.25rem;">
                     <button type="button" id="btn-modal-class-batch" class="btn btn-success"><i class="fa-solid fa-square-plus"></i> 학습 이력 일괄 등록</button>
                 </div>
             `;
+            const plannedCopyButton = document.getElementById('btn-copy-planned-books');
+            plannedCopyButton.addEventListener('click', () => copyBookList(data.planned_books || [], document.getElementById('planned-copy-status'), plannedCopyButton, true));
+            modalClassDetailBody.querySelectorAll('.planned-book-date').forEach(input => {
+                input.addEventListener('change', async () => {
+                    const book = data.planned_books.find(item => Number(item.PlannedId) === Number(input.dataset.id));
+                    if (!input.checkValidity()) { input.reportValidity(); return; }
+                    input.disabled = true;
+                    plannedCopyButton.disabled = true;
+                    try {
+                        const result = await apiFetch(`/api/user/classes/${classId}/planned-books/${input.dataset.id}`, {
+                            method: 'PUT', body: JSON.stringify({ PlannedDay: input.value })
+                        });
+                        book.PlannedDay = result.PlannedDay;
+                        document.getElementById('planned-copy-status').textContent = '수업 예정일을 저장했습니다.';
+                    } catch (err) {
+                        input.value = book.PlannedDay || '';
+                        document.getElementById('planned-copy-status').textContent = err.message;
+                    } finally {
+                        input.disabled = false;
+                        plannedCopyButton.disabled = !!modalClassDetailBody.querySelector('.planned-book-date:disabled');
+                    }
+                });
+            });
+            modalClassDetailBody.querySelectorAll('.btn-remove-planned-book').forEach(button => {
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await apiFetch(`/api/user/classes/${classId}/planned-books/${button.dataset.id}`, { method: 'DELETE' });
+                        await openClassDetailModal(classId);
+                    } catch (err) {
+                        document.getElementById('planned-copy-status').textContent = err.message;
+                        button.disabled = false;
+                    }
+                });
+            });
             document.getElementById('btn-modal-class-batch').addEventListener('click', () => {
                 modalClassDetail.classList.add('hidden');
                 goToClassBatchReg(classId);
