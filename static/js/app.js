@@ -2110,6 +2110,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let studylogSortBy = 'row_id';
+    let studylogSortDirection = 'desc';
+
     // Load StudyLog Search Results Grid
     async function loadStudyLogSearchResults(directSearch = false) {
         if (!token) return;
@@ -2121,7 +2124,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const queryParams = new URLSearchParams({
                 page: studylogSearchPage,
-                limit: studylogSearchLimit
+                limit: studylogSearchLimit,
+                sort_by: studylogSortBy,
+                sort_direction: studylogSortDirection
             });
             if (q) queryParams.append('q', q);
             if (date) queryParams.append('studied_day', date);
@@ -7373,6 +7378,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = header.closest('table');
         const columnIndex = Array.from(header.parentElement.children).indexOf(header);
         if (!table || columnIndex < 0 || header.querySelector('input, button, select, a')) return false;
+        if (table.querySelector('#studylog-cards-grid')) return columnIndex < 7;
         return !Array.from(table.tBodies).some(body =>
             Array.from(body.rows).some(row => row.cells[columnIndex]?.querySelector('input, button, select, a'))
         );
@@ -7423,6 +7429,14 @@ document.addEventListener('DOMContentLoaded', () => {
         header.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
         table.dataset.sortColumn = String(columnIndex);
         table.dataset.sortDirection = direction;
+
+        if (table.querySelector('#studylog-cards-grid')) {
+            studylogSortBy = ['row_id', 'StudiedDay', 'StudentName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'][columnIndex];
+            studylogSortDirection = direction;
+            studylogSearchPage = 1;
+            loadStudyLogSearchResults();
+            return;
+        }
 
         Array.from(table.tBodies).forEach(body => {
             const rows = Array.from(body.rows);

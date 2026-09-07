@@ -1584,6 +1584,8 @@ def user_search_studylogs(
     studied_day: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
+    sort_by: str = Query("row_id", regex="^(row_id|StudiedDay|StudentName|BookTitle|IsSpecial|LessonContent|Description)$"),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -1594,8 +1596,8 @@ def user_search_studylogs(
 
     if q and q.strip():
         search_pattern = f"%{q.strip()}%"
-        conditions.append('(s.Name LIKE ? OR b.Title LIKE ? OR b.Author LIKE ? OR b.Publisher LIKE ? OR s.Referrer LIKE ?)')
-        params.extend([search_pattern] * 5)
+        conditions.append('(s.Name LIKE ? OR b.Title LIKE ? OR b.Author LIKE ? OR b.Publisher LIKE ?)')
+        params.extend([search_pattern] * 4)
 
     if studied_day and studied_day.strip():
         conditions.append('sl.StudiedDay LIKE ?')
@@ -1628,6 +1630,18 @@ def user_search_studylogs(
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
 
+    # 허용된 컬럼만 사용하여 전체 검색 결과를 정렬한 뒤 페이지를 나눈다.
+    sort_columns = {
+        "row_id": "sl.rowid",
+        "StudiedDay": "sl.StudiedDay",
+        "StudentName": "s.Name",
+        "BookTitle": "b.Title",
+        "IsSpecial": "sl.IsSpecial",
+        "LessonContent": "sl.LessonContent",
+        "Description": "sl.Description",
+    }
+    sort_column = sort_columns[sort_by]
+    order_by = f"{sort_column} COLLATE NOCASE {sort_direction.upper()}, sl.rowid DESC"
     offset = (page - 1) * limit
     data_query = f'''
         SELECT sl.rowid as row_id, sl.*, 
@@ -1638,7 +1652,7 @@ def user_search_studylogs(
         LEFT JOIN "Students" s ON sl.StudentId = s.rowid OR sl.StudentId = s.Id
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
         {where_str}
-        ORDER BY sl.rowid DESC LIMIT {limit} OFFSET {offset}
+        ORDER BY {order_by} LIMIT {limit} OFFSET {offset}
     '''
     cursor.execute(data_query, params)
     rows = cursor.fetchall()
