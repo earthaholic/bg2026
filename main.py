@@ -2167,7 +2167,7 @@ def _get_class_planned_books(class_id: int):
         return [dict(row) for row in conn.execute('''
             SELECT p."Id" AS "PlannedId", p."BookId", p."PlannedDay", b."Title", b."Author", b."Publisher"
             FROM "ClassPlannedBooks" p JOIN "Books" b ON b.rowid = p."BookId"
-            WHERE p."ClassId" = ? ORDER BY p."Id"
+            WHERE p."ClassId" = ? ORDER BY p."SortOrder", p."Id"
         ''', (class_id,))]
     finally:
         conn.close()
@@ -2192,8 +2192,8 @@ def user_add_class_planned_books(class_id: int, payload: ClassPlannedBooksReques
             added = 0
             created = []
             for book_id in sorted(book_ids):
-                cursor = conn.execute('INSERT OR IGNORE INTO "ClassPlannedBooks" ("ClassId", "BookId") VALUES (?, ?)',
-                                      (class_id, book_id))
+                cursor = conn.execute('INSERT OR IGNORE INTO "ClassPlannedBooks" ("ClassId", "BookId", "SortOrder") SELECT ?, ?, COALESCE(MAX("SortOrder"), 0) + 1 FROM "ClassPlannedBooks" WHERE "ClassId" = ?',
+                                      (class_id, book_id, class_id))
                 added += cursor.rowcount
                 if cursor.rowcount:
                     created.append({"Id": cursor.lastrowid, "ClassId": class_id, "BookId": book_id})
@@ -2206,6 +2206,35 @@ def user_add_class_planned_books(class_id: int, payload: ClassPlannedBooksReques
 
 class PlannedBookDateRequest(BaseModel):
     PlannedDay: str = ""
+
+
+class PlannedBookOrderRequest(BaseModel):
+    PlannedIds: List[int]
+
+
+@app.put("/api/user/classes/{class_id}/planned-books/order")
+def user_reorder_class_planned_books(class_id: int, payload: PlannedBookOrderRequest,
+                                     current_user: Dict[str, Any] = Depends(get_current_user)):
+    _get_accessible_class(class_id, current_user)
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute('SELECT * FROM "ClassPlannedBooks" WHERE "ClassId" = ?', (class_id,)).fetchall()
+            ids = payload.PlannedIds
+            if len(ids) != len(set(ids)) or set(ids) != {row["Id"] for row in rows}:
+                raise HTTPException(status_code=409, detail="예정 도서 목록이 변경되었습니다. 수업 상세를 다시 열어 주세요.")
+            conn.executemany('UPDATE "ClassPlannedBooks" SET "SortOrder" = ? WHERE "ClassId" = ? AND "Id" = ?',
+                             [(index, class_id, planned_id) for index, planned_id in enumerate(ids)])
+        positions = {planned_id: index for index, planned_id in enumerate(ids)}
+        for row in rows:
+            old = dict(row)
+            new = dict(old, SortOrder=positions[row["Id"]])
+            if old["SortOrder"] != new["SortOrder"]:
+                _audit_update("ClassPlannedBooks", row["Id"], old, new, current_user["username"], current_user["role"])
+        return {"status": "success"}
+    finally:
+        conn.close()
 
 
 @app.put("/api/user/classes/{class_id}/planned-books/{planned_id}")

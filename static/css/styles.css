@@ -4216,3 +4216,7 @@ body {
 
 #modal-class-detail .modal-card { width: min(960px, calc(100vw - 2rem)); max-width: 960px; }
 .planned-book-date { min-width: 150px; }
+
+.planned-book-drag { cursor: grab; touch-action: none; user-select: none; }
+.planned-book-drag:active { cursor: grabbing; }
+.planned-book-dragging { background: var(--bg-selection); outline: 2px solid var(--primary); outline-offset: -2px; }

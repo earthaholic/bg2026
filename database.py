@@ -201,6 +201,9 @@ def init_system_tables():
         )
     """)
     planned_columns = {row[1] for row in cursor.execute('PRAGMA table_info("ClassPlannedBooks")')}
+    if "SortOrder" not in planned_columns:
+        cursor.execute('ALTER TABLE "ClassPlannedBooks" ADD COLUMN "SortOrder" INTEGER NOT NULL DEFAULT 0')
+        cursor.execute('UPDATE "ClassPlannedBooks" SET "SortOrder" = "Id"')
     if "PlannedDay" not in planned_columns:
         cursor.execute("ALTER TABLE \"ClassPlannedBooks\" ADD COLUMN \"PlannedDay\" TEXT DEFAULT ''")
     if cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='Books'").fetchone():

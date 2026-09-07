@@ -5338,12 +5338,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" id="btn-copy-planned-books" class="btn btn-sm btn-outline" ${(data.planned_books || []).length ? '' : 'disabled'}><i class="fa-solid fa-copy"></i> 목록 복사</button>
                     <span id="planned-copy-status" role="status" aria-live="polite"></span>
                     <div class="table-responsive"><table class="modern-table">
-                        <thead><tr><th>수업 예정일</th><th>도서명</th><th>저자</th><th>출판사</th><th>관리</th></tr></thead>
-                        <tbody>${(data.planned_books || []).map(book => `<tr>
+                        <thead><tr><th>순서</th><th>수업 예정일</th><th>도서명</th><th>저자</th><th>출판사</th><th>관리</th></tr></thead>
+                        <tbody id="planned-book-rows">${(data.planned_books || []).map(book => `<tr data-planned-id="${Number(book.PlannedId)}">
+                            <td><button type="button" class="btn btn-xs btn-outline planned-book-drag" aria-label="${escapeHtml(book.Title || '도서')} 순서 변경" title="드래그하거나 위·아래 방향키로 순서를 변경하세요"><i class="fa-solid fa-grip-vertical"></i></button></td>
                             <td><input type="date" class="form-control planned-book-date" aria-label="${escapeHtml(book.Title || '도서')} 수업 예정일" data-id="${Number(book.PlannedId)}" value="${escapeHtml(book.PlannedDay || '')}" max="9999-12-31"></td>
                             <td>${escapeHtml(book.Title || '제목 없음')}</td><td>${escapeHtml(book.Author || '저자 미상')}</td><td>${escapeHtml(book.Publisher || '출판사 미상')}</td>
                             <td><button type="button" class="btn btn-xs btn-danger btn-remove-planned-book" data-id="${Number(book.PlannedId)}">목록에서 삭제</button></td>
-                        </tr>`).join('') || '<tr><td colspan="5" class="empty-state">학습 예정 도서가 없습니다. 도서 검색에서 선택한 도서를 추가해 주세요.</td></tr>'}</tbody>
+                        </tr>`).join('') || '<tr><td colspan="6" class="empty-state">학습 예정 도서가 없습니다. 도서 검색에서 선택한 도서를 추가해 주세요.</td></tr>'}</tbody>
                     </table></div>
                 </div>
                 <div class="modal-actions" style="margin-top: 1.25rem;">
@@ -5352,6 +5353,82 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             const plannedCopyButton = document.getElementById('btn-copy-planned-books');
             plannedCopyButton.addEventListener('click', () => copyBookList(data.planned_books || [], document.getElementById('planned-copy-status'), plannedCopyButton, true));
+            const plannedRows = document.getElementById('planned-book-rows');
+            let orderSaving = false;
+            let dragState = null;
+            const restorePlannedOrder = () => {
+                (data.planned_books || []).forEach(book => {
+                    const row = plannedRows.querySelector(`[data-planned-id="${Number(book.PlannedId)}"]`);
+                    if (row) plannedRows.appendChild(row);
+                });
+            };
+            async function savePlannedOrder() {
+                const ids = Array.from(plannedRows.querySelectorAll('[data-planned-id]'), row => Number(row.dataset.plannedId));
+                if (ids.every((id, index) => id === Number(data.planned_books[index].PlannedId))) return;
+                orderSaving = true;
+                plannedCopyButton.disabled = true;
+                plannedRows.querySelectorAll('button, input').forEach(control => { control.disabled = true; });
+                const status = document.getElementById('planned-copy-status');
+                status.textContent = '도서 순서를 저장하는 중입니다...';
+                try {
+                    await apiFetch(`/api/user/classes/${classId}/planned-books/order`, {
+                        method: 'PUT', body: JSON.stringify({ PlannedIds: ids })
+                    });
+                    const books = new Map(data.planned_books.map(book => [Number(book.PlannedId), book]));
+                    data.planned_books = ids.map(id => books.get(id));
+                    status.textContent = '도서 순서를 저장했습니다.';
+                } catch (err) {
+                    restorePlannedOrder();
+                    status.textContent = err.message;
+                } finally {
+                    orderSaving = false;
+                    plannedCopyButton.disabled = false;
+                    plannedRows.querySelectorAll('button, input').forEach(control => { control.disabled = false; });
+                }
+            }
+            plannedRows.querySelectorAll('.planned-book-drag').forEach(handle => {
+                handle.addEventListener('pointerdown', event => {
+                    if (event.button !== 0 || orderSaving || plannedRows.querySelector('input:disabled')) return;
+                    event.preventDefault();
+                    handle.focus();
+                    dragState = { row: handle.closest('tr'), pointerId: event.pointerId };
+                    dragState.row.classList.add('planned-book-dragging');
+                    handle.setPointerCapture(event.pointerId);
+                });
+                handle.addEventListener('pointermove', event => {
+                    if (!dragState || event.pointerId !== dragState.pointerId) return;
+                    const bodyRect = modalClassDetailBody.getBoundingClientRect();
+                    if (event.clientY < bodyRect.top + 50) modalClassDetailBody.scrollTop -= 20;
+                    if (event.clientY > bodyRect.bottom - 50) modalClassDetailBody.scrollTop += 20;
+                    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('tr[data-planned-id]');
+                    if (!target || target === dragState.row || target.parentElement !== plannedRows) return;
+                    const rect = target.getBoundingClientRect();
+                    plannedRows.insertBefore(dragState.row, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+                    handle.setPointerCapture(event.pointerId);
+                });
+                const finishDrag = async event => {
+                    if (!dragState || event.pointerId !== dragState.pointerId) return;
+                    dragState.row.classList.remove('planned-book-dragging');
+                    dragState = null;
+                    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+                    if (event.type === 'pointercancel' || event.type === 'lostpointercapture') restorePlannedOrder();
+                    else await savePlannedOrder();
+                };
+                handle.addEventListener('pointerup', finishDrag);
+                handle.addEventListener('pointercancel', finishDrag);
+
+                handle.addEventListener('keydown', async event => {
+                    if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                    event.preventDefault();
+                    if (orderSaving || dragState || plannedRows.querySelector('input:disabled')) return;
+                    const row = handle.closest('tr');
+                    const sibling = event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling;
+                    if (!sibling) return;
+                    plannedRows.insertBefore(row, event.key === 'ArrowUp' ? sibling : sibling.nextSibling);
+                    await savePlannedOrder();
+                    handle.focus();
+                });
+            });
             modalClassDetailBody.querySelectorAll('.planned-book-date').forEach(input => {
                 input.addEventListener('change', async () => {
                     const book = data.planned_books.find(item => Number(item.PlannedId) === Number(input.dataset.id));
