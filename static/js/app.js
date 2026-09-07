@@ -6825,7 +6825,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="form-section">
                     <h4 class="section-title"><i class="fa-solid fa-receipt"></i> 결제 정보</h4>
                     <div class="form-grid">
-                        <div class="form-group"><label for="edit-tuition-paid-lessons">결제차시 <span class="required">*</span></label><select id="edit-tuition-paid-lessons" class="form-control">${[10, 20, 30].map(value => `<option value="${value}" ${Number(payment.PaidLessons) === value ? 'selected' : ''}>${value}차시</option>`).join('')}</select></div>
+                        <div class="form-group"><label for="edit-tuition-paid-lessons">결제차시 <span class="required">*</span></label><select id="edit-tuition-paid-lessons" class="form-control">${[0, 10, 20, 30].map(value => `<option value="${value}" ${Number(payment.PaidLessons) === value ? 'selected' : ''}>${value}차시</option>`).join('')}</select></div>
                         <div class="form-group"><label for="edit-tuition-service-lessons">서비스차시</label><input id="edit-tuition-service-lessons" class="form-control" type="number" min="0" max="10" value="${Number(payment.ServiceLessons || 0)}"></div>
                         <div class="form-group"><label for="edit-tuition-start-date">차시 시작일 <span class="required">*</span></label><input id="edit-tuition-start-date" class="form-control" type="date" value="${escapeHtml(payment.StartDate || '')}" required></div>
                         <div class="form-group"><label for="edit-tuition-paid-date">납부일 <span class="required">*</span></label><input id="edit-tuition-paid-date" class="form-control" type="date" value="${escapeHtml(payment.PaidDate || '')}" required></div>

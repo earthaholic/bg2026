@@ -277,8 +277,8 @@ TUITION_CLASS_TYPES = (
 def _validate_tuition_values(class_type: str, paid_lessons: int, service_lessons: int = 0, fee_amount: int = 0):
     if class_type not in TUITION_CLASS_TYPES:
         raise HTTPException(status_code=400, detail="올바른 반 정보를 선택해 주세요.")
-    if paid_lessons not in (10, 20, 30):
-        raise HTTPException(status_code=400, detail="결제차시는 10, 20, 30회 중에서 선택해 주세요.")
+    if paid_lessons not in (0, 10, 20, 30):
+        raise HTTPException(status_code=400, detail="결제차시는 0, 10, 20, 30회 중에서 선택해 주세요.")
     if not 0 <= service_lessons <= 10:
         raise HTTPException(status_code=400, detail="서비스차시는 0~10회 사이로 입력해 주세요.")
     if fee_amount < 0:
@@ -1316,6 +1316,8 @@ def get_tuition_fee_settings(current_user: Dict[str, Any] = Depends(get_current_
 
 @app.post("/api/user/tuition-fee-settings")
 def save_tuition_fee_setting(payload: TuitionFeeSettingRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if payload.PaidLessons == 0:
+        raise HTTPException(status_code=400, detail="기본 수업료는 10, 20, 30회에만 설정할 수 있습니다.")
     _validate_tuition_values(payload.ClassType, payload.PaidLessons, 0, payload.DefaultFee)
     conn = get_db_connection()
     try:

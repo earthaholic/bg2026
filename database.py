@@ -82,7 +82,7 @@ def init_system_tables():
             "Id" INTEGER PRIMARY KEY,
             "StudentId" INTEGER NOT NULL,
             "ClassType" TEXT NOT NULL,
-            "PaidLessons" INTEGER NOT NULL CHECK("PaidLessons" IN (10, 20, 30)),
+            "PaidLessons" INTEGER NOT NULL CHECK("PaidLessons" IN (0, 10, 20, 30)),
             "ServiceLessons" INTEGER NOT NULL DEFAULT 0 CHECK("ServiceLessons" BETWEEN 0 AND 10),
             "StartDate" TEXT NOT NULL,
             "PaidDate" TEXT NOT NULL DEFAULT '',
@@ -93,6 +93,19 @@ def init_system_tables():
             "UpdatedAt" TEXT DEFAULT ''
         )
     """)
+    # 기존 결제 데이터와 인덱스를 보존하면서 0차시 결제를 허용한다.
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'TuitionPayments'")
+    payment_ddl = cursor.fetchone()["sql"]
+    old_check = 'CHECK("PaidLessons" IN (10, 20, 30))'
+    if old_check in payment_ddl:
+        cursor.execute("SELECT sql FROM sqlite_master WHERE tbl_name = 'TuitionPayments' AND type IN ('index', 'trigger') AND sql IS NOT NULL")
+        payment_objects = [row["sql"] for row in cursor.fetchall()]
+        cursor.execute(payment_ddl.replace('"TuitionPayments"', '"TuitionPayments_migration"', 1).replace(old_check, 'CHECK("PaidLessons" IN (0, 10, 20, 30))'))
+        cursor.execute('INSERT INTO "TuitionPayments_migration" SELECT * FROM "TuitionPayments"')
+        cursor.execute('DROP TABLE "TuitionPayments"')
+        cursor.execute('ALTER TABLE "TuitionPayments_migration" RENAME TO "TuitionPayments"')
+        for statement in payment_objects:
+            cursor.execute(statement)
     cursor.execute('PRAGMA table_info("TuitionPayments")')
     tuition_payment_cols = [r["name"] for r in cursor.fetchall()]
     if "PaidDate" not in tuition_payment_cols:
