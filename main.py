@@ -567,6 +567,8 @@ def user_search_books(
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
     unstudied_student_ids: Optional[str] = Query(None),
+    sort_by: str = Query("row_id", regex="^(row_id|StudyStudentCount)$"),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -667,14 +669,34 @@ def user_search_books(
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
 
-    # Paginated data
+    # 학생 식별 규칙은 상세 학생 목록과 동일하게 적용하고, 전체 집계 후 페이지를 나눈다.
     offset = (page - 1) * limit
-    data_query = f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
-    cursor.execute(data_query, params)
+    if sort_by == "StudyStudentCount":
+        data_query = f'''WITH resolved AS (
+            SELECT sl.rowid AS log_id, sl.BookId, MIN(s.rowid) AS student_row_id
+            FROM "StudyLogs" sl JOIN "Students" s
+              ON (CAST(sl.StudentId AS TEXT) = CAST(s.rowid AS TEXT)
+                  OR CAST(sl.StudentId AS TEXT) = CAST(s.Id AS TEXT)
+                  OR (sl.StudentId = s.Name AND NOT EXISTS (
+                      SELECT 1 FROM "Students" identified
+                      WHERE CAST(sl.StudentId AS TEXT) = CAST(identified.rowid AS TEXT)
+                         OR CAST(sl.StudentId AS TEXT) = CAST(identified.Id AS TEXT))))
+            GROUP BY sl.rowid HAVING COUNT(*) = 1
+        )
+        SELECT "Books".rowid AS row_id, "Books".*,
+               (SELECT COUNT(DISTINCT r.student_row_id) FROM resolved r
+                WHERE r.BookId = "Books".rowid OR r.BookId = "Books"."Id") AS StudyStudentCount
+        FROM "Books"{where_str}
+        ORDER BY StudyStudentCount {sort_direction.upper()}, "Books".rowid DESC
+        LIMIT ? OFFSET ?'''
+    else:
+        data_query = f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid {sort_direction.upper()} LIMIT ? OFFSET ?'
+    cursor.execute(data_query, params + [limit, offset])
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    for book in rows:
-        book['StudyStudentCount'] = len(get_cached_book_students(book['row_id'], book['Id']))
+    if sort_by != "StudyStudentCount":
+        for book in rows:
+            book['StudyStudentCount'] = len(get_cached_book_students(book['row_id'], book['Id']))
 
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
 

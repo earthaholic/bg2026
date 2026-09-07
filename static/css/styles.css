@@ -13,6 +13,8 @@
     --primary: #3b82f6;
     --primary-hover: #2563eb;
     --primary-glow: rgba(59, 130, 246, 0.35);
+    --bg-selection: #16243b;
+    --text-selection-accent: #93c5fd;
     
     --success: #10b981;
     --success-hover: #059669;
@@ -48,6 +50,8 @@
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
     --primary-glow: rgba(37, 99, 235, 0.25);
+    --bg-selection: #eff6ff;
+    --text-selection-accent: #1d4ed8;
 
     --success: #059669;
     --success-hover: #047857;
@@ -2316,7 +2320,7 @@ body {
     flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.75rem;
-    background: rgba(248, 250, 252, 0.6);
+    background: var(--bg-section);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     margin-top: 0.5rem;
@@ -2327,8 +2331,8 @@ body {
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.65rem;
-    background: var(--primary-light, #eff6ff);
-    color: var(--primary, #2563eb);
+    background: var(--bg-selection);
+    color: var(--text-selection-accent);
     border: 1px solid rgba(59, 130, 246, 0.25);
     border-radius: 9999px;
     font-size: 0.825rem;
@@ -2381,7 +2385,7 @@ body {
 }
 
 #view-book-search .book-study-student-result:hover {
-    background: var(--primary-light, #eff6ff);
+    background: var(--bg-selection);
 }
 
 #view-book-search .book-study-student-chips {
@@ -4198,5 +4202,7 @@ body {
 #view-book-search .book-selection-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 #view-book-search .book-selection-cell { width: 3rem; text-align: center; }
 #view-book-search .book-selection-cell input { width: 1rem; height: 1rem; cursor: pointer; }
-#view-book-search .book-row-selected { background-color: var(--primary-light, #eef2ff); }
+#view-book-search .book-row-selected { background-color: var(--bg-selection); }
 .book-clipboard-buffer { position: fixed; left: -9999px; top: 0; }
+
+#view-book-search .book-row-selected .text-primary { color: var(--text-selection-accent); }
