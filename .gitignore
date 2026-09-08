@@ -16,6 +16,11 @@ google/
 data.db
 *.db
 *.sqlite3
+*.db.uploading
+
+# 실제 학생·결제 데이터 작업 파일
+production_tuition_payments_import_20260811.sql
+study_logs.csv
 
 # Runtime Logs (server_daemon.py)
 logs/

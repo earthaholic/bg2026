@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // 기존 보유 값 1은 저작권 있음으로 유지한다.
+    const PDF_STATUS_LABELS = ['미보유', 'PDF 보유(저작권 있음)', 'PDF 보유(저작권 없음)'];
+    function pdfStatusLabel(value) {
+        return PDF_STATUS_LABELS[Number(value || 0)] || PDF_STATUS_LABELS[0];
+    }
+    function pdfStatusOptions(value) {
+        return PDF_STATUS_LABELS.map((label, status) => `<option value="${status}" ${status === Number(value || 0) ? 'selected' : ''}>${label}</option>`).join('');
+    }
+
     // App State
     let token = localStorage.getItem('token');
     let currentUser = null;
@@ -1027,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkQuiz.checked = false;
             filterChkReading.checked = false;
             filterChkWriting.checked = false;
-            filterChkPdf.checked = false;
+            filterChkPdf.value = '';
             [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
             bookUnstudiedStudents.clear();
             bookStudyStudentQ.value = '';
@@ -1305,7 +1314,7 @@ document.addEventListener('DOMContentLoaded', () => {
             HasAdvancedMaterial: formData.get('HasAdvancedMaterial') ? 1 : 0,
             HasDebateMaterial: formData.get('HasDebateMaterial') ? 1 : 0,
             IsPaperbookExist: formData.get('IsPaperbookExist') ? 1 : 0,
-            IsPdfExist: formData.get('IsPdfExist') ? 1 : 0,
+            IsPdfExist: Number(formData.get('IsPdfExist') || 0),
             IsYes24Exist: formData.get('IsYes24Exist') ? 1 : 0,
             IsMillieExist: formData.get('IsMillieExist') ? 1 : 0,
             Desc: (formData.get('Desc') || '').trim()
@@ -1358,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const msg = document.getElementById('book-material-request-msg');
         const requestType = document.getElementById('material-request-type').value;
         const fields = [...document.querySelectorAll('input[name="material-field"]:checked')].map(el => el.value);
-        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields };
+        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields, PdfStatus: Number(document.getElementById('material-pdf-status').value) };
         if (requestType === 'new_book') {
             payload.BookData = { Title: document.getElementById('material-new-title').value.trim(), Author: document.getElementById('material-new-author').value.trim(), Publisher: document.getElementById('material-new-publisher').value.trim() };
         } else payload.BookId = Number(document.getElementById('material-book-id').value);
@@ -1377,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/book-material-requests');
             if (!data.requests.length) { body.innerHTML = `<tr><td colspan="${forReview ? 7 : 6}" class="text-center p-4">등록된 요청이 없습니다.</td></tr>`; return; }
             body.innerHTML = data.requests.map(item => {
-                const fields = (item.MaterialFields || []).map(field => MATERIAL_FIELD_LABELS[field] || field).join(', ');
+                const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ');
                 const status = item.Status === 'pending' ? '대기' : item.Status === 'approved' ? '승인' : '반려';
                 const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
                 const review = item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : details;
@@ -2295,9 +2304,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'PUT',
                 body: JSON.stringify(payload)
             });
+            if (field === 'IsPdfExist') chkEl.dataset.current = String(newVal);
             feedback.show('도서 보유 자료 정보가 업데이트되었습니다.', 'success');
         } catch (err) {
-            chkEl.checked = !chkEl.checked;
+            if (field === 'IsPdfExist') chkEl.value = chkEl.dataset.current;
+            else chkEl.checked = !chkEl.checked;
             feedback.show('도서 정보 수정 실패: ' + err.message, 'error');
         }
     }
@@ -2598,7 +2609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${l.HasWritingQuestion ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 독서 논술 문제</span>' : ''}
                             ${l.HasDebateMaterial ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 토론 자료</span>' : ''}
                             ${l.IsPaperbookExist ? '<span class="badge badge-feature"><i class="fa-solid fa-book"></i> 종이책 보유</span>' : ''}
-                            ${l.IsPdfExist ? '<span class="badge badge-feature"><i class="fa-solid fa-file-pdf"></i> PDF 파일</span>' : ''}
+                            <span class="badge badge-feature"><i class="fa-solid fa-file-pdf"></i> ${pdfStatusLabel(l.IsPdfExist)}</span>
                         </div>
                     </div>
                 </div>
@@ -3001,7 +3012,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasQuiz = filterChkQuiz.checked ? 1 : 0;
             const hasReading = filterChkReading.checked ? 1 : 0;
             const hasWriting = filterChkWriting.checked ? 1 : 0;
-            const hasPdf = filterChkPdf.checked ? 1 : 0;
+            const pdfStatus = filterChkPdf.value;
             const hasAdvanced = filterChkAdvanced.checked ? 1 : 0;
             const hasDebate = filterChkDebate.checked ? 1 : 0;
             const hasPaperbook = filterChkPaperbook.checked ? 1 : 0;
@@ -3025,7 +3036,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasQuiz) queryParams.append('has_quiz', 1);
             if (hasReading) queryParams.append('has_reading', 1);
             if (hasWriting) queryParams.append('has_writing', 1);
-            if (hasPdf) queryParams.append('has_pdf', 1);
+            if (pdfStatus === 'owned') queryParams.append('has_pdf', 1);
+            else if (pdfStatus !== '') queryParams.append('pdf_status', pdfStatus);
             if (hasAdvanced) queryParams.append('has_advanced', 1);
             if (hasDebate) queryParams.append('has_debate', 1);
             if (hasPaperbook) queryParams.append('has_paperbook', 1);
@@ -3068,7 +3080,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const bookId = b.row_id || b.Id;
 
             const hasReading = !!(b.HasReadingQuestion == 1 || b.HasReadingAnswer == 1 || b.HasReadingQuiz == 1);
-            const hasPdf = !!(b.IsPdfExist == 1 || b.HasPdf == 1);
 
             html += `
                 <tr data-book-id="${bookId}">
@@ -3087,10 +3098,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </label>
                     </td>
                     <td class="text-center">
-                        <label class="form-switch sm" title="PDF 보유 여부 변경">
-                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="IsPdfExist" ${hasPdf ? 'checked' : ''}>
-                            <span class="switch-slider"></span>
-                        </label>
+                        <select class="form-control select-pdf-status" data-book-id="${bookId}" data-current="${Number(b.IsPdfExist || 0)}" aria-label="${title} PDF 상태" ${isStaff() ? '' : 'disabled'}>${pdfStatusOptions(b.IsPdfExist)}</select>
                     </td>
                     <td>
                         <button type="button" class="btn btn-xs btn-outline btn-open-book-detail" data-book-id="${bookId}">
@@ -3108,6 +3116,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.stopPropagation();
                 const bookId = btn.getAttribute('data-book-id');
                 openBookDetailModal(bookId);
+            });
+        });
+
+        bookCardsGrid.querySelectorAll('.select-pdf-status').forEach(select => {
+            select.addEventListener('change', async () => {
+                select.disabled = true;
+                await toggleBookField(select.dataset.bookId, 'IsPdfExist', Number(select.value), select);
+                select.disabled = false;
             });
         });
 
@@ -3393,7 +3409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="detail-section-title"><i class="fa-solid fa-store"></i> 도서 포맷 & 유통 채널</div>
                     <div class="detail-badges-list">
                         ${b.IsPaperbookExist ? '<span class="tag-badge success"><i class="fa-solid fa-book"></i> 종이책</span>' : ''}
-                        ${b.IsPdfExist ? '<span class="tag-badge primary"><i class="fa-solid fa-file-pdf"></i> PDF</span>' : ''}
+                        <span class="tag-badge primary"><i class="fa-solid fa-file-pdf"></i> ${pdfStatusLabel(b.IsPdfExist)}</span>
                         ${b.IsYes24Exist ? '<span class="tag-badge"><i class="fa-solid fa-shopping-cart"></i> YES24</span>' : ''}
                         ${b.IsMillieExist ? '<span class="tag-badge"><i class="fa-solid fa-tablet-screen-button"></i> 밀리의 서재</span>' : ''}
                     </div>
@@ -4229,10 +4245,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="checkbox" name="IsPaperbookExist" value="1" ${b.IsPaperbookExist ? 'checked' : ''}>
                             <span>종이책</span>
                         </label>
-                        <label class="checkbox-pill">
-                            <input type="checkbox" name="IsPdfExist" value="1" ${b.IsPdfExist ? 'checked' : ''}>
-                            <span>PDF</span>
-                        </label>
+                        <label class="form-group"><span>PDF</span><select name="IsPdfExist" class="form-control">${pdfStatusOptions(b.IsPdfExist)}</select></label>
                         <label class="checkbox-pill">
                             <input type="checkbox" name="IsYes24Exist" value="1" ${b.IsYes24Exist ? 'checked' : ''}>
                             <span>YES24</span>
@@ -4296,7 +4309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             HasAdvancedMaterial: formData.get('HasAdvancedMaterial') ? 1 : 0,
             HasDebateMaterial: formData.get('HasDebateMaterial') ? 1 : 0,
             IsPaperbookExist: formData.get('IsPaperbookExist') ? 1 : 0,
-            IsPdfExist: formData.get('IsPdfExist') ? 1 : 0,
+            IsPdfExist: Number(formData.get('IsPdfExist') || 0),
             IsYes24Exist: formData.get('IsYes24Exist') ? 1 : 0,
             IsMillieExist: formData.get('IsMillieExist') ? 1 : 0,
             Desc: (formData.get('Desc') || '').trim()

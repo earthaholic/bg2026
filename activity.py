@@ -42,7 +42,7 @@ FILTER_KEYS = {"q", "page", "limit", "sex", "grade", "date_from", "date_to", "mo
                "student_id", "book_id", "class_id", "teacher_username", "username", "status",
                "subject", "study_class", "include_ended", "is_special", "action", "table_name",
                "studied_day", "target", "voca_min", "voca_max", "length_min", "length_max",
-               "has_quiz", "has_reading", "has_writing", "has_pdf", "has_advanced", "has_debate",
+               "has_quiz", "has_reading", "has_writing", "has_pdf", "pdf_status", "has_advanced", "has_debate",
                "has_paperbook", "has_yes24", "has_millie", "unstudied_student_ids"}
 
 

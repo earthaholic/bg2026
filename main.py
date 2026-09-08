@@ -6,7 +6,7 @@ import json
 from threading import RLock
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -151,7 +151,7 @@ class UserBookRegisterRequest(BaseModel):
     HasAdvancedMaterial: Optional[int] = 0
     HasDebateMaterial: Optional[int] = 0
     IsPaperbookExist: Optional[int] = 0
-    IsPdfExist: Optional[int] = 0
+    IsPdfExist: Literal[0, 1, 2] = 0
     IsYes24Exist: Optional[int] = 0
     IsMillieExist: Optional[int] = 0
     Desc: Optional[str] = ""
@@ -162,6 +162,7 @@ class BookMaterialRequestCreate(BaseModel):
     BookData: Optional[UserBookRegisterRequest] = None
     BookCategory: str
     MaterialFields: List[str]
+    PdfStatus: Literal[1, 2] = 1
 
 class BookMaterialRequestReview(BaseModel):
     Status: str
@@ -436,6 +437,8 @@ def create_book_material_request(payload: BookMaterialRequestCreate, current_use
         if not payload.BookId or _resolve_domain_pk("Books", payload.BookId) is None:
             raise HTTPException(status_code=404, detail="자료를 추가할 도서를 찾을 수 없습니다.")
         book_id = _resolve_domain_pk("Books", payload.BookId)
+    if "IsPdfExist" in fields:
+        book_data["IsPdfExist"] = payload.PdfStatus
     conn = get_db_connection()
     try:
         cursor = conn.execute('''INSERT INTO "BookMaterialRequests"("RequestType","BookId","BookData","BookCategory","MaterialFields","RequestedBy")
@@ -486,9 +489,12 @@ def review_book_material_request(request_id: int, payload: BookMaterialRequestRe
         rate = conn.execute('SELECT "UnitAmount" FROM "BookMaterialPayRates" WHERE "BookCategory"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1', (request_data["BookCategory"], now.strftime("%Y-%m-%d"))).fetchone()
         if not rate: raise HTTPException(status_code=400, detail="승인일 기준 자료 제작 단가가 설정되어 있지 않습니다.")
         fields = request_data["MaterialFields"]
+        material_values = {field: 1 for field in fields}
+        if "IsPdfExist" in fields:
+            material_values["IsPdfExist"] = request_data["BookData"].get("IsPdfExist") or 1
         if request_data["RequestType"] == "new_book":
             book_data = request_data["BookData"]
-            book_data.update({field: 1 for field in fields})
+            book_data.update(material_values)
             book_data["CreatedBy"] = request_data["RequestedBy"]
             columns = list(book_data.keys()); placeholders = ", ".join("?" for _ in columns)
             cursor = conn.execute(f'INSERT INTO "Books" ({", ".join(chr(34)+c+chr(34) for c in columns)}) VALUES ({placeholders})', [book_data[c] for c in columns])
@@ -498,8 +504,8 @@ def review_book_material_request(request_id: int, payload: BookMaterialRequestRe
             book_id = request_data["BookId"]
             old_snapshot = dict(conn.execute('SELECT rowid AS row_id, * FROM "Books" WHERE rowid=?', (book_id,)).fetchone() or {})
             if not old_snapshot: raise HTTPException(status_code=404, detail="자료를 추가할 도서를 찾을 수 없습니다.")
-            assignments = ", ".join(f'"{field}"=1' for field in fields) + ', "UpdatedBy"=?, "UpdatedAt"=?'
-            conn.execute(f'UPDATE "Books" SET {assignments} WHERE rowid=?', [current_user["username"], reviewed_at, book_id])
+            assignments = ", ".join(f'"{field}"=?' for field in fields) + ', "UpdatedBy"=?, "UpdatedAt"=?'
+            conn.execute(f'UPDATE "Books" SET {assignments} WHERE rowid=?', [material_values[field] for field in fields] + [current_user["username"], reviewed_at, book_id])
             new_snapshot = None
         conn.execute('''UPDATE "BookMaterialRequests" SET "BookId"=?,"Status"='approved',"ReviewedBy"=?,"ReviewedAt"=?,"ApprovedAmount"=?,"PayrollMonth"=? WHERE "Id"=?''', (book_id, current_user["username"], reviewed_at, rate[0], payroll_month, request_id))
         conn.commit()
@@ -561,6 +567,7 @@ def user_search_books(
     has_reading: Optional[int] = Query(None),
     has_writing: Optional[int] = Query(None),
     has_pdf: Optional[int] = Query(None),
+    pdf_status: Optional[int] = Query(None, ge=0, le=2),
     has_advanced: Optional[int] = Query(None),
     has_debate: Optional[int] = Query(None),
     has_paperbook: Optional[int] = Query(None),
@@ -620,8 +627,11 @@ def user_search_books(
     if has_writing == 1:
         conditions.append('("HasWritingQuestion" = 1 OR "HasWritingAnswer" = 1)')
 
-    if has_pdf == 1:
-        conditions.append('"IsPdfExist" = 1')
+    if pdf_status is not None:
+        conditions.append('COALESCE("IsPdfExist", 0) = ?')
+        params.append(pdf_status)
+    elif has_pdf == 1:
+        conditions.append('"IsPdfExist" IN (1, 2)')
     if has_advanced == 1:
         conditions.append('"HasAdvancedMaterial" = 1')
     if has_debate == 1:
@@ -3613,6 +3623,10 @@ def user_update_book(
     payload: RowDataRequest,
     current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
+    if "IsPdfExist" in payload.data:
+        pdf_status = payload.data["IsPdfExist"]
+        if type(pdf_status) is not int or pdf_status not in (0, 1, 2):
+            raise HTTPException(status_code=400, detail="PDF 상태는 0, 1, 2 중 하나여야 합니다.")
     row_id = _resolve_domain_pk("Books", book_id)
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 도서를 찾을 수 없습니다.")

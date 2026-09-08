@@ -4280,3 +4280,7 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
 .book-form > [data-action-message] { margin-top: -.85rem; }
 [data-action-message].alert-danger { color: var(--danger); }
 [data-action-message].alert-success { color: var(--success); }
+
+/* PDF 상태 선택 */
+.pdf-filter { display: flex; align-items: center; gap: 0.5rem; }
+.pdf-filter .form-control, .select-pdf-status { width: auto; min-width: 13rem; }

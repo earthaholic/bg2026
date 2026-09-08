@@ -84,3 +84,8 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - Frontend loads FontAwesome/Chart.js/Google Fonts from CDNs — requires internet to render fully.
 - Secrets live in `.env` (gitignored): Oracle creds + wallet password, JWT `SECRET_KEY`, admin 로그인 (fallback `admin`/`admin123` in `config.py`). 배포 시에는 admin 계정만 시드되며, manager/teacher는 admin이 계정 관리 UI에서 발급한다. `wallet/` holds the real Oracle wallet — never commit. Note: `google/bg2026-drive-a95ead8d7698.json` (GCP service account key for Drive search) is already committed; don't add further credentials.
 - Commit messages follow conventional commits in Korean (e.g. `feat:`, `style & refactor:`).
+
+## 도서 PDF 상태
+- 실제 컬럼은 `Books.IsPdfExist`(INTEGER)이며 `0=미보유`, `1=PDF 보유(저작권 있음)`, `2=PDF 보유(저작권 없음)`이다. 기존 보유 값 1은 그대로 유지한다. 불리언 변환으로 상태 2를 잃지 않도록 주의한다.
+- 도서 검색의 `pdf_status=0|1|2`는 정확한 상태를 조회하고, 기존 `has_pdf=1`은 상태 1과 2 모두를 조회한다.
+- 자료 요청의 `PdfStatus=1|2`는 `BookData.IsPdfExist`에 보관하여 승인 시 반영한다. 과거 요청에 값이 없으면 1로 처리한다.
