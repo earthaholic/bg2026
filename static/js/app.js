@@ -1372,6 +1372,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isNew = document.getElementById('material-request-type').value === 'new_book';
         document.getElementById('material-existing-book-fields').classList.toggle('hidden', isNew);
         document.getElementById('material-new-book-fields').classList.toggle('hidden', !isNew);
+        document.querySelector('#form-book-material-request .checkbox-grid').previousElementSibling.textContent = isNew ? '추가할 자료 종류 (선택 사항 · 도서만 요청 가능)' : '추가할 자료 종류';
     }
 
     function requestBookTitle(item) {
@@ -1402,7 +1403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/book-material-requests');
             if (!data.requests.length) { body.innerHTML = `<tr><td colspan="${forReview ? 7 : 6}" class="text-center p-4">등록된 요청이 없습니다.</td></tr>`; return; }
             body.innerHTML = data.requests.map(item => {
-                const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ');
+                const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ') || '도서만 등록';
                 const status = item.Status === 'pending' ? '대기' : item.Status === 'approved' ? '승인' : '반려';
                 const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
                 const review = item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : details;

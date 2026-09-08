@@ -425,8 +425,10 @@ def create_book_material_request(payload: BookMaterialRequestCreate, current_use
     if payload.RequestType not in ("new_book", "material_add") or payload.BookCategory not in BOOK_MATERIAL_CATEGORIES:
         raise HTTPException(status_code=400, detail="요청 유형 또는 도서 분류를 확인해 주세요.")
     fields = sorted(set(payload.MaterialFields))
-    if not fields or any(field not in BOOK_MATERIAL_FIELDS for field in fields):
+    if payload.RequestType == "material_add" and not fields:
         raise HTTPException(status_code=400, detail="추가할 자료 종류를 한 개 이상 선택해 주세요.")
+    if any(field not in BOOK_MATERIAL_FIELDS for field in fields):
+        raise HTTPException(status_code=400, detail="추가할 자료 종류를 확인해 주세요.")
     book_data: Dict[str, Any] = {}
     book_id = None
     if payload.RequestType == "new_book":
