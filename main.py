@@ -2922,6 +2922,17 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
     for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
     conn=get_db_connection()
     try:
+        team_students = []
+        class_ids = sorted({r["ClassId"] for r in rows if r.get("ClassId") is not None})
+        if class_ids:
+            placeholders = ','.join('?' for _ in class_ids)
+            team_students = [dict(r) for r in conn.execute(f'''
+                SELECT DISTINCT cs."ClassId", s.rowid AS "StudentRowId",
+                       s."Name" AS "StudentName", s."Grade" AS "CurrentGrade"
+                FROM "ClassStudents" cs
+                JOIN "Students" s ON cs."StudentId"=s.rowid OR cs."StudentId"=s."Id"
+                WHERE cs."ClassId" IN ({placeholders})
+            ''', class_ids).fetchall()]
         closed=bool(teacher and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month, teacher)).fetchone())
         claim_sql = 'SELECT * FROM "TeacherPayrollClaims" WHERE "PayrollMonth"=?'
         claim_params = [month]
@@ -2940,7 +2951,7 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
     for item in material_requests:
         totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
-    return {"month":month,"closed":closed,"lines":rows,"claims":claims,"material_requests":material_requests,"totals":totals}
+    return {"month":month,"closed":closed,"lines":rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"totals":totals}
 
 @app.post("/api/user/payroll/backfill-class-links")
 def backfill_payroll_class_links(
@@ -3565,7 +3576,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
     try:
         closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
-            sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
+            sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                             sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
@@ -3577,7 +3588,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
         sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus",
-                        s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
+                        s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                         COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
                         COALESCE(c."CategoryId", sl."PayrollCategoryId") AS "CategoryId", c."TeacherUsername"
                  FROM "StudyLogs" sl LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"

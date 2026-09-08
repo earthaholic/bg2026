@@ -7495,7 +7495,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const canTransfer = Boolean(isStaff() && teacher && !data.closed);
         renderPayrollTransferPanel(canTransfer, teacher);
         renderPayrollUnconfiguredLines(unconfiguredLines);
-        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer);
+        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer, data.team_students || []);
         renderPayrollClaims(data.claims || []);
         renderPayrollMaterials(data.material_requests || []);
         const claimCard = document.getElementById('payroll-claim-card');
@@ -7534,7 +7534,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (button) button.disabled = !count || !document.getElementById('payroll-transfer-teacher')?.value;
     }
 
-    function renderPayrollTeamCards(lines, canTransfer = false) {
+    function renderPayrollTeamCards(lines, canTransfer = false, teamStudents = []) {
         const container = document.getElementById('payroll-team-cards');
         const teams = new Map();
         lines.forEach(line => {
@@ -7554,9 +7554,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const students = new Map();
             teamLines.forEach(line => {
                 const formattedGrade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
-                const key = `${line.StudentName || '-'}|${formattedGrade}`;
+                const key = line.StudentRowId != null ? `student:${line.StudentRowId}` : `${line.StudentName || '-'}|${formattedGrade}`;
                 if (!students.has(key)) students.set(key, { name: line.StudentName || '-', grade: formattedGrade, lines: [] });
                 students.get(key).lines.push(line);
+            });
+            // 수업 기록이 전혀 없는 팀 소속 학생도 결석 칸과 함께 표시한다.
+            teamStudents.filter(student => student.ClassId === teamLines[0].ClassId).forEach(student => {
+                const key = `student:${student.StudentRowId}`;
+                if (!students.has(key)) students.set(key, {
+                    name: student.StudentName || '-', grade: formatPayrollGrade(student.CurrentGrade), lines: []
+                });
             });
             const teamTotal = teamLines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
             const headerCells = dates.map((date, index) => {
