@@ -486,11 +486,17 @@ def review_book_material_request(request_id: int, payload: BookMaterialRequestRe
         if payload.Status == "rejected":
             conn.execute('UPDATE "BookMaterialRequests" SET "Status"=?,"ReviewedBy"=?,"ReviewedAt"=?,"RejectReason"=? WHERE "Id"=?', ("rejected", current_user["username"], reviewed_at, payload.RejectReason.strip(), request_id))
             conn.commit(); return {"status": "success", "message": "요청을 반려했습니다."}
-        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (payroll_month, request_data["RequestedBy"])).fetchone():
-            raise HTTPException(status_code=400, detail="요청자의 승인월 정산이 이미 마감되어 승인할 수 없습니다.")
-        rate = conn.execute('SELECT "UnitAmount" FROM "BookMaterialPayRates" WHERE "BookCategory"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1', (request_data["BookCategory"], now.strftime("%Y-%m-%d"))).fetchone()
-        if not rate: raise HTTPException(status_code=400, detail="승인일 기준 자료 제작 단가가 설정되어 있지 않습니다.")
         fields = request_data["MaterialFields"]
+        book_only = request_data["RequestType"] == "new_book" and not fields
+        approved_amount = 0
+        if book_only:
+            payroll_month = ""
+        else:
+            if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (payroll_month, request_data["RequestedBy"])).fetchone():
+                raise HTTPException(status_code=400, detail="요청자의 승인월 정산이 이미 마감되어 승인할 수 없습니다.")
+            rate = conn.execute('SELECT "UnitAmount" FROM "BookMaterialPayRates" WHERE "BookCategory"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1', (request_data["BookCategory"], now.strftime("%Y-%m-%d"))).fetchone()
+            if not rate: raise HTTPException(status_code=400, detail="승인일 기준 자료 제작 단가가 설정되어 있지 않습니다.")
+            approved_amount = rate[0]
         material_values = {field: 1 for field in fields}
         if "IsPdfExist" in fields:
             material_values["IsPdfExist"] = request_data["BookData"].get("IsPdfExist") or 1
@@ -509,14 +515,16 @@ def review_book_material_request(request_id: int, payload: BookMaterialRequestRe
             assignments = ", ".join(f'"{field}"=?' for field in fields) + ', "UpdatedBy"=?, "UpdatedAt"=?'
             conn.execute(f'UPDATE "Books" SET {assignments} WHERE rowid=?', [material_values[field] for field in fields] + [current_user["username"], reviewed_at, book_id])
             new_snapshot = None
-        conn.execute('''UPDATE "BookMaterialRequests" SET "BookId"=?,"Status"='approved',"ReviewedBy"=?,"ReviewedAt"=?,"ApprovedAmount"=?,"PayrollMonth"=? WHERE "Id"=?''', (book_id, current_user["username"], reviewed_at, rate[0], payroll_month, request_id))
+        conn.execute('''UPDATE "BookMaterialRequests" SET "BookId"=?,"Status"='approved',"ReviewedBy"=?,"ReviewedAt"=?,"ApprovedAmount"=?,"PayrollMonth"=? WHERE "Id"=?''', (book_id, current_user["username"], reviewed_at, approved_amount, payroll_month, request_id))
         conn.commit()
     finally:
         conn.close()
     snapshot = get_record_snapshot("Books", book_id)
     if request_data["RequestType"] == "new_book": _audit_insert("Books", book_id, snapshot, current_user["username"], current_user["role"])
     else: _audit_update("Books", book_id, old_snapshot, snapshot, current_user["username"], current_user["role"])
-    return {"status": "success", "message": f"요청을 승인했습니다. {payroll_month} 정산에 {rate[0]:,}원이 반영됩니다."}
+    if book_only:
+        return {"status": "success", "message": "도서 등록 요청을 승인했습니다. 자료 제작비 정산 대상이 아닙니다."}
+    return {"status": "success", "message": f"요청을 승인했습니다. {payroll_month} 정산에 {approved_amount:,}원이 반영됩니다."}
 
 # --- User Book Registration & Search APIs ---
 # 등록/수정/삭제: 관리 선생님(manager) 이상만 가능 / 조회: 모든 로그인 사용자 가능
