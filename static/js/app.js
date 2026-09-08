@@ -7485,6 +7485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPayrollUnconfiguredLines(unconfiguredLines);
         renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer);
         renderPayrollClaims(data.claims || []);
+        renderPayrollMaterials(data.material_requests || []);
         const claimCard = document.getElementById('payroll-claim-card');
         claimCard.classList.toggle('hidden', Boolean(isStaff() && !teacher && !document.getElementById('payroll-claim-id').value));
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
@@ -7581,6 +7582,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const middleNumber = value.match(/^([7-9])(?:학년)?$/);
         if (middleNumber) return `중${Number(middleNumber[1]) - 6}`;
         return value || '-';
+    }
+
+    function renderPayrollMaterials(requests) {
+        document.getElementById('payroll-material-card').classList.toggle('hidden', !requests.length);
+        const total = requests.reduce((sum, item) => sum + Number(item.ApprovedAmount || 0), 0);
+        document.getElementById('payroll-material-total').textContent = `${total.toLocaleString()}원`;
+        document.getElementById('payroll-material-body').innerHTML = requests.map(item => {
+            const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ') || '도서만 등록';
+            return `<tr><td>${escapeHtml(item.RequestedBy || '-')}</td><td>${escapeHtml((item.ReviewedAt || '').slice(0, 10) || '-')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel || '-')}</td><td>${escapeHtml(fields)}</td><td class="payroll-amount">${Number(item.ApprovedAmount || 0).toLocaleString()}원</td></tr>`;
+        }).join('');
     }
 
     function renderPayrollClaims(claims) {
