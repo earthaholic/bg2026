@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from config import settings
 from database import (
     init_system_tables,
+    refresh_book_student_counts,
     advance_student_grades,
     get_user_by_username,
     verify_password,
@@ -609,11 +610,14 @@ def user_search_books(
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
     unstudied_student_ids: Optional[str] = Query(None),
+    sort_by: str = Query("row_id", regex="^(row_id|StudyStudentCount)$"),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
+    refresh_book_student_counts(conn)
     cursor = conn.cursor()
 
     conditions = []
@@ -714,12 +718,15 @@ def user_search_books(
 
     # Paginated data
     offset = (page - 1) * limit
-    data_query = f'SELECT rowid as row_id, * FROM "Books"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
-    cursor.execute(data_query, params)
+    order_column = 'StudyStudentCount' if sort_by == 'StudyStudentCount' else 'row_id'
+    data_query = f'''SELECT rowid AS row_id, *,
+        COALESCE((SELECT student_count FROM _app_book_student_counts c
+                  WHERE c.book_rowid = Books.rowid), 0) AS StudyStudentCount
+        FROM "Books"{where_str}
+        ORDER BY {order_column} {sort_direction}, row_id DESC LIMIT ? OFFSET ?'''
+    cursor.execute(data_query, params + [limit, offset])
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    for book in rows:
-        book['StudyStudentCount'] = len(get_cached_book_students(book['row_id'], book['Id']))
 
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
 

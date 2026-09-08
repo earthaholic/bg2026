@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Book Search State
     let searchPage = 1;
+    let bookSortBy = "row_id";
+    let bookSortDirection = "desc";
     let searchLimit = 30;
     let searchTotalPages = 1;
 
@@ -3050,6 +3052,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 page: searchPage,
                 limit: searchLimit
             });
+            queryParams.set('sort_by', bookSortBy);
+            queryParams.set('sort_direction', bookSortDirection);
             if (q) queryParams.append('q', q);
             if (target) queryParams.append('target', target);
             if (vocaMin > 0 || vocaMax < 10) {
@@ -7985,6 +7989,14 @@ document.addEventListener('DOMContentLoaded', () => {
         header.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
         table.dataset.sortColumn = String(columnIndex);
         table.dataset.sortDirection = direction;
+
+        if (table.querySelector('#book-cards-grid') && (columnIndex === 7 || columnIndex === 1)) {
+            bookSortBy = columnIndex === 7 ? 'StudyStudentCount' : 'row_id';
+            bookSortDirection = direction;
+            searchPage = 1;
+            loadBookSearchResults();
+            return;
+        }
 
         if (table.querySelector('#studylog-cards-grid')) {
             studylogSortBy = ['row_id', 'StudiedDay', 'StudentName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'][columnIndex];

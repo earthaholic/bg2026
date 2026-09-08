@@ -11,6 +11,7 @@
 사용법:
     python server_daemon.py
 """
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +34,8 @@ with open(LOG_FILE, "ab", buffering=0) as log_handle:
         stdout=log_handle,
         stderr=subprocess.STDOUT,
         close_fds=True,
-        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+        **({"creationflags": DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW}
+           if os.name == "nt" else {"start_new_session": True}),
     )
 
 print(f"uvicorn daemon started (PID {proc.pid}) - log: {LOG_FILE}")

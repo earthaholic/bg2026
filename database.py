@@ -478,8 +478,64 @@ def init_system_tables():
                     UPDATE _app_book_students_version SET version = version + 1 WHERE id = 1;
                 END""")
 
+    cursor.execute("""CREATE TABLE IF NOT EXISTS _app_book_student_counts (
+        book_rowid INTEGER PRIMARY KEY, student_count INTEGER NOT NULL
+    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS _app_book_student_counts_state (
+        id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL
+    )""")
+    conn.commit()
+    if all(cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
+           for name in ("Books", "Students", "StudyLogs")):
+        refresh_book_student_counts(conn)
     conn.commit()
     conn.close()
+
+
+def refresh_book_student_counts(conn):
+    """변경된 경우에만 전체 도서를 집계하고 검색용 읽기 스냅샷을 유지한다."""
+    conn.execute('BEGIN')
+    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
+    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
+    if saved and saved[0] == version:
+        return
+    conn.rollback()
+    # 동시 검색에서 과거 집계로 덮어쓰지 않도록 쓰기 잠금 후 다시 확인한다.
+    conn.execute('BEGIN IMMEDIATE')
+    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
+    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
+    if saved and saved[0] == version:
+        return
+    conn.execute('DELETE FROM _app_book_student_counts')
+    conn.execute('''INSERT INTO _app_book_student_counts (book_rowid, student_count)
+        WITH identities AS (
+            SELECT CAST(rowid AS TEXT) AS identity, rowid AS student_rowid FROM Students
+            UNION
+            SELECT CAST(Id AS TEXT), rowid FROM Students
+        ), candidates AS (
+            SELECT * FROM identities
+            UNION
+            SELECT s.Name, s.rowid FROM Students s
+            WHERE NOT EXISTS (SELECT 1 FROM identities i WHERE i.identity = s.Name)
+        ), resolved AS (
+            SELECT identity, MIN(student_rowid) AS student_rowid
+            FROM candidates GROUP BY identity HAVING COUNT(*) = 1
+        ), studied AS (
+            SELECT sl.BookId, r.student_rowid
+            FROM StudyLogs sl JOIN resolved r ON CAST(sl.StudentId AS TEXT) = r.identity
+        ), book_students AS (
+            SELECT b.rowid AS book_rowid, s.student_rowid
+            FROM studied s JOIN Books b ON s.BookId = b.rowid
+            UNION
+            SELECT b.rowid, s.student_rowid
+            FROM studied s JOIN Books b ON s.BookId = b.Id
+        )
+        SELECT book_rowid, COUNT(*) FROM book_students GROUP BY book_rowid
+    ''')
+    conn.execute('INSERT OR REPLACE INTO _app_book_student_counts_state VALUES (1, ?)', (version,))
+    conn.commit()
+    refresh_book_student_counts(conn)
+
 
 def advance_student_grades() -> None:
     """등록 당시 학년을 기준으로 새해마다 학생 학년을 계산해 반영한다."""
