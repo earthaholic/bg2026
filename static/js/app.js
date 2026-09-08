@@ -1341,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    const MATERIAL_FIELD_LABELS = { HasQuiz: '어휘 퀴즈', HasReadingQuestion: '독서 문제', HasReadingAnswer: '독서 답안', HasWritingQuestion: '글쓰기 문제', HasWritingAnswer: '글쓰기 답안', HasAdvancedMaterial: '심화 자료', HasDebateMaterial: '토론 자료', IsPdfExist: 'PDF 파일' };
+    const MATERIAL_FIELD_LABELS = { HasQuiz: '퀴즈', HasReadingQuestion: '독서 문제', HasReadingAnswer: '독서 답안', HasWritingQuestion: '글쓰기 문제', HasWritingAnswer: '글쓰기 답안', HasAdvancedMaterial: '심화 자료', HasDebateMaterial: '토론 자료', IsPdfExist: 'PDF 파일' };
 
     function toggleMaterialRequestType() {
         const isNew = document.getElementById('material-request-type').value === 'new_book';
@@ -2593,7 +2593,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
 
                         <div class="badge-feature-row" style="margin-top: 0.75rem;">
-                            ${l.HasQuiz ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 어휘 퀴즈</span>' : ''}
+                            ${l.HasQuiz ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 퀴즈</span>' : ''}
                             ${l.HasReadingQuestion ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 독서 이해 문제</span>' : ''}
                             ${l.HasWritingQuestion ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 독서 논술 문제</span>' : ''}
                             ${l.HasDebateMaterial ? '<span class="badge badge-feature"><i class="fa-solid fa-check"></i> 토론 자료</span>' : ''}
@@ -3379,7 +3379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div>
                     <div class="detail-section-title"><i class="fa-solid fa-award"></i> 교재 / 학습 자료 보유 현황</div>
                     <div class="detail-badges-list">
-                        ${b.HasQuiz ? '<span class="tag-badge success"><i class="fa-solid fa-check"></i> 어휘 퀴즈</span>' : '<span class="tag-badge"><i class="fa-solid fa-xmark"></i> 어휘 퀴즈 없음</span>'}
+                        ${b.HasQuiz ? '<span class="tag-badge success"><i class="fa-solid fa-check"></i> 퀴즈</span>' : '<span class="tag-badge"><i class="fa-solid fa-xmark"></i> 퀴즈 없음</span>'}
                         ${b.HasReadingQuestion ? '<span class="tag-badge success"><i class="fa-solid fa-check"></i> 독서 문제</span>' : ''}
                         ${b.HasReadingAnswer ? '<span class="tag-badge success"><i class="fa-solid fa-check"></i> 독서 답안</span>' : ''}
                         ${b.HasWritingQuestion ? '<span class="tag-badge success"><i class="fa-solid fa-check"></i> 글쓰기 문제</span>' : ''}
@@ -4193,7 +4193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="checkbox-grid">
                         <label class="checkbox-pill">
                             <input type="checkbox" name="HasQuiz" value="1" ${b.HasQuiz ? 'checked' : ''}>
-                            <span>어휘 퀴즈</span>
+                            <span>퀴즈</span>
                         </label>
                         <label class="checkbox-pill">
                             <input type="checkbox" name="HasReadingQuestion" value="1" ${b.HasReadingQuestion ? 'checked' : ''}>
