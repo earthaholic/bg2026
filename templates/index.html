@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260908-pdf-status">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260908-pdf-toggle">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -494,7 +494,7 @@
                                             <input type="checkbox" id="filter-chk-writing" value="1">
                                             <span>글쓰기 문제/답안</span>
                                         </label>
-                                        <label class="pdf-filter"><span>PDF</span><select id="filter-chk-pdf" class="form-control"><option value="">전체</option><option value="owned">PDF 보유 전체</option><option value="0">미보유</option><option value="1">PDF 보유(저작권 있음)</option><option value="2">PDF 보유(저작권 없음)</option></select></label>
+                                        <div class="pdf-filter"><span>PDF</span><div id="filter-chk-pdf" class="pdf-state-toggle" role="group" aria-label="PDF 보유 상태 필터" data-value=""><button type="button" class="pdf-state-button" data-value="" aria-pressed="true">전체</button><button type="button" class="pdf-state-button" data-value="owned" aria-pressed="false">보유 전체</button><button type="button" class="pdf-state-button" data-value="0" aria-pressed="false">미보유</button><button type="button" class="pdf-state-button" data-value="1" aria-pressed="false">저작권 있음</button><button type="button" class="pdf-state-button" data-value="2" aria-pressed="false">저작권 없음</button></div></div>
                                         <label class="checkbox-pill sm">
                                             <input type="checkbox" id="filter-chk-advanced" value="1">
                                             <span>심화 자료</span>
@@ -2345,6 +2345,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260908-pdf-status"></script>
+    <script src="/static/js/app.js?v=20260908-pdf-toggle"></script>
 </body>
 </html>

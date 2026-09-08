@@ -4283,4 +4283,12 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
 
 /* PDF 상태 선택 */
 .pdf-filter { display: flex; align-items: center; gap: 0.5rem; }
-.pdf-filter .form-control, .select-pdf-status { width: auto; min-width: 13rem; }
+.pdf-state-toggle { display: inline-flex; align-items: stretch; padding: 3px; gap: 2px; border: 1px solid var(--border-color, #475569); border-radius: 9px; background: var(--bg-input, transparent); }
+.pdf-state-button { border: 0; border-radius: 6px; background: transparent; color: var(--text-muted, #94a3b8); padding: 7px 9px; font: inherit; font-size: 0.75rem; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.pdf-state-button:hover:not(:disabled) { background: rgba(59, 130, 246, 0.12); color: var(--text-main, #e2e8f0); }
+.pdf-state-button[aria-pressed="true"] { background: #2563eb; color: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.pdf-state-button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.pdf-state-button:disabled { cursor: default; }
+.pdf-state-toggle[aria-busy="true"] { opacity: 0.65; }
+.pdf-filter { flex-wrap: wrap; }
+.pdf-filter .pdf-state-toggle { flex-wrap: wrap; }

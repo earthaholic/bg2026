@@ -8,6 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return PDF_STATUS_LABELS.map((label, status) => `<option value="${status}" ${status === Number(value || 0) ? 'selected' : ''}>${label}</option>`).join('');
     }
 
+    function pdfToggleButtons(value, disabled = false) {
+        return ['미보유', '저작권 있음', '저작권 없음'].map((label, status) => `<button type="button" class="pdf-state-button" data-value="${status}" aria-label="${PDF_STATUS_LABELS[status]}" aria-pressed="${status === Number(value || 0)}" title="${PDF_STATUS_LABELS[status]}" ${disabled ? 'disabled' : ''}>${label}</button>`).join('');
+    }
+    function setPdfToggleValue(group, value) {
+        group.dataset.value = String(value);
+        group.querySelectorAll('button[data-value]').forEach(button => {
+            button.setAttribute('aria-pressed', String(button.dataset.value === String(value)));
+        });
+    }
+
     // App State
     let token = localStorage.getItem('token');
     let currentUser = null;
@@ -974,7 +984,13 @@ document.addEventListener('DOMContentLoaded', () => {
         filterChkQuiz.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkReading.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
         filterChkWriting.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
-        filterChkPdf.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
+        filterChkPdf.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-value]');
+            if (!button || button.getAttribute('aria-pressed') === 'true') return;
+            setPdfToggleValue(filterChkPdf, button.dataset.value);
+            searchPage = 1;
+            loadBookSearchResults();
+        });
         [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); }));
 
         bookStudyStudentQ.addEventListener('input', () => {
@@ -1036,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkQuiz.checked = false;
             filterChkReading.checked = false;
             filterChkWriting.checked = false;
-            filterChkPdf.value = '';
+            setPdfToggleValue(filterChkPdf, '');
             [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
             bookUnstudiedStudents.clear();
             bookStudyStudentQ.value = '';
@@ -2304,11 +2320,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'PUT',
                 body: JSON.stringify(payload)
             });
-            if (field === 'IsPdfExist') chkEl.dataset.current = String(newVal);
             feedback.show('도서 보유 자료 정보가 업데이트되었습니다.', 'success');
         } catch (err) {
-            if (field === 'IsPdfExist') chkEl.value = chkEl.dataset.current;
-            else chkEl.checked = !chkEl.checked;
+            chkEl.checked = !chkEl.checked;
             feedback.show('도서 정보 수정 실패: ' + err.message, 'error');
         }
     }
@@ -3012,7 +3026,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasQuiz = filterChkQuiz.checked ? 1 : 0;
             const hasReading = filterChkReading.checked ? 1 : 0;
             const hasWriting = filterChkWriting.checked ? 1 : 0;
-            const pdfStatus = filterChkPdf.value;
+            const pdfStatus = filterChkPdf.dataset.value;
             const hasAdvanced = filterChkAdvanced.checked ? 1 : 0;
             const hasDebate = filterChkDebate.checked ? 1 : 0;
             const hasPaperbook = filterChkPaperbook.checked ? 1 : 0;
@@ -3098,7 +3112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </label>
                     </td>
                     <td class="text-center">
-                        <select class="form-control select-pdf-status" data-book-id="${bookId}" data-current="${Number(b.IsPdfExist || 0)}" aria-label="${title} PDF 상태" ${isStaff() ? '' : 'disabled'}>${pdfStatusOptions(b.IsPdfExist)}</select>
+                        <div class="pdf-state-toggle book-pdf-toggle" role="group" data-book-id="${bookId}" data-value="${Number(b.IsPdfExist || 0)}" aria-label="${title} PDF 상태">${pdfToggleButtons(b.IsPdfExist, !isStaff())}</div>
                     </td>
                     <td>
                         <button type="button" class="btn btn-xs btn-outline btn-open-book-detail" data-book-id="${bookId}">
@@ -3119,11 +3133,28 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        bookCardsGrid.querySelectorAll('.select-pdf-status').forEach(select => {
-            select.addEventListener('change', async () => {
-                select.disabled = true;
-                await toggleBookField(select.dataset.bookId, 'IsPdfExist', Number(select.value), select);
-                select.disabled = false;
+        bookCardsGrid.querySelectorAll('.book-pdf-toggle').forEach(group => {
+            group.addEventListener('click', async (event) => {
+                const button = event.target.closest('button[data-value]');
+                if (!button || !isStaff() || group.dataset.saving === 'true' || button.getAttribute('aria-pressed') === 'true') return;
+                const feedback = createActionFeedback(button);
+                group.dataset.saving = 'true';
+                group.setAttribute('aria-busy', 'true');
+                group.querySelectorAll('button').forEach(item => { item.disabled = true; });
+                try {
+                    await apiFetch(`/api/user/books/${group.dataset.bookId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ data: { IsPdfExist: Number(button.dataset.value) } })
+                    });
+                    setPdfToggleValue(group, button.dataset.value);
+                    feedback.show('PDF 상태가 변경되었습니다.', 'success');
+                } catch (err) {
+                    feedback.show('PDF 상태 변경 실패: ' + err.message, 'error');
+                } finally {
+                    delete group.dataset.saving;
+                    group.removeAttribute('aria-busy');
+                    group.querySelectorAll('button').forEach(item => { item.disabled = !isStaff(); });
+                }
             });
         });
 
