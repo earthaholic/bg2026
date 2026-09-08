@@ -469,6 +469,31 @@ def list_book_material_requests(status_filter: Optional[str] = Query(None, alias
     finally:
         conn.close()
 
+@app.delete("/api/user/book-material-requests/{request_id}")
+def delete_book_material_request(request_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT * FROM "BookMaterialRequests" WHERE "Id"=?', (request_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
+        snapshot = dict(row)
+        is_staff = current_user.get("role") in ("admin", "subadmin", "manager")
+        if not is_staff and (row["RequestedBy"] != current_user["username"] or row["Status"] == "approved"):
+            raise HTTPException(status_code=403, detail="본인의 대기·반려 요청만 삭제할 수 있습니다. 승인된 요청은 관리자에게 문의해 주세요.")
+        if row["Status"] == "approved" and row["PayrollMonth"] and conn.execute(
+            'SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+            (row["PayrollMonth"], row["RequestedBy"])
+        ).fetchone():
+            raise HTTPException(status_code=400, detail="마감된 정산에 포함된 자료 요청은 삭제할 수 없습니다.")
+        conn.execute('DELETE FROM "BookMaterialRequests" WHERE "Id"=?', (request_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    _audit_delete("BookMaterialRequests", request_id, snapshot, current_user["username"], current_user["role"])
+    return {"status": "success", "message": "요청 내역을 삭제하고 제작비 정산에서 제외했습니다. 등록된 도서·자료는 유지됩니다."}
+
+
 @app.post("/api/user/book-material-requests/{request_id}/review")
 def review_book_material_request(request_id: int, payload: BookMaterialRequestReview, current_user: Dict[str, Any] = Depends(get_current_staff)):
     if payload.Status not in ("approved", "rejected"):

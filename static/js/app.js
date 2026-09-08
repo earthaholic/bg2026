@@ -1406,15 +1406,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ') || '도서만 등록';
                 const status = item.Status === 'pending' ? '대기' : item.Status === 'approved' ? '승인' : '반려';
                 const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
-                const review = item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : details;
-                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(item.RequestedBy)}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}</td></tr>`;
+                const deleteButton = isStaff() || (item.RequestedBy === currentUser.username && item.Status !== 'approved') ? ` <button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '';
+                const review = (item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : escapeHtml(details)) + deleteButton;
+                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(item.RequestedBy)}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
             }).join('');
+            body.querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, () => loadBookMaterialRequests(forReview))));
             if (forReview) {
                 body.querySelectorAll('.btn-material-approve').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'approved')));
                 body.querySelectorAll('.btn-material-reject').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'rejected')));
             }
         } catch (err) {
             feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="text-center">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    async function deleteBookMaterialRequest(id, refresh) {
+        const feedback = createActionFeedback();
+        if (!(await feedback.confirm('이 요청 내역을 삭제할까요? 승인된 요청은 제작비가 정산 합계에서 제외됩니다.\n등록된 도서·자료는 유지되며, 삭제한 요청은 복구할 수 없습니다.'))) return;
+        try {
+            const result = await apiFetch(`/api/user/book-material-requests/${id}`, { method: 'DELETE' });
+            feedback.show(result.message, 'success');
+            await refresh();
+        } catch (err) { feedback.show(err.message, 'error'); }
     }
 
     async function reviewBookMaterialRequest(id, status) {
@@ -7590,8 +7602,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('payroll-material-total').textContent = `${total.toLocaleString()}원`;
         document.getElementById('payroll-material-body').innerHTML = requests.map(item => {
             const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ') || '도서만 등록';
-            return `<tr><td>${escapeHtml(item.RequestedBy || '-')}</td><td>${escapeHtml((item.ReviewedAt || '').slice(0, 10) || '-')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel || '-')}</td><td>${escapeHtml(fields)}</td><td class="payroll-amount">${Number(item.ApprovedAmount || 0).toLocaleString()}원</td></tr>`;
+            const manage = isStaff() ? `<button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '-';
+            return `<tr><td>${escapeHtml(item.RequestedBy || '-')}</td><td>${escapeHtml((item.ReviewedAt || '').slice(0, 10) || '-')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel || '-')}</td><td>${escapeHtml(fields)}</td><td class="payroll-amount">${Number(item.ApprovedAmount || 0).toLocaleString()}원</td><td>${manage}</td></tr>`;
         }).join('');
+        document.getElementById('payroll-material-body').querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, loadTeacherPayroll)));
     }
 
     function renderPayrollClaims(claims) {
