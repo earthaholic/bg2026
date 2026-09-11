@@ -2230,6 +2230,50 @@ body {
 }
 
 /* Picker Modal Dialog Styles */
+#modal-book-picker .picker-modal-card {
+    width: 1440px;
+    height: 760px;
+}
+
+.book-picker-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    flex: 1;
+    min-height: 0;
+}
+
+.book-picker-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    gap: 0.75rem;
+}
+
+.book-picker-column h4, .book-picker-hint {
+    margin: 0;
+}
+
+.book-picker-hint {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+.book-picker-column .picker-search-bar { margin-bottom: 0; }
+.book-picker-column .picker-item-row { gap: 0.6rem; }
+.book-picker-column .item-main { min-width: 0; overflow-wrap: anywhere; }
+.book-picker-column .btn-select-book-picker { flex-shrink: 0; }
+
+@media (max-width: 900px) {
+    #modal-book-picker .book-picker-columns {
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    #modal-book-picker .book-picker-column { flex: 0 0 340px; }
+}
+
 .picker-modal-card {
     width: 660px;
     max-width: 92vw;

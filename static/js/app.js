@@ -2022,15 +2022,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Load Picker Books List
+    let bookPickerRequestId = 0;
+
+    // 도서 검색·예정·최근 목록을 독립된 컬럼에 표시한다.
     async function loadPickerBooks() {
         const feedback = createActionFeedback();
         const container = document.getElementById('picker-book-results');
         const inputQ = document.getElementById('input-picker-book-q');
         if (!container) return;
+        const requestId = ++bookPickerRequestId;
+        const plannedContainer = document.getElementById('picker-book-planned');
+        const recentContainer = document.getElementById('picker-book-recent');
+        const containers = [container, plannedContainer, recentContainer];
 
         try {
-            container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 검색 중...</div>';
+            containers.forEach(el => { el.innerHTML = '<div class="loading-spinner">도서 목록 조회 중...</div>'; });
             const q = inputQ ? inputQ.value.trim() : '';
             const pickerTarget = activeBookPickerTarget;
             const pickerClassId = pickerTarget === 'batch' ? classBatchSelect.value : '';
@@ -2038,55 +2044,62 @@ document.addEventListener('DOMContentLoaded', () => {
             if (q) params.set('q', q);
             if (pickerClassId) params.set('class_id', pickerClassId);
             const data = await apiFetch(`/api/user/picker/books?${params}`);
-            if (inputQ.value.trim() !== q || activeBookPickerTarget !== pickerTarget || (pickerTarget === 'batch' && classBatchSelect.value !== pickerClassId)) return;
-            const books = data.books || [];
+            if (requestId !== bookPickerRequestId || inputQ.value.trim() !== q || activeBookPickerTarget !== pickerTarget || (pickerTarget === 'batch' && classBatchSelect.value !== pickerClassId)) return;
+            function renderBooks(target, books, emptyMessage) {
+                if (!books.length) {
+                    target.innerHTML = `<div class="empty-state"><p>${emptyMessage}</p></div>`;
+                    return;
+                }
 
-            if (books.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>검색 조건에 맞는 도서가 없습니다.</p></div>';
-                return;
-            }
-
-            let html = '';
-            books.forEach(b => {
-                const bId = b.row_id || b.Id;
-                const title = escapeHtml(b.Title || '제목 없음');
-                const author = escapeHtml(b.Author || '저자 미상');
-                const publisher = escapeHtml(b.Publisher || '출판사 미상');
-                const subject = escapeHtml(b.Subject || '분야 미상');
-                const activeBooks = activeBookPickerTarget === 'batch' ? selectedBatchBooks : selectedStudylogBooks;
-                const isBatchSelected = activeBooks.has(String(bId));
-                html += `
-                    <div class="picker-item-row ${isBatchSelected ? 'selected' : ''}">
-                        <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title} ${b.PlannedOrder != null ? '<span class="badge badge-info">예정 수업 내역</span>' : recentPickerBadge(b, q, '도서')}</div>
-                            <div class="item-sub">저자: ${author} | 출판사: ${publisher} | 분야: ${subject} | ID: #${bId}</div>
+                let html = '';
+                books.forEach(b => {
+                    const bId = b.row_id || b.Id;
+                    const title = escapeHtml(b.Title || '제목 없음');
+                    const author = escapeHtml(b.Author || '저자 미상');
+                    const publisher = escapeHtml(b.Publisher || '출판사 미상');
+                    const subject = escapeHtml(b.Subject || '분야 미상');
+                    const activeBooks = activeBookPickerTarget === 'batch' ? selectedBatchBooks : selectedStudylogBooks;
+                    const isBatchSelected = activeBooks.has(String(bId));
+                    html += `
+                        <div class="picker-item-row ${isBatchSelected ? 'selected' : ''}">
+                            <div class="item-main">
+                                <div class="item-title"><i class="fa-solid fa-book" style="color: var(--success);"></i> ${title} </div>
+                                <div class="item-sub">저자: ${author} | 출판사: ${publisher} | 분야: ${subject} | ID: #${bId}</div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-success btn-select-book-picker"
+                                    data-id="${bId}" data-title="${title}" data-author="${author}" data-publisher="${publisher}">
+                                <i class="fa-solid ${isBatchSelected ? 'fa-minus' : 'fa-check'}"></i> ${isBatchSelected ? '해제' : '선택'}
+                            </button>
                         </div>
-                        <button type="button" class="btn btn-sm btn-success btn-select-book-picker"
-                                data-id="${bId}" data-title="${title}" data-author="${author}" data-publisher="${publisher}">
-                            <i class="fa-solid ${isBatchSelected ? 'fa-minus' : 'fa-check'}"></i> ${isBatchSelected ? '해제' : '선택'}
-                        </button>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-
-            container.querySelectorAll('.btn-select-book-picker').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const id = btn.getAttribute('data-id');
-                    const title = btn.getAttribute('data-title');
-                    const author = btn.getAttribute('data-author');
-                    const publisher = btn.getAttribute('data-publisher');
-
-                    const selectedBooks = activeBookPickerTarget === 'batch' ? selectedBatchBooks : selectedStudylogBooks;
-                    if (selectedBooks.has(String(id))) selectedBooks.delete(String(id));
-                    else selectedBooks.set(String(id), { id: Number(id), title, author, publisher });
-                    updateBookPickerCount();
-                    loadPickerBooks();
+                    `;
                 });
-            });
+                target.innerHTML = html;
+
+                target.querySelectorAll('.btn-select-book-picker').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const id = btn.getAttribute('data-id');
+                        const title = btn.getAttribute('data-title');
+                        const author = btn.getAttribute('data-author');
+                        const publisher = btn.getAttribute('data-publisher');
+
+                        const selectedBooks = activeBookPickerTarget === 'batch' ? selectedBatchBooks : selectedStudylogBooks;
+                        if (selectedBooks.has(String(id))) selectedBooks.delete(String(id));
+                        else selectedBooks.set(String(id), { id: Number(id), title, author, publisher });
+                        updateBookPickerCount();
+                        renderColumns();
+                    });
+                });
+            }
+            function renderColumns() {
+                renderBooks(container, data.books || [], '검색 조건에 맞는 도서가 없습니다.');
+                renderBooks(plannedContainer, data.planned_books || [], pickerClassId ? '등록된 수업 예정 도서가 없습니다.' : '수업을 선택하면 예정 도서가 표시됩니다.');
+                renderBooks(recentContainer, data.recent_books || [], '내가 등록한 학습 이력의 도서가 아직 없습니다.');
+            }
+            renderColumns();
         } catch (err) {
+            if (requestId !== bookPickerRequestId) return;
             feedback.show(err.message, 'error');
-            container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+            containers.forEach(el => { el.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; });
         }
     }
 
