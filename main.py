@@ -1353,8 +1353,13 @@ def picker_search_books(
         params = [pattern] * 4
 
     # 학습 일자가 아닌 등록 순서로 최근 사용 항목을 중복 없이 우선 표시한다.
-    # 모든 역할에 동일하게 로그인 계정이 직접 등록한 이력만 사용한다. 등록자 없는 과거 이력은 제외한다.
-    recent_expr = '(SELECT MAX(sl.rowid) FROM "StudyLogs" sl WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id") AND sl."CreatedBy" = ?)'
+    # 모든 역할에서 실제 진행 선생님을 기준으로 한다. 대리 등록한 계정은 수업 주체가 아니다.
+    # 실제 진행 정보가 없는 과거 이력만 수업 담당 선생님으로 보완하며, 둘 다 없으면 제외한다.
+    recent_expr = '''(SELECT MAX(sl.rowid) FROM "StudyLogs" sl
+        LEFT JOIN "Classes" c ON c."Id" = sl."ClassId"
+        WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id")
+          AND COALESCE(NULLIF(TRIM(sl."ActualTeacherUsername"), ''),
+                       NULLIF(TRIM(c."TeacherUsername"), '')) = ?)'''
     select_params = [current_user["username"]]
     # 검색 결과와 추천 목록을 따로 조회하여 검색어와 결과 제한에 서로 영향을 주지 않는다.
     base_query = f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId FROM "Books"'

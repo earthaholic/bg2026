@@ -2091,7 +2091,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             function renderColumns() {
                 renderBooks(container, data.books || [], '검색 조건에 맞는 도서가 없습니다.');
-                renderBooks(recentContainer, data.recent_books || [], '내가 등록한 학습 이력의 도서가 아직 없습니다.');
+                renderBooks(recentContainer, data.recent_books || [], '내가 진행한 수업의 도서가 아직 없습니다.');
             }
             renderColumns();
         } catch (err) {
