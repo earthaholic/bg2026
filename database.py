@@ -975,7 +975,7 @@ def search_classes(
     if rows:
         placeholders = ','.join('?' for _ in rows)
         cursor.execute(f'''
-            SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name"
+            SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name", cs."IsSpecial"
             FROM "ClassStudents" cs
             JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
             WHERE cs."ClassId" IN ({placeholders})
@@ -983,7 +983,8 @@ def search_classes(
         ''', list(students_by_class))
         for student in cursor.fetchall():
             students_by_class[student['ClassId']].append({
-                'row_id': student['row_id'], 'Name': student['Name']
+                'row_id': student['row_id'], 'Name': student['Name'],
+                'IsSpecial': student['IsSpecial']
             })
     for row in rows:
         row['Students'] = students_by_class[row['Id']]

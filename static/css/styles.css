@@ -4376,6 +4376,22 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     white-space: normal;
 }
 
+#view-class-list .class-name-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+}
+
+#view-class-list .class-student-badge.warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
 #view-class-list .class-student-badges:empty {
     display: none;
 }
