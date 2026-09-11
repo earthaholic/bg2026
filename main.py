@@ -1936,9 +1936,11 @@ def build_monthly_report_text(
     special_teacher_name: str,
     logs: List[Dict[str, Any]]
 ) -> str:
-    name_yi = _get_korean_name_with_yi(student_name)
+    student_name = (student_name or "").strip()
+    given_name = student_name[1:] if len(student_name) > 1 else student_name
+    name_yi = _get_korean_name_with_yi(given_name)
     lines = []
-    lines.append(f"{name_yi} 어머니")
+    lines.append(f"{name_yi} 어머님")
     lines.append("안녕하세요")
 
     period_str = (period_label or "").strip()
