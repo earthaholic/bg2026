@@ -6462,8 +6462,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (studentSelect && studentSelect.selectedIndex >= 0) {
             const selectedOpt = studentSelect.options[studentSelect.selectedIndex];
             if (selectedOpt && selectedOpt.value) {
-                const text = selectedOpt.text;
-                studentName = text.replace(/\([^()]*\)|（[^（）]*）/g, '').trim();
+                studentName = selectedOpt.dataset.studentName || '';
             }
         }
 
@@ -6756,7 +6755,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sId = s.row_id || s.Id;
                 const name = escapeHtml(s.Name || '이름 없음');
                 const sex = formatSex(s.Sex);
-                html += `<option value="${sId}">${name} (${sex}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} [#${sId}]</option>`;
+                html += `<option value="${sId}" data-student-name="${name}">${name} (${sex}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} [#${sId}]</option>`;
             });
             select.innerHTML = html;
             if (selectedStudentId) {
@@ -6821,6 +6820,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const sId = s.row_id || s.Id;
                     const opt = document.createElement('option');
                     opt.value = String(sId);
+                    opt.dataset.studentName = s.Name || '이름 없음';
                     opt.textContent = `${s.Name || '이름 없음'} (${formatSex(s.Sex)}) - 학년 ${formatGrade(s.Grade)}, 추천 ${s.Referrer ? formatReferrer(s.Referrer) : '미입력'} (수업 종료) [#${sId}]`;
                     select.appendChild(opt);
                     select.value = String(sId);
