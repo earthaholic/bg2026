@@ -4939,13 +4939,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadUserAccounts() {
         const feedback = createActionFeedback();
         try {
-            userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
             const data = await apiFetch('/api/admin/users');
             await loadUserDisplayNames();
             renderUserAccounts(data.users);
         } catch (err) {
             feedback.show(err.message, 'error');
-            userManageBody.innerHTML = `<tr><td colspan="4" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
+            userManageBody.innerHTML = `<tr><td colspan="5" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
     }
 
@@ -4953,11 +4953,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userManageStats.textContent = `총 ${users.length} 명의 계정`;
 
         if (users.length === 0) {
-            userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
             return;
         }
 
-        let headHtml = '<th>이름</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
+        let headHtml = '<th>아이디</th><th>이름</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
         userManageHead.innerHTML = headHtml;
 
         let bodyHtml = '';
@@ -4987,6 +4987,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             bodyHtml += `
                 <tr>
+                    <td><strong>${escapeHtml(u.username)}</strong></td>
                     <td><input class="form-control input-user-name" aria-label="선생님 이름" maxlength="100" value="${escapeHtml(u.name || '')}" placeholder="이름 미등록"></td>
                     <td><span class="role-pill ${u.role}">${roleLabel}</span></td>
                     <td>${createdAt}</td>

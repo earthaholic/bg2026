@@ -4361,3 +4361,9 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     #modal-student-picker.monthly-picker .student-picker-search,
     #modal-student-picker.monthly-picker .student-picker-recent { flex: 0 0 340px; }
 }
+
+/* 계정 관리에서 아이디와 이름을 나란히 확인한다. */
+#view-user-manage .input-user-name {
+    width: 10rem;
+    max-width: 100%;
+}
