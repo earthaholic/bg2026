@@ -1937,7 +1937,8 @@ def build_monthly_report_text(
     logs: List[Dict[str, Any]]
 ) -> str:
     student_name = re.sub(r"\([^()]*\)|（[^（）]*）", "", student_name or "").strip()
-    given_name = student_name[1:] if len(student_name) > 1 else student_name
+    names = [name.strip() for name in student_name.split(",") if name.strip()]
+    given_name = ", ".join(name[1:] if len(name) > 1 else name for name in names)
     name_yi = _get_korean_name_with_yi(given_name)
     lines = []
     lines.append(f"{name_yi} 어머님")

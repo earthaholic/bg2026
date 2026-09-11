@@ -6527,7 +6527,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const trimmedName = (studentName || '').replace(/\([^()]*\)|（[^（）]*）/g, '').trim();
-        const givenName = trimmedName.length > 1 ? trimmedName.slice(1) : trimmedName;
+        const givenName = trimmedName.split(',')
+            .map(name => name.trim())
+            .filter(Boolean)
+            .map(name => name.length > 1 ? name.slice(1) : name)
+            .join(', ');
         const nameYi = getKoreanNameWithYi(givenName);
         const lines = [];
         lines.push(`${nameYi} 어머님`);
