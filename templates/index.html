@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260911-book-two-columns">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260911-monthly-recent-students">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -2055,12 +2055,21 @@
                 <button id="btn-close-student-picker" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="student-picker-columns">
+                <section class="student-picker-search">
                 <div class="picker-search-bar">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <input type="text" id="input-picker-student-q" class="form-control" placeholder="학생 이름, 학년, 추천인 검색..." autocomplete="off">
                 </div>
                 <div id="picker-student-results" class="picker-results-container">
                     <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학생 목록 로딩 중...</div>
+                </div>
+                </section>
+                <section id="monthly-recent-students-column" class="student-picker-recent hidden">
+                    <h4>최근 선택한 학생</h4>
+                    <p class="book-picker-hint">내가 수업한 학생 · 최근 선택 순 · 최대 25명</p>
+                    <div id="picker-monthly-recent-students" class="picker-results-container"></div>
+                </section>
                 </div>
             </div>
             <div id="picker-student-footer" class="modal-footer picker-modal-footer">
@@ -2359,6 +2368,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260911-actual-teacher-books"></script>
+    <script src="/static/js/app.js?v=20260911-monthly-recent-students"></script>
 </body>
 </html>

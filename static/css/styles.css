@@ -4336,3 +4336,28 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
 .pdf-state-toggle[aria-busy="true"] { opacity: 0.65; }
 .pdf-filter { flex-wrap: wrap; }
 .pdf-filter .pdf-state-toggle { flex-wrap: wrap; }
+
+/* 월말보고 학생 선택은 검색과 개인별 최근 선택을 나란히 표시한다. */
+.student-picker-columns, .student-picker-search, .student-picker-recent {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+#modal-student-picker.monthly-picker .picker-modal-card { width: 1180px; height: 760px; }
+#modal-student-picker.monthly-picker .student-picker-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 1.25rem;
+}
+.student-picker-recent { gap: 0.75rem; }
+.student-picker-recent h4 { margin: 0; }
+.student-picker-columns .picker-item-row { gap: 0.6rem; }
+.student-picker-columns .item-main { min-width: 0; overflow-wrap: anywhere; }
+.student-picker-columns .btn-select-student-picker { flex-shrink: 0; }
+@media (max-width: 900px) {
+    #modal-student-picker.monthly-picker .student-picker-columns { display: flex; overflow-y: auto; }
+    #modal-student-picker.monthly-picker .student-picker-search,
+    #modal-student-picker.monthly-picker .student-picker-recent { flex: 0 0 340px; }
+}

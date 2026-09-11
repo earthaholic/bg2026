@@ -1335,6 +1335,49 @@ def picker_search_students(
     conn.close()
     return {"students": [dict(r) for r in rows]}
 
+@app.post("/api/user/monthly-report/recent-students/{student_id}")
+def remember_monthly_student(student_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        student = _get_monthly_report_student(conn.cursor(), student_id, current_user)
+        conn.execute('DELETE FROM _app_monthly_student_selections WHERE username = ? AND student_id = ?',
+                     (current_user["username"], student["row_id"]))
+        conn.execute('INSERT INTO _app_monthly_student_selections (username, student_id) VALUES (?, ?)',
+                     (current_user["username"], student["row_id"]))
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
+
+
+@app.get("/api/user/monthly-report/recent-students")
+def get_monthly_recent_students(current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''SELECT s.rowid AS row_id, s.*
+            FROM _app_monthly_student_selections r JOIN "Students" s ON s.rowid = r.student_id
+            WHERE r.username = ? AND COALESCE(s."IsClassEnded", 0) = 0
+              AND EXISTS (SELECT 1 FROM "StudyLogs" sl LEFT JOIN "Classes" c ON c."Id" = sl."ClassId"
+                  WHERE (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
+                    AND COALESCE(NULLIF(TRIM(sl."ActualTeacherUsername"), ''),
+                                 NULLIF(TRIM(c."TeacherUsername"), '')) = ?)
+            ORDER BY r.id DESC''', (current_user["username"], current_user["username"])).fetchall()
+        students = []
+        for row in rows:
+            try:
+                _get_monthly_report_student(conn.cursor(), row["row_id"], current_user)
+            except HTTPException as exc:
+                if exc.status_code == 403:
+                    continue
+                raise
+            students.append(dict(row))
+            if len(students) == 25:
+                break
+        return {"students": students}
+    finally:
+        conn.close()
+
+
 @app.get("/api/user/picker/books")
 def picker_search_books(
     q: Optional[str] = Query(None),

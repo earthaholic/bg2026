@@ -1934,12 +1934,22 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<span class="tag-badge primary" title="최근 등록한 학습 기록 기준">최근 선택한 ${label}</span>` : '';
     }
 
-    // Load Picker Students List
+    let studentPickerRequestId = 0;
+    let monthlyStudentSelectionSave = Promise.resolve();
+
+    // 학생 검색과 월말보고의 최근 선택을 표시한다.
     async function loadPickerStudents() {
         const feedback = createActionFeedback();
         const container = document.getElementById('picker-student-results');
         const inputQ = document.getElementById('input-picker-student-q');
         if (!container) return;
+        const requestId = ++studentPickerRequestId;
+        const pickerTarget = activeStudentPickerTarget;
+        const isMonthly = pickerTarget === 'monthly';
+        document.querySelector('#modal-student-picker .modal-header h3').textContent = isMonthly ? '월말보고 학생 선택' : '학습할 학생 선택';
+        const recentContainer = document.getElementById('picker-monthly-recent-students');
+        document.getElementById('modal-student-picker').classList.toggle('monthly-picker', isMonthly);
+        document.getElementById('monthly-recent-students-column').classList.toggle('hidden', !isMonthly);
 
         try {
             container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 검색 중...</div>';
@@ -1950,73 +1960,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 const classId = document.getElementById('studylog-class')?.value;
                 if (classId) queryParams.set('class_id', classId);
             }
-            const data = await apiFetch(`/api/user/picker/students${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-            if (inputQ.value.trim() !== q) return;
-            const students = data.students || [];
-
-            if (students.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>검색 조건에 맞는 학생이 없습니다.</p></div>';
-                return;
+            if (isMonthly) {
+                recentContainer.innerHTML = '<div class="loading-spinner">최근 선택한 학생 조회 중...</div>';
+                await monthlyStudentSelectionSave;
             }
+            const data = await apiFetch(`/api/user/picker/students${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+            const recent = isMonthly ? await apiFetch('/api/user/monthly-report/recent-students') : { students: [] };
+            if (requestId !== studentPickerRequestId || activeStudentPickerTarget !== pickerTarget || inputQ.value.trim() !== q) return;
+            function renderStudents(target, students, emptyMessage) {
 
-            let html = '';
-            students.forEach(s => {
-                const sId = parseInt(s.row_id || s.Id);
-                const name = escapeHtml(s.Name || '이름 없음');
-                const sex = formatSex(s.Sex);
-                const grade = formatGrade(s.Grade);
-                const referrer = formatReferrer(s.Referrer);
-                const isSelected = activeStudentPickerTarget === 'studylog' && selectedStudentsMap.has(sId);
+                if (students.length === 0) {
+                    target.innerHTML = `<div class="empty-state"><p>${emptyMessage}</p></div>`;
+                    return;
+                }
+
+                let html = '';
+                students.forEach(s => {
+                    const sId = parseInt(s.row_id || s.Id);
+                    const name = escapeHtml(s.Name || '이름 없음');
+                    const sex = formatSex(s.Sex);
+                    const grade = formatGrade(s.Grade);
+                    const referrer = formatReferrer(s.Referrer);
+                    const isSelected = activeStudentPickerTarget === 'studylog' && selectedStudentsMap.has(sId);
 
 
-                html += `
-                    <div class="picker-item-row ${isSelected ? 'selected' : ''}" data-row-id="${sId}">
-                        <div class="item-main">
-                            <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex}) ${recentPickerBadge(s, q, '학생')}</div>
-                            <div class="item-sub">학년: ${grade}${s.Referrer ? ' · 추천: ' + referrer : ''} | ID: #${sId}</div>
+                    html += `
+                        <div class="picker-item-row ${isSelected ? 'selected' : ''}" data-row-id="${sId}">
+                            <div class="item-main">
+                                <div class="item-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} (${sex}) ${isMonthly ? '' : recentPickerBadge(s, q, '학생')}</div>
+                                <div class="item-sub">학년: ${grade}${s.Referrer ? ' · 추천: ' + referrer : ''} | ID: #${sId}</div>
+                            </div>
+                            <button type="button" class="btn btn-sm ${isSelected ? 'btn-success' : 'btn-outline-primary'} btn-select-student-picker"
+                                    data-id="${sId}" data-name="${name}" data-sex="${sex}" data-grade="${grade}" data-referrer="${referrer}">
+                                <i class="fa-solid fa-${isSelected ? 'check' : 'plus'}"></i> ${isSelected ? '선택됨' : '선택'}
+                            </button>
                         </div>
-                        <button type="button" class="btn btn-sm ${isSelected ? 'btn-success' : 'btn-outline-primary'} btn-select-student-picker"
-                                data-id="${sId}" data-name="${name}" data-sex="${sex}" data-grade="${grade}" data-referrer="${referrer}">
-                            <i class="fa-solid fa-${isSelected ? 'check' : 'plus'}"></i> ${isSelected ? '선택됨' : '선택'}
-                        </button>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-
-            container.querySelectorAll('.btn-select-student-picker').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const id = parseInt(btn.getAttribute('data-id'));
-                    const name = btn.getAttribute('data-name');
-                    const sex = btn.getAttribute('data-sex');
-                    const grade = btn.getAttribute('data-grade');
-                    const referrer = btn.getAttribute('data-referrer');
-
-                    if (activeStudentPickerTarget === 'monthly') {
-                        const monthlySelect = document.getElementById('monthly-report-student-select');
-                        const elModal = document.getElementById('modal-student-picker');
-                        if (monthlySelect) {
-                            monthlySelect.value = String(id);
-                            monthlySelect.dispatchEvent(new Event('change'));
-                        }
-                        if (elModal) elModal.classList.add('hidden');
-                        activeStudentPickerTarget = 'studylog';
-                        return;
-                    }
-
-                    // Studylog multi selection toggle
-                    if (selectedStudentsMap.has(id)) {
-                        selectedStudentsMap.delete(id);
-                    } else {
-                        selectedStudentsMap.set(id, { id, name, sex, grade, referrer });
-                    }
-
-                    loadPickerStudents();
-                    updatePickerSelectCountBadge();
+                    `;
                 });
-            });
+                target.innerHTML = html;
+
+                target.querySelectorAll('.btn-select-student-picker').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = parseInt(btn.getAttribute('data-id'));
+                        const name = btn.getAttribute('data-name');
+                        const sex = btn.getAttribute('data-sex');
+                        const grade = btn.getAttribute('data-grade');
+                        const referrer = btn.getAttribute('data-referrer');
+
+                        if (activeStudentPickerTarget === 'monthly') {
+                            const monthlySelect = document.getElementById('monthly-report-student-select');
+                            const elModal = document.getElementById('modal-student-picker');
+                            if (monthlySelect) {
+                                monthlySelect.value = String(id);
+                                monthlySelect.dispatchEvent(new Event('change'));
+                            }
+                            if (elModal) elModal.classList.add('hidden');
+                            activeStudentPickerTarget = 'studylog';
+                            return;
+                        }
+
+                        // Studylog multi selection toggle
+                        if (selectedStudentsMap.has(id)) {
+                            selectedStudentsMap.delete(id);
+                        } else {
+                            selectedStudentsMap.set(id, { id, name, sex, grade, referrer });
+                        }
+
+                        loadPickerStudents();
+                        updatePickerSelectCountBadge();
+                    });
+                });
+            }
+            renderStudents(container, data.students || [], '검색 조건에 맞는 학생이 없습니다.');
+            if (isMonthly) renderStudents(recentContainer, recent.students || [], '월말보고에서 선택한 본인 수업 학생이 아직 없습니다.');
         } catch (err) {
+            if (requestId !== studentPickerRequestId) return;
+            if (isMonthly) recentContainer.innerHTML = '<div class="empty-state">최근 학생 목록을 불러오지 못했습니다. 다시 열어 주세요.</div>';
             feedback.show(err.message, 'error');
             container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
         }
@@ -6877,6 +6897,10 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMonthlyReportId = null;
             setMonthlyReportSaveState(null);
             if (studentSelectEl.value) {
+                const selectedId = studentSelectEl.value;
+                monthlyStudentSelectionSave = monthlyStudentSelectionSave
+                    .then(() => apiFetch(`/api/user/monthly-report/recent-students/${encodeURIComponent(selectedId)}`, { method: 'POST' }))
+                    .catch(err => createActionFeedback().show(`최근 학생 선택 저장 실패: ${err.message}`, 'error'));
                 loadMonthlyReportLogs();
             } else {
                 generateMonthlyReportText();

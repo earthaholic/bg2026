@@ -16,6 +16,13 @@ def init_system_tables():
     """System table initialization for authentication and user management."""
     conn = get_db_connection()
     cursor = conn.cursor()
+    # 월말보고 학생 선택 순서를 계정별로 보관한다.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS _app_monthly_student_selections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        student_id INTEGER NOT NULL,
+        UNIQUE(username, student_id)
+    )''')
 
     # User authentication table (신규 스키마: admin / subadmin / manager / teacher)
     cursor.execute("""
