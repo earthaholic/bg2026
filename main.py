@@ -1353,22 +1353,16 @@ def picker_search_books(
         params = [pattern] * 4
 
     # 학습 일자가 아닌 등록 순서로 최근 사용 항목을 중복 없이 우선 표시한다.
-    # 로그인 계정이 직접 등록한 이력만 사용한다. 등록자 없는 과거 이력은 제외한다.
+    # 모든 역할에 동일하게 로그인 계정이 직접 등록한 이력만 사용한다. 등록자 없는 과거 이력은 제외한다.
     recent_expr = '(SELECT MAX(sl.rowid) FROM "StudyLogs" sl WHERE (sl."BookId" = "Books".rowid OR sl."BookId" = "Books"."Id") AND sl."CreatedBy" = ?)'
-    planned_expr = 'NULL'
     select_params = [current_user["username"]]
-    if class_id is not None:
-        planned_expr = '(SELECT p."SortOrder" FROM "ClassPlannedBooks" p WHERE p."ClassId" = ? AND p."BookId" = "Books".rowid AND p."IsBreak" = 0)'
-        select_params.append(class_id)
     # 검색 결과와 추천 목록을 따로 조회하여 검색어와 결과 제한에 서로 영향을 주지 않는다.
-    base_query = f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId, {planned_expr} AS PlannedOrder FROM "Books"'
+    base_query = f'SELECT rowid as row_id, *, {recent_expr} AS RecentStudyLogId FROM "Books"'
     try:
         books = cursor.execute(base_query + where_str + ' ORDER BY rowid DESC LIMIT 25', select_params + params).fetchall()
-        planned = cursor.execute(base_query + ' WHERE PlannedOrder IS NOT NULL ORDER BY PlannedOrder, rowid', select_params).fetchall() if class_id is not None else []
         recent = cursor.execute(base_query + ' WHERE RecentStudyLogId IS NOT NULL ORDER BY RecentStudyLogId DESC, rowid DESC LIMIT 25', select_params).fetchall()
         return {
             "books": [dict(r) for r in books],
-            "planned_books": [dict(r) for r in planned],
             "recent_books": [dict(r) for r in recent],
         }
     finally:

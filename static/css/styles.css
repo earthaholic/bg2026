@@ -2231,13 +2231,13 @@ body {
 
 /* Picker Modal Dialog Styles */
 #modal-book-picker .picker-modal-card {
-    width: 1440px;
+    width: 1180px;
     height: 760px;
 }
 
 .book-picker-columns {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
     gap: 1.25rem;
     flex: 1;
     min-height: 0;

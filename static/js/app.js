@@ -2024,16 +2024,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let bookPickerRequestId = 0;
 
-    // 도서 검색·예정·최근 목록을 독립된 컬럼에 표시한다.
+    // 도서 검색과 본인의 최근 수업 도서를 독립된 컬럼에 표시한다.
     async function loadPickerBooks() {
         const feedback = createActionFeedback();
         const container = document.getElementById('picker-book-results');
         const inputQ = document.getElementById('input-picker-book-q');
         if (!container) return;
         const requestId = ++bookPickerRequestId;
-        const plannedContainer = document.getElementById('picker-book-planned');
         const recentContainer = document.getElementById('picker-book-recent');
-        const containers = [container, plannedContainer, recentContainer];
+        const containers = [container, recentContainer];
 
         try {
             containers.forEach(el => { el.innerHTML = '<div class="loading-spinner">도서 목록 조회 중...</div>'; });
@@ -2092,7 +2091,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             function renderColumns() {
                 renderBooks(container, data.books || [], '검색 조건에 맞는 도서가 없습니다.');
-                renderBooks(plannedContainer, data.planned_books || [], pickerClassId ? '등록된 수업 예정 도서가 없습니다.' : '수업을 선택하면 예정 도서가 표시됩니다.');
                 renderBooks(recentContainer, data.recent_books || [], '내가 등록한 학습 이력의 도서가 아직 없습니다.');
             }
             renderColumns();
