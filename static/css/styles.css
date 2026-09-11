@@ -25,6 +25,9 @@
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
     --text-dim: #64748b;
+    --scrollbar-track: #0f172a;
+    --scrollbar-thumb: #64748b;
+    --scrollbar-thumb-hover: #94a3b8;
 
     --radius-sm: 6px;
     --radius-md: 10px;
@@ -36,6 +39,9 @@
 }
 
 [data-theme="light"] {
+    --scrollbar-track: #f1f5f9;
+    --scrollbar-thumb: #64748b;
+    --scrollbar-thumb-hover: #475569;
     --bg-dark: #f8fafc;
     --bg-card: rgba(255, 255, 255, 0.9);
     --bg-card-hover: #ffffff;
@@ -275,20 +281,24 @@ body {
     border-color: var(--primary);
 }
 
-/* Custom Scrollbar */
+/* 테마별 불투명 색상으로 스크롤 위치를 명확히 표시한다. */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
 }
 ::-webkit-scrollbar-track {
-    background: rgba(15, 23, 42, 0.5);
+    background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.2);
-    border-radius: 4px;
+    background: var(--scrollbar-thumb);
+    border: 2px solid var(--scrollbar-track);
+    border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.4);
+    background: var(--scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+    background: var(--scrollbar-track);
 }
 
 /* App Layout */
