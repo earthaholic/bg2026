@@ -6463,7 +6463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectedOpt = studentSelect.options[studentSelect.selectedIndex];
             if (selectedOpt && selectedOpt.value) {
                 const text = selectedOpt.text;
-                studentName = text.split(' (')[0].trim();
+                studentName = text.replace(/\([^()]*\)|（[^（）]*）/g, '').trim();
             }
         }
 
@@ -6526,7 +6526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (title && !titles.includes(title)) titles.push(title);
         });
 
-        const trimmedName = (studentName || '').trim();
+        const trimmedName = (studentName || '').replace(/\([^()]*\)|（[^（）]*）/g, '').trim();
         const givenName = trimmedName.length > 1 ? trimmedName.slice(1) : trimmedName;
         const nameYi = getKoreanNameWithYi(givenName);
         const lines = [];
