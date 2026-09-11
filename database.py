@@ -60,6 +60,10 @@ def init_system_tables():
         """)
         cursor.execute("DROP TABLE _app_users_legacy")
 
+    # 기존 계정과 연결 관계를 보존하며 표시 이름을 추가한다.
+    if 'name' not in {row['name'] for row in cursor.execute('PRAGMA table_info(_app_users)')}:
+        cursor.execute("ALTER TABLE _app_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+
     # Seed Admin User (사이트 관리자) if not exists
     cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.ADMIN_USERNAME,))
     if not cursor.fetchone():
@@ -792,7 +796,7 @@ def execute_raw_sql(sql_query: str) -> Dict[str, Any]:
 def list_all_users() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, role, created_at FROM _app_users ORDER BY id ASC")
+    cursor.execute("SELECT id, username, name, role, created_at FROM _app_users ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -807,13 +811,13 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
         return dict(row)
     return None
 
-def create_user(username: str, password: str, role: str) -> Dict[str, Any]:
+def create_user(username: str, password: str, role: str, name: str) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO _app_users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username, hash_password(password), role)
+            "INSERT INTO _app_users (username, password_hash, role, name) VALUES (?, ?, ?, ?)",
+            (username, hash_password(password), role, name)
         )
         conn.commit()
         inserted_id = cursor.lastrowid
@@ -934,7 +938,7 @@ def search_classes(
 
     if q and q.strip():
         pattern = f"%{q.strip()}%"
-        conditions.append('(c."ClassName" LIKE ? OR c."TeacherUsername" LIKE ?)')
+        conditions.append('(c."ClassName" LIKE ? OR EXISTS (SELECT 1 FROM _app_users u WHERE u.username = c."TeacherUsername" AND u.name LIKE ?))')
         params.extend([pattern, pattern])
 
     if teacher_username:
@@ -1054,7 +1058,7 @@ def get_teacher_options() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') ORDER BY username ASC"
+        "SELECT id, username, name, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') ORDER BY username ASC"
     )
     rows = cursor.fetchall()
     conn.close()

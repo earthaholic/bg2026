@@ -93,9 +93,13 @@ class LoginRequest(BaseModel):
     password: str
 
 class UserCreateRequest(BaseModel):
+    name: str
     username: str
     password: str
     role: str
+
+class UserNameUpdateRequest(BaseModel):
+    name: str
 
 class UserPasswordResetRequest(BaseModel):
     password: str
@@ -372,6 +376,7 @@ def login(payload: LoginRequest, request: Request):
         "access_token": token,
         "token_type": "bearer",
         "username": user["username"],
+        "name": user["name"],
         "role": user["role"]
     }
 
@@ -379,6 +384,7 @@ def login(payload: LoginRequest, request: Request):
 def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
     return {
         "username": current_user["username"],
+        "name": current_user["name"],
         "role": current_user["role"]
     }
 
@@ -3588,7 +3594,7 @@ def close_payroll(month: str, teacher_username: str = Query(...), current_user: 
         if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month,teacher_username)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 선생님 정산입니다.")
         for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason") VALUES(?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason']))
         conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","TeacherUsername","ClosedBy") VALUES(?,?,?)',(month,teacher_username,current_user['username'])); conn.commit()
-        return {"status":"success","message":f"{teacher_username} 선생님의 {month} 급여 정산을 마감했습니다."}
+        return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}
     except HTTPException: raise
     finally: conn.close()
 
@@ -4107,6 +4113,30 @@ def _resolve_target_user(user_id: int) -> Dict[str, Any]:
     return user
 
 
+def _validated_user_name(name: str) -> str:
+    name = name.strip()
+    if not name or len(name) > 100:
+        raise HTTPException(status_code=400, detail="이름은 1자 이상 100자 이하로 입력해 주세요.")
+    return name
+
+
+@app.get("/api/user/display-names")
+def user_display_names(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {"names": {u["username"]: u["name"] for u in list_all_users()}}
+
+
+@app.put("/api/admin/users/{user_id}/name")
+def admin_update_user_name(user_id: int, payload: UserNameUpdateRequest,
+                           current_admin: Dict[str, Any] = Depends(get_current_admin)):
+    name = _validated_user_name(payload.name)
+    old = _strip_user_password(_resolve_target_user(user_id))
+    with get_db_connection() as conn:
+        conn.execute("UPDATE _app_users SET name = ? WHERE id = ?", (name, user_id))
+    _audit_update("_app_users", user_id, old, _strip_user_password(get_user_by_id(user_id)),
+                  current_admin["username"], current_admin["role"])
+    return {"status": "success", "message": "이름이 변경되었습니다."}
+
+
 @app.get("/api/admin/users")
 def admin_list_users(current_admin: Dict[str, Any] = Depends(get_current_admin)):
     users = list_all_users()
@@ -4130,13 +4160,13 @@ def admin_create_user(
         )
 
     try:
-        res = create_user(username, payload.password, payload.role)
+        res = create_user(username, payload.password, payload.role, _validated_user_name(payload.name))
         user_row = _strip_user_password(get_user_by_id(res.get("id")))
         _audit_insert("_app_users", res.get("id"), user_row,
                       current_admin["username"], current_admin["role"])
         return {
             "status": "success",
-            "message": f"'{username}' 계정이 성공적으로 발급되었습니다.",
+            "message": "계정이 성공적으로 발급되었습니다.",
             "id": res.get("id")
         }
     except ValueError as e:

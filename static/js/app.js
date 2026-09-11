@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 classes.push(...data.classes);
             } while (page <= data.total_pages);
             plannedClassSelect.innerHTML = '<option value="">수업 선택</option>' + classes.map(cls =>
-                `<option value="${Number(cls.Id)}">${escapeHtml(cls.ClassName)} · ${escapeHtml(cls.TeacherUsername)} · ${escapeHtml(cls.DayOfWeek)} ${escapeHtml(cls.StartTime || '')}${cls.IsEnded ? ' (종료)' : ''}</option>`).join('');
+                `<option value="${Number(cls.Id)}">${escapeHtml(cls.ClassName)} · ${escapeHtml(userName(cls.TeacherUsername))} · ${escapeHtml(cls.DayOfWeek)} ${escapeHtml(cls.StartTime || '')}${cls.IsEnded ? ' (종료)' : ''}</option>`).join('');
             plannedSubmit.disabled = !classes.length;
             if (!classes.length) plannedStatus.textContent = '등록 가능한 수업이 없습니다.';
         } catch (err) {
@@ -651,11 +651,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return !!(currentUser && ['admin', 'subadmin', 'manager'].includes(currentUser.role));
     }
 
+    let userDisplayNames = Object.create(null);
+    function userName(username) {
+        if (!username || ['-', '미지정', '정보 없음'].includes(username)) return username || '-';
+        return userDisplayNames[username] || '이름 미등록';
+    }
+    async function loadUserDisplayNames() {
+        const data = await apiFetch('/api/user/display-names');
+        userDisplayNames = Object.assign(Object.create(null), data.names);
+    }
+
     async function init() {
         setupEventListeners();
         if (token) {
             try {
                 currentUser = await apiFetch('/api/auth/me');
+                await loadUserDisplayNames();
                 updateUserUI();
                 await loadTables();
                 await loadRecentBooks();
@@ -685,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         userProfileBadge.classList.remove('hidden');
         btnLogout.classList.remove('hidden');
-        badgeUsername.textContent = currentUser.username;
+        badgeUsername.textContent = userName(currentUser.username);
         badgeRole.textContent = (ROLE_LABELS[currentUser.role] || currentUser.role).toUpperCase();
         badgeRole.className = `role-pill ${currentUser.role}`;
 
@@ -849,7 +860,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 token = data.access_token;
                 localStorage.setItem('token', token);
-                currentUser = { username: data.username, role: data.role };
+                currentUser = { username: data.username, name: data.name, role: data.role };
+                await loadUserDisplayNames();
                 updateUserUI();
                 await loadTables();
                 await loadRecentBooks();
@@ -1410,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
                 const deleteButton = isStaff() || (item.RequestedBy === currentUser.username && item.Status !== 'approved') ? ` <button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '';
                 const review = (item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : escapeHtml(details)) + deleteButton;
-                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(item.RequestedBy)}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
+                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(userName(item.RequestedBy))}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
             }).join('');
             body.querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, () => loadBookMaterialRequests(forReview))));
             if (forReview) {
@@ -2436,7 +2448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
         try {
             const data = await apiFetch(`/api/user/students/${studentId}/classes`);
-            const classLabel = c => `${c.ClassName} · ${c.TeacherUsername || ''} · ${c.StartTime || ''}`;
+            const classLabel = c => `${c.ClassName} · ${userName(c.TeacherUsername)} · ${c.StartTime || ''}`;
             const picker = (kind, label) => `<div class="student-class-picker">
                 <label for="student-${kind}-class-search">${label} 검색</label>
                 <div class="student-class-search-field"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="student-${kind}-class-search" class="form-control" aria-label="${label} 수업 검색" placeholder="수업명 / 담당 선생님 입력" autocomplete="off"></div>
@@ -2455,7 +2467,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let selected = String(data.assignments.find(a => Boolean(a.IsSpecial) === (kind === 'special'))?.ClassId ?? '');
                 const renderOptions = () => {
                     const query = search.value.trim().toLocaleLowerCase();
-                    const matches = data.classes.filter(c => `${c.ClassName} ${c.TeacherUsername || ''}`.toLocaleLowerCase().includes(query));
+                    const matches = data.classes.filter(c => `${c.ClassName} ${userName(c.TeacherUsername)}`.toLocaleLowerCase().includes(query));
                     const current = data.classes.find(c => String(c.Id) === selected);
                     const keepCurrent = current && !matches.includes(current);
                     const visible = keepCurrent ? [current, ...matches] : matches;
@@ -2645,7 +2657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="detail-meta-row">
                         ${studiedDayHtml}
                         <span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${l.row_id || l.Id}</strong></span>
-                        <span><i class="fa-solid fa-chalkboard-user"></i> 실제 진행: <strong>${escapeHtml(l.ActualTeacherUsername || '미지정')}</strong></span>
+                        <span><i class="fa-solid fa-chalkboard-user"></i> 실제 진행: <strong>${escapeHtml(userName(l.ActualTeacherUsername || '미지정'))}</strong></span>
                         <span><i class="fa-solid fa-users-rectangle"></i> 연결 수업: <strong>${escapeHtml(l.ClassName || '수업 없음')}</strong></span>
                         <span><i class="fa-solid fa-tag"></i> 정산 카테고리: <strong>${escapeHtml(l.PayrollCategoryName || '미지정')}</strong></span>
                     </div>
@@ -2844,10 +2856,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const classOptions = '<option value="">수업 없음</option>' + classes.map(cls =>
-            `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
+            `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
         ).join('');
         const teacherOptions = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === (log.ActualTeacherUsername || '') ? 'selected' : ''}>${escapeHtml(teacher.username)}</option>`
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === (log.ActualTeacherUsername || '') ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}</option>`
         ).join('');
         const categoryOptions = '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
             `<option value="${category.Id}" ${Number(log.PayrollCategoryId) === Number(category.Id) ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
@@ -2968,7 +2980,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const categoryData = isStaff() ? await apiFetch('/api/user/payroll/categories') : { categories: [] };
             const emptyLabel = currentUser?.role === 'teacher' ? '담당 수업을 선택해 주세요' : '정산에 연결하지 않음';
             classSelect.innerHTML = `<option value="">${emptyLabel}</option>` + (classData.classes || []).map(cls =>
-                `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(cls.TeacherUsername || '-')}</option>`
+                `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
             ).join('');
             classSelect.value = selectedClass;
             document.getElementById('studylog-class-required')?.classList.toggle('hidden', currentUser?.role !== 'teacher');
@@ -2995,7 +3007,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetTeacher = classId ? assignedTeacher : selectedTeacher;
         teacherSelect.disabled = currentUser?.role === 'teacher';
         teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
         ).join('');
         const selectedCategory = categorySelect.value;
         let categories = [];
@@ -3743,7 +3755,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </form>` : '';
         const listHtml = consultations.length ? consultations.map(item => `
             <article class="consultation-item" data-consultation-id="${item.row_id || item.Id}">
-                <div class="consultation-item-header"><span><i class="fa-regular fa-clock"></i> ${escapeHtml(item.CreatedAt || '작성 시각 없음')}${item.CreatedBy ? ` · ${escapeHtml(item.CreatedBy)}` : ''}</span>${isStaff() ? '<span><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></span>' : ''}</div>
+                <div class="consultation-item-header"><span><i class="fa-regular fa-clock"></i> ${escapeHtml(item.CreatedAt || '작성 시각 없음')}${item.CreatedBy ? ` · ${escapeHtml(userName(item.CreatedBy))}` : ''}</span>${isStaff() ? '<span><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></span>' : ''}</div>
                 <div class="consultation-content">${escapeHtml(item.Content || '')}</div>
             </article>`).join('') : '<div class="empty-state"><i class="fa-solid fa-comments fa-2x"></i><p>등록된 상담 기록이 없습니다.</p></div>';
         modalStudentConsultationsBody.innerHTML = `${formHtml}<div class="consultation-list">${listHtml}</div>`;
@@ -4929,6 +4941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             userManageBody.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
             const data = await apiFetch('/api/admin/users');
+            await loadUserDisplayNames();
             renderUserAccounts(data.users);
         } catch (err) {
             feedback.show(err.message, 'error');
@@ -4944,12 +4957,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        let headHtml = '<th>아이디</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
+        let headHtml = '<th>이름</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
         userManageHead.innerHTML = headHtml;
 
         let bodyHtml = '';
         users.forEach(u => {
-            const username = escapeHtml(u.username);
+            const username = escapeHtml(userName(u.username));
             const roleLabel = ROLE_LABELS[u.role] || u.role;
             const createdAt = escapeHtml(u.created_at || '-');
 
@@ -4974,15 +4987,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             bodyHtml += `
                 <tr>
-                    <td><strong>${username}</strong></td>
+                    <td><input class="form-control input-user-name" aria-label="선생님 이름" maxlength="100" value="${escapeHtml(u.name || '')}" placeholder="이름 미등록"></td>
                     <td><span class="role-pill ${u.role}">${roleLabel}</span></td>
                     <td>${createdAt}</td>
-                    <td style="text-align: right;">${actionsHtml}</td>
+                    <td style="text-align: right;"><button type="button" class="btn btn-sm btn-outline btn-user-name" data-user-id="${u.id}">이름 변경</button> ${actionsHtml}</td>
                 </tr>
             `;
         });
 
         userManageBody.innerHTML = bodyHtml;
+        userManageBody.querySelectorAll('.btn-user-name').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const user = users.find(u => String(u.id) === btn.dataset.userId);
+                const name = btn.closest('tr').querySelector('.input-user-name').value.trim();
+                const feedback = createActionFeedback();
+                try {
+                    await apiFetch(`/api/admin/users/${user.id}/name`, {method: 'PUT', body: JSON.stringify({name})});
+                    await loadUserDisplayNames();
+                    badgeUsername.textContent = userName(currentUser.username);
+                    await loadUserAccounts();
+                    feedback.show('이름이 변경되었습니다.', 'success');
+                } catch (err) { feedback.show(err.message, 'error'); }
+            });
+        });
 
         userManageBody.querySelectorAll('.btn-user-reset-pw').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -5023,6 +5050,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userCreateMsg.classList.add('hidden');
 
         const username = inputUserCreateUsername.value.trim();
+        const name = document.getElementById('input-user-create-name').value.trim();
         const password = inputUserCreatePassword.value;
         const role = selectUserCreateRole.value;
 
@@ -5043,7 +5071,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await apiFetch('/api/admin/users', {
                 method: 'POST',
-                body: JSON.stringify({ username, password, role })
+                body: JSON.stringify({ username, name, password, role })
             });
 
             feedback.show(result.message, 'success');
@@ -5287,7 +5315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let thtml = '<option value="">-- 담당 선생님 선택 --</option>';
             (tData.teachers || []).forEach(t => {
                 const roleLabel = ROLE_LABELS[t.role] || '선생님';
-                thtml += `<option value="${escapeHtml(t.username)}">${escapeHtml(t.username)} (${roleLabel})</option>`;
+                thtml += `<option value="${escapeHtml(t.username)}">${escapeHtml(userName(t.username))} (${roleLabel})</option>`;
             });
             teacherSelect.innerHTML = thtml;
             const categorySelect = document.getElementById('class-category');
@@ -5368,7 +5396,7 @@ document.addEventListener('DOMContentLoaded', () => {
         classes.forEach(c => {
             const cId = c.Id;
             const name = escapeHtml(c.ClassName || '수업명 없음');
-            const teacher = escapeHtml(c.TeacherUsername || '-');
+            const teacher = escapeHtml(userName(c.TeacherUsername || '-'));
             const day = formatDayOfWeek(c.DayOfWeek);
             const time = c.StartTime ? escapeHtml(c.StartTime) : '미지정';
             const count = c.StudentCount || 0;
@@ -5471,7 +5499,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="detail-header-block">
                     <div class="detail-title">${escapeHtml(cls.ClassName || '수업명 없음')}</div>
                     <div class="detail-meta-row">
-                        <span><i class="fa-solid fa-user-tie"></i> 담당 선생님: <strong>${escapeHtml(cls.TeacherUsername || '-')}</strong></span>
+                        <span><i class="fa-solid fa-user-tie"></i> 담당 선생님: <strong>${escapeHtml(userName(cls.TeacherUsername || '-'))}</strong></span>
                         <span><i class="fa-solid fa-tag"></i> 카테고리: <strong>${escapeHtml(cls.CategoryName || '미지정')}</strong></span>
                         <span><i class="fa-solid fa-calendar-days"></i> 요일: <strong>${day}</strong></span>
                         <span><i class="fa-solid fa-clock"></i> 시간: <strong>${time}</strong></span>
@@ -5747,7 +5775,7 @@ document.addEventListener('DOMContentLoaded', () => {
             (tData.teachers || []).forEach(t => {
                 const sel = t.username === cls.TeacherUsername ? 'selected' : '';
                 const roleLabel = ROLE_LABELS[t.role] || '선생님';
-                teacherOpts += `<option value="${escapeHtml(t.username)}" ${sel}>${escapeHtml(t.username)} (${roleLabel})</option>`;
+                teacherOpts += `<option value="${escapeHtml(t.username)}" ${sel}>${escapeHtml(userName(t.username))} (${roleLabel})</option>`;
             });
             const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
                 `<option value="${d}" ${cls.DayOfWeek === d ? 'selected' : ''}>${DAY_LABELS[d]}</option>`
@@ -5902,7 +5930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             classes.forEach(c => {
                 const name = escapeHtml(c.ClassName || '수업명 없음');
                 const day = formatDayOfWeek(c.DayOfWeek);
-                const teacher = escapeHtml(c.TeacherUsername || '');
+                const teacher = escapeHtml(userName(c.TeacherUsername || ''));
                 html += `<option value="${c.Id}">${name} (${day} ${c.StartTime ? c.StartTime : ''} · ${teacher})</option>`;
             });
             classBatchSelect.innerHTML = html;
@@ -5930,7 +5958,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cls = data.class_;
             const students = data.students || [];
             if (batchClassName) batchClassName.textContent = cls.ClassName || '-';
-            if (batchClassTeacher) batchClassTeacher.textContent = cls.TeacherUsername || '-';
+            if (batchClassTeacher) batchClassTeacher.textContent = userName(cls.TeacherUsername);
             if (batchClassSchedule) batchClassSchedule.textContent = `${formatDayOfWeek(cls.DayOfWeek)} ${cls.StartTime ? cls.StartTime : '(시간 미지정)'}`;
             if (batchClassStudentCount) batchClassStudentCount.textContent = `${students.length}명`;
             if (classBatchInfo) classBatchInfo.classList.remove('hidden');
@@ -6023,7 +6051,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!select) return;
         const data = await apiFetch('/api/user/teachers-options');
         select.innerHTML = (data.teachers || []).map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(teacher.username)}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
+            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
         ).join('');
     }
 
@@ -6042,7 +6070,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const assignmentBody = document.getElementById('class-category-assignment-body');
             assignmentBody.innerHTML = classes.length ? classes.map(cls => {
                 const options = '<option value="">-- 카테고리 선택 --</option>' + categories.map(c => `<option value="${c.Id}" ${Number(cls.CategoryId) === Number(c.Id) ? 'selected' : ''}>${escapeHtml(c.Name)}</option>`).join('');
-                return `<tr><td><strong>${escapeHtml(cls.ClassName)}</strong></td><td>${escapeHtml(cls.TeacherUsername || '-')}</td><td><select class="form-control class-category-assignment" data-class-id="${cls.Id}">${options}</select></td><td><button type="button" class="btn btn-xs btn-primary btn-save-class-category" data-class-id="${cls.Id}"><i class="fa-solid fa-floppy-disk"></i> 저장</button></td></tr>`;
+                return `<tr><td><strong>${escapeHtml(cls.ClassName)}</strong></td><td>${escapeHtml(userName(cls.TeacherUsername || '-'))}</td><td><select class="form-control class-category-assignment" data-class-id="${cls.Id}">${options}</select></td><td><button type="button" class="btn btn-xs btn-primary btn-save-class-category" data-class-id="${cls.Id}"><i class="fa-solid fa-floppy-disk"></i> 저장</button></td></tr>`;
             }).join('') : '<tr><td colspan="4" class="empty-state">카테고리가 미설정된 수업이 없습니다.</td></tr>';
             assignmentBody.querySelectorAll('.btn-save-class-category').forEach(button => button.addEventListener('click', () => saveClassCategoryAssignment(button.dataset.classId)));
             const rates = ratesData.rates || [];
@@ -6184,7 +6212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             batchExistingRecords.innerHTML = `
                 <div><strong><i class="fa-solid fa-ban"></i> ${date} 휴강 등록됨</strong><p>사유: ${escapeHtml(reason)}</p></div>
                 <div class="batch-record-summary">
-                    <div class="batch-record-representative"><strong>등록자 · ${escapeHtml(cancellation.CreatedBy || '정보 없음')}</strong><span>휴강은 도서·학생별 학습 이력을 만들지 않습니다.</span></div>
+                    <div class="batch-record-representative"><strong>등록자 · ${escapeHtml(userName(cancellation.CreatedBy || '정보 없음'))}</strong><span>휴강은 도서·학생별 학습 이력을 만들지 않습니다.</span></div>
                     <button type="button" class="btn btn-xs btn-danger" id="btn-delete-batch-cancellation" data-cancellation-id="${cancellation.Id}"><i class="fa-solid fa-rotate-left"></i> 휴강 해제</button>
                 </div>`;
             batchExistingRecords.classList.remove('hidden');
@@ -6608,7 +6636,7 @@ document.addEventListener('DOMContentLoaded', () => {
         badge.textContent = completed ? '저장 완료' : '임시 저장';
         badge.classList.toggle('completed', completed);
         badge.classList.remove('hidden');
-        state.textContent = `${report.UpdatedBy || report.CreatedBy || ''} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
+        state.textContent = `${userName(report.UpdatedBy || report.CreatedBy)} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
     }
 
     function renderMonthlyReportLogItems(logs, selectAll = false) {
@@ -7016,7 +7044,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const current = auditFilterUsername.value;
             let opts = '<option value="">전체 계정</option>';
             users.forEach(u => {
-                opts += `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)}</option>`;
+                opts += `<option value="${escapeHtml(u.username)}">${escapeHtml(userName(u.username))}</option>`;
             });
             auditFilterUsername.innerHTML = opts;
             if (current) auditFilterUsername.value = current;
@@ -7085,7 +7113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `
                 <tr class="audit-log-row" data-audit-index="${idx}" style="cursor: pointer;">
                     <td class="text-nowrap">${escapeHtml(log.created_at || '-')}</td>
-                    <td><strong>${escapeHtml(log.username)}</strong></td>
+                    <td><strong>${escapeHtml(userName(log.username))}</strong></td>
                     <td>${escapeHtml(tableLabel)}</td>
                     <td>#${escapeHtml(log.record_id || '-')}</td>
                     <td><span class="audit-action-badge ${actionClass}">${actionLabel}</span></td>
@@ -7112,6 +7140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let val = v;
                 if (v === null || v === undefined) val = '';
                 else if (typeof v === 'object') val = JSON.stringify(v);
+                else if (['username', 'TeacherUsername', 'ActualTeacherUsername', 'CreatedBy', 'UpdatedBy', 'RequestedBy', 'ReviewedBy', 'ClosedBy'].includes(k)) val = userName(v);
                 const cls = changedSet && changedSet.has(k) ? ' class="audit-changed-row"' : '';
                 return `<tr${cls}><td class="audit-key-cell">${escapeHtml(k)}</td><td>${escapeHtml(String(val))}</td></tr>`;
             }).join('');
@@ -7151,7 +7180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalAuditDetailBody.innerHTML = `
             <div class="audit-detail-meta">
                 <div><span class="text-muted">일시:</span> ${escapeHtml(log.created_at || '-')}</div>
-                <div><span class="text-muted">계정:</span> <strong>${escapeHtml(log.username)}</strong> <span class="role-pill ${escapeHtml(log.user_role || '')}">${escapeHtml(log.user_role || '')}</span></div>
+                <div><span class="text-muted">계정:</span> <strong>${escapeHtml(userName(log.username))}</strong> <span class="role-pill ${escapeHtml(log.user_role || '')}">${escapeHtml(log.user_role || '')}</span></div>
                 <div><span class="text-muted">대상:</span> ${escapeHtml(tableLabel)} (레코드 #${escapeHtml(log.record_id || '-')})</div>
                 <div><span class="text-muted">액션:</span> <span class="audit-action-badge ${actionClass}">${actionLabel}</span></div>
             </div>
@@ -7517,7 +7546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         payrollTeacherOptions = data.teachers || [];
         payrollTeacherOptions.forEach(teacher => {
             const roleLabel = ROLE_LABELS[teacher.role] || '선생님';
-            options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)} (${roleLabel})</option>`;
+            options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(userName(teacher.username))} (${roleLabel})</option>`;
         });
         teacherSelect.innerHTML = options;
         teacherSelect.value = selectedTeacher;
@@ -7550,7 +7579,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetSelect = document.getElementById('payroll-transfer-teacher');
         targetSelect.innerHTML = '<option value="">이전할 선생님 선택</option>' + payrollTeacherOptions
             .filter(teacher => teacher.username !== sourceTeacher)
-            .map(teacher => `<option value="${escapeHtml(teacher.username)}">${escapeHtml(teacher.username)}</option>`)
+            .map(teacher => `<option value="${escapeHtml(teacher.username)}">${escapeHtml(userName(teacher.username))}</option>`)
             .join('');
         updatePayrollTransferSelection();
     }
@@ -7649,7 +7678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('payroll-material-body').innerHTML = requests.map(item => {
             const fields = (item.MaterialFields || []).map(field => field === 'IsPdfExist' ? pdfStatusLabel(item.BookData?.IsPdfExist || 1) : MATERIAL_FIELD_LABELS[field] || field).join(', ') || '도서만 등록';
             const manage = isStaff() ? `<button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '-';
-            return `<tr><td>${escapeHtml(item.RequestedBy || '-')}</td><td>${escapeHtml((item.ReviewedAt || '').slice(0, 10) || '-')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel || '-')}</td><td>${escapeHtml(fields)}</td><td class="payroll-amount">${Number(item.ApprovedAmount || 0).toLocaleString()}원</td><td>${manage}</td></tr>`;
+            return `<tr><td>${escapeHtml(userName(item.RequestedBy || '-'))}</td><td>${escapeHtml((item.ReviewedAt || '').slice(0, 10) || '-')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel || '-')}</td><td>${escapeHtml(fields)}</td><td class="payroll-amount">${Number(item.ApprovedAmount || 0).toLocaleString()}원</td><td>${manage}</td></tr>`;
         }).join('');
         document.getElementById('payroll-material-body').querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, loadTeacherPayroll)));
     }
@@ -7660,7 +7689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         payrollClaimsById.clear();
         claims.forEach(claim => payrollClaimsById.set(Number(claim.Id), claim));
         document.getElementById('payroll-claims-body').innerHTML = claims.map(claim => {
-            return `<tr><td>${escapeHtml(claim.TeacherUsername)}</td><td>${escapeHtml(claim.ClaimDate || '-')}</td><td>${escapeHtml(claim.ItemName)}</td><td>${escapeHtml(claim.Description || '-')}</td><td class="payroll-amount">${Number(claim.Amount || 0).toLocaleString()}원</td><td><button type="button" class="btn btn-xs btn-outline btn-edit-payroll-claim" data-id="${Number(claim.Id)}">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-payroll-claim" data-id="${Number(claim.Id)}">삭제</button></td></tr>`;
+            return `<tr><td>${escapeHtml(userName(claim.TeacherUsername))}</td><td>${escapeHtml(claim.ClaimDate || '-')}</td><td>${escapeHtml(claim.ItemName)}</td><td>${escapeHtml(claim.Description || '-')}</td><td class="payroll-amount">${Number(claim.Amount || 0).toLocaleString()}원</td><td><button type="button" class="btn btn-xs btn-outline btn-edit-payroll-claim" data-id="${Number(claim.Id)}">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-payroll-claim" data-id="${Number(claim.Id)}">삭제</button></td></tr>`;
         }).join('');
     }
 
@@ -7683,7 +7712,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('payroll-claim-amount').value = Number(claim.Amount || 0);
         document.getElementById('payroll-claim-description').value = claim.Description || '';
         payrollEditingClaimTeacher = claim.TeacherUsername;
-        document.getElementById('payroll-claim-form-title').innerHTML = `<i class="fa-solid fa-pen"></i> ${escapeHtml(claim.TeacherUsername)} 추가 청구 수정`;
+        document.getElementById('payroll-claim-form-title').innerHTML = `<i class="fa-solid fa-pen"></i> ${escapeHtml(userName(claim.TeacherUsername))} 추가 청구 수정`;
         document.getElementById('btn-submit-payroll-claim').innerHTML = '<i class="fa-solid fa-check"></i> 수정 저장';
         document.getElementById('btn-cancel-payroll-claim-edit').classList.remove('hidden');
         const card = document.getElementById('payroll-claim-card');
@@ -7787,7 +7816,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.getElementById('studylog-csv-runs-body');
         try {
             const data = await apiFetch('/api/user/utilities/studylog-csv/runs');
-            body.innerHTML = data.runs.length ? data.runs.map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(run.username)}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
+            body.innerHTML = data.runs.length ? data.runs.map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(userName(run.username))}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
         } catch (error) {
             feedback.show(error.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`; }
     }
@@ -7916,7 +7945,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-close-payroll')?.addEventListener('click', async () => {
         const feedback = createActionFeedback();
         try {
-            const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !(await feedback.confirm(`${teacher} 선생님의 ${month} 정산을 마감할까요?`))) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll();
+            const month=document.getElementById('payroll-month').value, teacher=document.getElementById('payroll-teacher').value.trim(); if (!teacher || !(await feedback.confirm(`${userName(teacher)} 선생님의 ${month} 정산을 마감할까요?`))) return; await apiFetch(`/api/user/payroll/${month}/close?teacher_username=${encodeURIComponent(teacher)}`, {method:'POST'}); await loadTeacherPayroll();
         } catch (err) { feedback.show(err.message, 'error'); }
     });
     document.getElementById('btn-cancel-payroll-claim-edit')?.addEventListener('click', resetPayrollClaimForm);
@@ -7932,7 +7961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startPayrollClaimEdit(claim);
                 return;
             }
-            if (!(await feedback.confirm(`${claim.TeacherUsername} 선생님의 '${claim.ItemName}' 추가 청구를 삭제할까요?\n\n삭제 즉시 정산 합계에서 제외됩니다.`))) return;
+            if (!(await feedback.confirm(`${userName(claim.TeacherUsername)} 선생님의 '${claim.ItemName}' 추가 청구를 삭제할까요?\n\n삭제 즉시 정산 합계에서 제외됩니다.`))) return;
             const result = await apiFetch(`/api/user/payroll/claims/${claimId}`, { method: 'DELETE' });
             if (Number(document.getElementById('payroll-claim-id').value) === claimId) resetPayrollClaimForm();
             await loadTeacherPayroll();
@@ -8130,7 +8159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isAdmin()) return;
             activityEvents = data.events;
             activityAreas = data.areas;
-            for (const [id, options] of [['username', Object.fromEntries(data.users.map(u => [u, u]))], ['event', data.events], ['area', data.areas]]) {
+            for (const [id, options] of [['username', Object.fromEntries(data.users.map(u => [u, userName(u)]))], ['event', data.events], ['area', data.areas]]) {
                 const select = activityEl(id);
                 const value = select.value;
                 select.options.length = 1;
@@ -8163,7 +8192,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const summary = data.summary;
             activityEl('summary').textContent = `총 ${summary.total.toLocaleString()}건 · 활동 계정 ${summary.users}명 · 로그인 성공 ${summary.logins}건 · 실패 ${summary.failures}건`;
             activityEl('body').innerHTML = data.items.length ? data.items.map((row, index) => {
-                const account = row.username || (row.attempted_username ? `${row.attempted_username} (로그인 시도)` : '미인증');
+                const account = (row.username ? userName(row.username) : '') || (row.attempted_username ? `${userName(row.attempted_username)} (로그인 시도)` : '미인증');
                 const target = row.event === 'VIEW' ? activityScreenName(row.target_id) : row.target_id ? `#${row.target_id}` : '—';
                 const result = row.status_code < 400 ? '성공' : row.status_code === 403 ? '권한 거부' : '실패';
                 return `<tr><td class="text-nowrap">${escapeHtml(activityTime(row.created_at))}</td><td>${escapeHtml(account)}<br><small>${escapeHtml(ROLE_LABELS[row.user_role] || '')}</small></td><td>${escapeHtml(activityEvents[row.event] || row.event)}</td><td>${escapeHtml(activityAreas[row.area] || row.area)}</td><td>${escapeHtml(target)}</td><td class="${row.status_code >= 400 ? 'activity-failure' : ''}">${result} (${row.status_code})</td><td><button class="btn btn-sm btn-outline" data-activity-index="${index}">상세</button></td></tr>`;
@@ -8191,8 +8220,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = activityItems[Number(button.dataset.activityIndex)];
         if (!row) return;
         const fields = {
-            '발생 시각': activityTime(row.created_at), '계정': row.username || '미인증',
-            '역할': ROLE_LABELS[row.user_role] || '—', '로그인 시도 계정': row.attempted_username || '—',
+            '발생 시각': activityTime(row.created_at), '계정': row.username ? userName(row.username) : '미인증',
+            '역할': ROLE_LABELS[row.user_role] || '—', '로그인 시도 이름': row.attempted_username ? userName(row.attempted_username) : '—',
             '활동': activityEvents[row.event], '업무 영역': activityAreas[row.area],
             '대상': row.event === 'VIEW' ? activityScreenName(row.target_id) : row.target_id || '—',
             '결과': `${row.status_code < 400 ? '성공' : '실패'} (${row.status_code})`,
