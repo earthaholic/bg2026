@@ -6526,9 +6526,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (title && !titles.includes(title)) titles.push(title);
         });
 
-        const nameYi = getKoreanNameWithYi(studentName);
+        const trimmedName = (studentName || '').trim();
+        const givenName = trimmedName.length > 1 ? trimmedName.slice(1) : trimmedName;
+        const nameYi = getKoreanNameWithYi(givenName);
         const lines = [];
-        lines.push(`${nameYi} 어머니`);
+        lines.push(`${nameYi} 어머님`);
         lines.push('안녕하세요');
 
         if (periodLabel && reportMonth) {
