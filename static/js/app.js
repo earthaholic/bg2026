@@ -5406,7 +5406,11 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `
                 <tr data-class-id="${cId}">
                     <td><strong>#${cId}</strong></td>
-                    <td class="fw-semibold text-primary cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</td>
+                    <td class="fw-semibold text-primary cell-clickable btn-open-class-detail" data-class-id="${cId}"><div>${name}</div>
+                        <div class="class-student-badges">${(c.Students || []).map(student => `
+                            <button type="button" class="tag-badge primary class-student-badge" data-student-id="${Number(student.row_id)}" aria-label="${escapeHtml(student.Name || '이름 없음')} 학생 상세 정보">${escapeHtml(student.Name || '이름 없음')}</button>
+                        `).join('')}</div>
+                    </td>
                     <td data-sort-value="${Object.keys(DAY_LABELS).indexOf(c.DayOfWeek) + 1}"><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
                     <td>${time}</td>
                     <td><i class="fa-solid fa-user-tie text-muted"></i> ${teacher}</td>
@@ -5435,6 +5439,13 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openClassDetailModal(btn.getAttribute('data-class-id'));
+            });
+        });
+
+        classCardsGrid.querySelectorAll('.class-student-badge').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openStudentDetailModal(btn.dataset.studentId);
             });
         });
 

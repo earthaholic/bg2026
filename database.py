@@ -938,8 +938,14 @@ def search_classes(
 
     if q and q.strip():
         pattern = f"%{q.strip()}%"
-        conditions.append('(c."ClassName" LIKE ? OR EXISTS (SELECT 1 FROM _app_users u WHERE u.username = c."TeacherUsername" AND u.name LIKE ?))')
-        params.extend([pattern, pattern])
+        conditions.append('''(c."ClassName" LIKE ? OR EXISTS (
+            SELECT 1 FROM _app_users u WHERE u.username = c."TeacherUsername" AND u.name LIKE ?
+        ) OR EXISTS (
+            SELECT 1 FROM "ClassStudents" cs
+            JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
+            WHERE cs."ClassId" = c."Id" AND s."Name" LIKE ?
+        ))''')
+        params.extend([pattern, pattern, pattern])
 
     if teacher_username:
         conditions.append('c."TeacherUsername" = ?')
@@ -964,10 +970,26 @@ def search_classes(
         ORDER BY c."Id" DESC LIMIT {limit} OFFSET {offset}
     '''
     cursor.execute(data_query, params)
-    rows = cursor.fetchall()
+    rows = [dict(r) for r in cursor.fetchall()]
+    students_by_class = {row['Id']: [] for row in rows}
+    if rows:
+        placeholders = ','.join('?' for _ in rows)
+        cursor.execute(f'''
+            SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name"
+            FROM "ClassStudents" cs
+            JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
+            WHERE cs."ClassId" IN ({placeholders})
+            ORDER BY s."Name", s.rowid
+        ''', list(students_by_class))
+        for student in cursor.fetchall():
+            students_by_class[student['ClassId']].append({
+                'row_id': student['row_id'], 'Name': student['Name']
+            })
+    for row in rows:
+        row['Students'] = students_by_class[row['Id']]
     conn.close()
 
-    return [dict(r) for r in rows], total_count
+    return rows, total_count
 
 def set_class_students(class_id: int, student_items: List) -> None:
     """수업의 학생 배정을 전체 교체한다 (기존 관계 삭제 후 재삽입).

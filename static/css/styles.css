@@ -4367,3 +4367,29 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     width: 10rem;
     max-width: 100%;
 }
+
+#view-class-list .class-student-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    white-space: normal;
+}
+
+#view-class-list .class-student-badges:empty {
+    display: none;
+}
+
+#view-class-list .class-student-badge {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+#view-class-list .class-student-badge:hover {
+    filter: brightness(0.95);
+}
+
+#view-class-list .class-student-badge:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
