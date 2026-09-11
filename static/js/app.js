@@ -5407,7 +5407,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr data-class-id="${cId}">
                     <td><strong>#${cId}</strong></td>
                     <td class="fw-semibold text-primary cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</td>
-                    <td><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
+                    <td data-sort-value="${Object.keys(DAY_LABELS).indexOf(c.DayOfWeek) + 1}"><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
                     <td>${time}</td>
                     <td><i class="fa-solid fa-user-tie text-muted"></i> ${teacher}</td>
                     <td><span class="badge badge-info"><i class="fa-solid fa-users"></i> ${count}명</span></td>
