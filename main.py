@@ -1710,7 +1710,7 @@ def user_search_studylogs(
     studied_day: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
-    sort_by: str = Query("row_id", regex="^(row_id|StudiedDay|StudentName|BookTitle|IsSpecial|LessonContent|Description)$"),
+    sort_by: str = Query("row_id", regex="^(row_id|StudiedDay|StudentName|TeacherName|BookTitle|IsSpecial|LessonContent|Description)$"),
     sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -1761,6 +1761,7 @@ def user_search_studylogs(
         "row_id": "sl.rowid",
         "StudiedDay": "sl.StudiedDay",
         "StudentName": "s.Name",
+        "TeacherName": "TeacherName",
         "BookTitle": "b.Title",
         "IsSpecial": "sl.IsSpecial",
         "LessonContent": "sl.LessonContent",
@@ -1773,10 +1774,15 @@ def user_search_studylogs(
         SELECT sl.rowid as row_id, sl.*, 
                s.Name as StudentName, s.Sex as StudentSex, s.Birthday as StudentBirthday,
                s.Grade as StudentGrade, s.Referrer as StudentReferrer,
-               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher, b.Subject as BookSubject
+               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher, b.Subject as BookSubject,
+               COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(sl."ActualTeacherUsername"), ''),
+                        NULLIF(TRIM(c."TeacherUsername"), ''), '미지정') AS TeacherName
         FROM "StudyLogs" sl
         LEFT JOIN "Students" s ON sl.StudentId = s.rowid OR sl.StudentId = s.Id
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
+        LEFT JOIN "Classes" c ON c."Id" = sl."ClassId"
+        LEFT JOIN _app_users u ON u.username = COALESCE(NULLIF(TRIM(sl."ActualTeacherUsername"), ''),
+                                                       NULLIF(TRIM(c."TeacherUsername"), ''))
         {where_str}
         ORDER BY {order_by} LIMIT {limit} OFFSET {offset}
     '''

@@ -2337,7 +2337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const feedback = createActionFeedback();
         if (!token) return;
         try {
-            studylogCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div>';
+            studylogCardsGrid.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div></td></tr>';
 
             const q = studylogSearchQ.value.trim();
             const date = studylogFilterDate.value.trim();
@@ -2363,7 +2363,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStudyLogCards(data.studylogs);
         } catch (err) {
             feedback.show(err.message, 'error');
-            studylogCardsGrid.innerHTML = `<div class="empty-state" style="grid-column: span 10;"><p class="alert alert-danger">${err.message}</p></div>`;
+            studylogCardsGrid.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p class="alert alert-danger">${escapeHtml(err.message)}</p></div></td></tr>`;
         }
     }
 
@@ -2528,7 +2528,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStudyLogCards(studylogs) {
         if (studylogs.length === 0) {
-            studylogCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div></td></tr>';
+            studylogCardsGrid.innerHTML = '<tr><td colspan="9" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div></td></tr>';
             return;
         }
 
@@ -2547,6 +2547,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>#${logId}</strong></td>
                     <td><span class="badge badge-warning"><i class="fa-solid fa-calendar-check"></i> ${day}</span></td>
                     <td class="fw-semibold">${sName}</td>
+                    <td>${escapeHtml(l.TeacherName || '미지정')}</td>
                     <td class="text-primary text-truncate-cell" title="${bTitle}">${bTitle}</td>
                     <td class="text-center">
                         <button type="button" class="btn-toggle-status ${isSpecial ? 'is-special' : 'is-normal'} btn-toggle-studylog-special" data-log-id="${logId}" data-current="${isSpecial ? 1 : 0}">
@@ -8033,7 +8034,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = header.closest('table');
         const columnIndex = Array.from(header.parentElement.children).indexOf(header);
         if (!table || columnIndex < 0 || header.querySelector('input, button, select, a')) return false;
-        if (table.querySelector('#studylog-cards-grid')) return columnIndex < 7;
+        if (table.querySelector('#studylog-cards-grid')) return columnIndex < 8;
         return !Array.from(table.tBodies).some(body =>
             Array.from(body.rows).some(row => row.cells[columnIndex]?.querySelector('input, button, select, a'))
         );
@@ -8094,7 +8095,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (table.querySelector('#studylog-cards-grid')) {
-            studylogSortBy = ['row_id', 'StudiedDay', 'StudentName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'][columnIndex];
+            studylogSortBy = ['row_id', 'StudiedDay', 'StudentName', 'TeacherName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'][columnIndex];
             studylogSortDirection = direction;
             studylogSearchPage = 1;
             loadStudyLogSearchResults();
