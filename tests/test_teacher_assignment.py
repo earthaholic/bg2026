@@ -197,6 +197,37 @@ class TeacherAssignmentTests(unittest.TestCase):
         rows = parse_assignment_file('이름,1차시\n검증학생,6/13\n'.encode(), '2026-7월.csv', '2026-06')
         self.assertEqual(rows[0]['studied_day'], '2026-06-13')
 
+    def test_korean_and_underscore_sheet_years(self):
+        for title in ['2026년_7월', '2026_7월', '2026년 7월', '2026년7월',
+                      '2026/7월', '2026-7월', '2026.7월', '２０２６년＿７월']:
+            with self.subTest(title=title):
+                workbook = Workbook()
+                workbook.active.title = title.replace('/', '.')
+                workbook.active.append(['이름', '1차시'])
+                workbook.active.append(['검증학생', '6/13'])
+                content = io.BytesIO()
+                workbook.save(content)
+                rows = parse_assignment_file(content.getvalue(), '2022+2023+2024+2025+2026.xlsx')
+                self.assertEqual(rows[0]['studied_day'], '2026-06-13')
+                self.assertEqual(rows[0]['error'], '')
+                csv_rows = parse_assignment_file('이름,일자\n검증학생,6/13\n'.encode(), title + '.csv')
+                self.assertEqual(csv_rows[0]['studied_day'], '2026-06-13')
+
+    def test_sheet_year_overrides_filter_year_for_short_dates(self):
+        rows = parse_assignment_file('이름,일자\n검증학생,6/13\n'.encode(), '2025년_7월.csv')
+        self.assertEqual(rows[0]['studied_day'], '2025-06-13')
+        with self.assertRaisesRegex(ValueError, '차시를 찾지 못했습니다'):
+            parse_assignment_file('이름,일자\n검증학생,6/13\n'.encode(), '2025년_7월.csv', '2026-06')
+
+    def test_weekday_and_trial_date_labels(self):
+        for value in ['9/4(금)', '9.4(금요일)', '9/4(금) (체험)', '9/4(금)체험', '2026-09-04(금)']:
+            with self.subTest(value=value):
+                rows = parse_assignment_file(f'이름,일자\n검증학생,{value}\n'.encode(), '2026년_9월.csv')
+                self.assertEqual(rows[0]['studied_day'], '2026-09-04')
+                self.assertEqual(rows[0]['error'], '')
+        row = parse_assignment_file('이름,일자\n검증학생,9/4(금) 휴강\n'.encode(), '2026년_9월.csv')[0]
+        self.assertTrue(row['error'])
+
     def test_large_csv_accepts_30000_lessons(self):
         content = ('이름,일자\n' + '검증학생,2026-06-13\n' * 30000).encode()
         self.assertEqual(len(parse_assignment_file(content, '차시.csv')), 30000)

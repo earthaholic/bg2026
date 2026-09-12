@@ -106,13 +106,18 @@ def parse_day(value, month):
     if isinstance(value, (datetime, date)):
         return value.strftime('%Y-%m-%d')
     value = clean(value)
+    # 차시표의 요일·체험 표시는 날짜 값과 분리해 읽는다.
+    value = re.sub(r'\s*\([월화수목금토일](?:요일)?\)', '', value)
+    value = re.sub(r'\s*(?:\(체험\)|체험)\s*$', '', value).strip()
     match = re.fullmatch(r'(\d{4})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{1,2})\s*\.?', value)
     if match:
         return date(*map(int, match.groups())).isoformat()
     match = re.fullmatch(r'(\d{1,2})\s*[./-]\s*(\d{1,2})\s*\.?', value)
     if match and month:
         return date(int(month[:4]), *map(int, match.groups())).isoformat()
-    raise ValueError('날짜를 확인해 주세요. 연도가 없는 날짜는 기준 월이 필요합니다.')
+    if match and not month:
+        raise ValueError('날짜에 연도가 없습니다. 시트명·CSV 파일명에 연월을 표시하거나 대상 월을 선택해 주세요.')
+    raise ValueError('날짜 형식을 확인해 주세요. 예: 2026-09-04 또는 9/4(금).')
 
 
 def parse_assignment_file(content, filename, month=''):
@@ -141,7 +146,10 @@ def parse_assignment_file(content, filename, month=''):
     results = []
     try:
         for title, rows in sheets:
-            inferred = re.search(r'(20\d{2})\s*[-.]\s*(\d{1,2})', clean(title))
+            inferred = re.search(
+                r'(?<!\d)(20\d{2})(?:\s*년\s*[_./-]?\s*|\s*[_./-]\s*|\s+)'
+                r'(0?[1-9]|1[0-2])(?!\d)', clean(title)
+            )
             sheet_month = f'{inferred[1]}-{int(inferred[2]):02d}' if inferred else month
             header = None
             for row_number, cells in enumerate(rows, 1):
