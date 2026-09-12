@@ -1988,13 +1988,16 @@ def build_monthly_report_text(
         teacher_suffix += " 선생님"
 
     for i, log in enumerate(grouped_logs):
+        if log.get("_is_break"):
+            date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
+            reason = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
+            lines.append(" ".join(f"{date_str} {reason or '휴강'}".split()))
+            continue
         if i > 0:
             lines.append("")
 
         is_special = bool(log.get("IsSpecial") or log.get("is_special"))
-        if log.get("_is_break"):
-            lines.append("<휴강>")
-        elif is_special:
+        if is_special:
             if teacher_suffix:
                 lines.append(f"<특강> {teacher_suffix}")
             else:

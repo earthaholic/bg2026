@@ -6556,14 +6556,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         groupedLogItems.forEach((log, idx) => {
+            if (log._isBreak) {
+                const dateStr = formatDateKorean(log.StudiedDay || log.studied_day || '');
+                const reason = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
+                lines.push(`${dateStr} ${reason || '휴강'}`.trim().replace(/\s+/g, ' '));
+                return;
+            }
             if (idx > 0) {
                 lines.push('');
             }
 
             const isSpecial = !!(log.IsSpecial || log.is_special);
-            if (log._isBreak) {
-                lines.push('<휴강>');
-            } else if (isSpecial) {
+            if (isSpecial) {
                 if (teacherSuffix) {
                     lines.push(`<특강> ${teacherSuffix}`);
                 } else {
