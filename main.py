@@ -55,7 +55,7 @@ from database import (
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from similarity import normalize_key, classify_match
-from teacher_assignment import parse_assignment_file, assignment_context, match_assignment, fingerprint
+from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from jose import jwt
 
@@ -3139,30 +3139,49 @@ def preview_teacher_assignment(
         conn.execute('BEGIN')
         teacher = _assignment_teacher(conn, teacher_username)
         context = assignment_context(conn)
-        results, seen = [], set()
+        results, seen = [], {}
         for source in sources:
-            record, message = match_assignment(source, teacher_username, context)
-            result = {**source, 'message': message, 'ready': False, 'token': '',
-                      'studylog_id': record['_rowid'] if record else None,
-                      'book_title': ' / '.join(sorted(context[5].get(str(record.get('BookId')), []))) if record else '',
-                      'current_teacher': (record.get('ActualTeacherUsername') or '') if record else ''}
-            if record and not message:
-                row_id = record['_rowid']
+            students, candidates = assignment_candidates(source, context) if not source.get('error') else ([], [])
+            review_required = len(students) > 1 or len(candidates) > 1
+            if not candidates:
+                _, message = match_assignment(source, teacher_username, context)
+                results.append({**source, 'message': message, 'ready': False, 'token': '',
+                                'studylog_id': None, 'book_title': '', 'current_teacher': '',
+                                'server_student_name': ' / '.join(student['Name'] for student in students),
+                                'server_student_id': None, 'auto_select': False})
+                continue
+            for student, candidate in candidates:
+                matched_source = {**source, 'matched_student_id': student['_rowid'], 'matched_log_id': candidate['_rowid']}
+                record, message = match_assignment(matched_source, teacher_username, context)
+                result = {**source, 'message': message, 'ready': False, 'token': '', 'auto_select': False,
+                          'server_student_name': student['Name'], 'server_student_id': student['_rowid'],
+                          'studylog_id': candidate['_rowid'],
+                          'book_title': ' / '.join(sorted(context[5].get(str(candidate.get('BookId')), []))),
+                          'current_teacher': candidate.get('ActualTeacherUsername') or ''}
+                row_id = candidate['_rowid']
                 if row_id in seen:
-                    result['message'] = '파일 내 중복 차시입니다. 같은 기록은 한 번만 적용합니다.'
-                else:
-                    seen.add(row_id)
+                    result['message'] = f'같은 서버 학습 기록 #{row_id} 항목이 파일에서 반복됩니다. {seen[row_id]} 항목에서 한 번만 선택해 주세요.'
+                elif record and not message:
+                    seen[row_id] = f"{source['sheet']} {source['row_number']}행 {source['column']}"
                     result['ready'] = True
-                    result['message'] = '지정 가능'
+                    result['auto_select'] = not review_required
+                    reasons = []
+                    if len(students) > 1:
+                        reasons.append('괄호 제외 이름이 같은 서버 학생이 있습니다. 서버 학생명·ID를 확인해 선택해 주세요.')
+                    if len(candidates) > 1:
+                        reasons.append('같은 날짜의 기록 후보입니다. 학생·도서·기록 ID를 확인하고 해당 기록을 선택해 주세요.')
+                    result['message'] = ' '.join(reasons) or '지정 가능'
                     result['token'] = jwt.encode({
                         'purpose': 'teacher-assignment', 'actor': current_user['username'],
-                        'teacher': teacher_username, 'row_id': row_id, 'source': source,
+                        'teacher': teacher_username, 'row_id': row_id, 'source': matched_source,
                         'fingerprint': fingerprint(record),
                         'exp': datetime.utcnow() + timedelta(minutes=30)
                     }, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-            results.append(result)
+                results.append(result)
+                if len(results) > 10000:
+                    raise HTTPException(status_code=400, detail='기록 후보가 너무 많습니다. 대상 월로 범위를 줄여 주세요.')
         return {'rows': results, 'teacher': teacher, 'ready_count': sum(r['ready'] for r in results),
-                'total_count': len(results)}
+                'source_count': len(sources), 'total_count': len(results)}
     finally:
         conn.close()
 

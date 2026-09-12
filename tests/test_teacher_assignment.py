@@ -124,14 +124,49 @@ class TeacherAssignmentTests(unittest.TestCase):
         result = self.preview('이름,일자\n검증학생,2026-06-13\n검증학생,2026-06-13\n').json()
         self.assertEqual(result['ready_count'], 1)
         self.sql("INSERT INTO StudyLogs(Id,StudentId,BookId,StudiedDay) VALUES (3,1,1,'2026-06-13')")
-        self.assertEqual(self.preview().json()['ready_count'], 0)
+        result = self.preview().json()
+        self.assertEqual(result['ready_count'], 2)
+        self.assertFalse(any(row['auto_select'] for row in result['rows']))
 
     def test_same_name_and_existing_teacher_excluded(self):
         self.sql("UPDATE StudyLogs SET ActualTeacherUsername='someone' WHERE Id=1")
         self.assertEqual(self.preview().json()['ready_count'], 0)
         self.sql("UPDATE StudyLogs SET ActualTeacherUsername='' WHERE Id=1")
         self.sql("INSERT INTO Students(Id,Name,Grade) VALUES (3,'검증학생','초4')")
-        self.assertEqual(self.preview().json()['ready_count'], 0)
+        result = self.preview().json()
+        self.assertEqual(result['ready_count'], 1)
+        self.assertFalse(result['rows'][0]['auto_select'])
+
+    def test_parentheses_on_both_sides_keep_server_identity(self):
+        self.sql("UPDATE Students SET Name='검증학생(서버 주석)' WHERE Id=1")
+        preview = self.preview('이름,일자\n검증학생（파일 주석）,2026-06-13\n').json()
+        self.assertEqual(preview['ready_count'], 1)
+        self.assertEqual(preview['rows'][0]['server_student_name'], '검증학생(서버 주석)')
+        self.assertEqual(self.apply(preview).status_code, 200)
+        self.assertEqual(self.sql('SELECT Name FROM Students WHERE Id=1')[0][0], '검증학생(서버 주석)')
+
+    def test_two_books_repeated_source_can_apply_selected_book_only(self):
+        self.sql("INSERT INTO Books(Id,Title) VALUES (2,'두 번째 도서')")
+        self.sql("INSERT INTO StudyLogs(Id,StudentId,BookId,StudiedDay) VALUES (3,1,2,'2026-06-13')")
+        preview = self.preview('이름,일자\n검증학생,2026-06-13\n검증학생(메모),2026-06-13\n').json()
+        self.assertEqual(len(preview['rows']), 4)
+        ready = [row for row in preview['rows'] if row['ready']]
+        self.assertEqual({row['studylog_id'] for row in ready}, {1, 3})
+        self.assertEqual({row['book_title'] for row in ready}, {'검증 도서', '두 번째 도서'})
+        chosen = next(row for row in ready if row['studylog_id'] == 3)
+        response = self.client.post('/api/user/utilities/teacher-assignment/apply', headers=self.headers,
+                                    json={'tokens': [chosen['token']]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.sql('SELECT ActualTeacherUsername FROM StudyLogs WHERE Id=1')[0][0], '')
+        self.assertEqual(self.sql('SELECT ActualTeacherUsername FROM StudyLogs WHERE Id=3')[0][0], 'assignment_teacher')
+
+    def test_same_normalized_server_names_are_separate_candidates(self):
+        self.sql("UPDATE Students SET Name='검증학생(A)' WHERE Id=1")
+        self.sql("UPDATE Students SET Name='검증학생(B)' WHERE Id=2")
+        preview = self.preview().json()
+        self.assertEqual(preview['ready_count'], 2)
+        self.assertEqual({r['server_student_id'] for r in preview['rows']}, {1, 2})
+        self.assertFalse(any(r['auto_select'] for r in preview['rows']))
 
     def test_closed_month_rechecked(self):
         preview = self.preview().json()

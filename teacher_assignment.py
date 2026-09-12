@@ -86,6 +86,14 @@ def clean(value):
     return unicodedata.normalize('NFKC', str(value or '')).strip()
 
 
+def student_name_key(value):
+    """파일·서버 양쪽 학생명의 괄호 주석을 제외하며 원본 이름은 보존한다."""
+    value = clean(value)
+    while re.search(r'\([^()]*\)', value):
+        value = re.sub(r'\([^()]*\)', '', value)
+    return value.strip()
+
+
 def fingerprint(record):
     return hashlib.sha256(json.dumps(record, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
 
@@ -179,7 +187,7 @@ def parse_assignment_file(content, filename, month=''):
 def assignment_context(conn):
     students = defaultdict(list)
     for row in conn.execute('SELECT rowid AS _rowid, "Id", "Name" FROM "Students"'):
-        students[clean(row['Name'])].append(dict(row))
+        students[student_name_key(row['Name'])].append(dict(row))
     logs = defaultdict(dict)
     for row in conn.execute('SELECT rowid AS _rowid, * FROM "StudyLogs"'):
         record = dict(row)
@@ -194,17 +202,33 @@ def assignment_context(conn):
     return students, logs, frozen, closures, classes, books
 
 
+def assignment_candidates(source, context):
+    students, logs, *_ = context
+    candidates = students.get(student_name_key(source['student_name']), [])
+    results = []
+    for student in candidates:
+        matches = {}
+        for key in (student['_rowid'], student['Id']):
+            matches.update(logs.get((str(key), source['studied_day']), {}))
+        results.extend((student, record) for record in matches.values())
+    return candidates, results
+
+
 def match_assignment(source, teacher, context):
     students, logs, frozen, closures, classes, books = context
     if source.get('error'):
         return None, source['error']
-    candidates = students.get(clean(source['student_name']), [])
+    candidates = students.get(student_name_key(source['student_name']), [])
+    if source.get('matched_student_id') is not None:
+        candidates = [student for student in candidates if student['_rowid'] == source['matched_student_id']]
     if len(candidates) != 1:
         return None, '동명이인 학생이 있습니다.' if candidates else '등록된 학생을 찾을 수 없습니다.'
     student = candidates[0]
     matches = {}
     for key in (student['_rowid'], student['Id']):
         matches.update(logs.get((str(key), source['studied_day']), {}))
+    if source.get('matched_log_id') is not None:
+        matches = {key: record for key, record in matches.items() if key == source['matched_log_id']}
     if len(matches) != 1:
         return None, '같은 날 학습 기록이 여러 건입니다. 개별 확인이 필요합니다.' if matches else '해당 날짜의 학습 기록이 없습니다.'
     record = next(iter(matches.values()))

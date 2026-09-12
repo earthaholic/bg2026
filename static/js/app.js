@@ -7834,7 +7834,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-apply-teacher-assignment').disabled = !selected || teacherAssignmentBusy;
         if (teacherAssignmentPreview) {
             const p = teacherAssignmentPreview;
-            document.getElementById('teacher-assignment-summary').textContent = `${p.teacher.name || p.teacher.username} · 전체 ${p.total_count}건 · 지정 가능 ${p.ready_count}건 · 제외 ${p.total_count - p.ready_count}건 · 선택 ${selected}건`;
+            document.getElementById('teacher-assignment-summary').textContent = `${p.teacher.name || p.teacher.username} · 파일 ${p.source_count ?? p.total_count}차시 · 미리보기 ${p.total_count}건 · 지정 가능 ${p.ready_count}건 · 제외 ${p.total_count - p.ready_count}건 · 선택 ${selected}건`;
         }
     }
 
@@ -7873,7 +7873,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (version !== teacherAssignmentVersion) return;
             teacherAssignmentPreview = data;
             document.getElementById('teacher-assignment-preview-body').innerHTML = data.rows.map((row, index) =>
-                `<tr><td>${row.ready ? `<input type="checkbox" class="teacher-assignment-checkbox" data-index="${index}" checked aria-label="${escapeHtml(row.student_name)} ${escapeHtml(row.studied_day)} 선택">` : '—'}</td><td>${escapeHtml(row.sheet)} / ${row.row_number}행 / ${escapeHtml(row.column)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.studied_day)}</td><td>${row.studylog_id ? `#${Number(row.studylog_id)} ` : ''}${escapeHtml(row.book_title || '—')}</td><td>${escapeHtml(row.current_teacher ? userName(row.current_teacher) : '미지정')}</td><td>${escapeHtml(row.message)}</td></tr>`).join('');
+                `<tr><td>${row.ready ? `<input type="checkbox" class="teacher-assignment-checkbox" data-index="${index}" ${row.auto_select ? 'checked' : ''} aria-label="${escapeHtml(row.server_student_name || row.student_name)} ${escapeHtml(row.studied_day)} 기록 ${Number(row.studylog_id)} 선택">` : '—'}</td><td>${escapeHtml(row.sheet)} / ${row.row_number}행 / ${escapeHtml(row.column)}</td><td>${escapeHtml(row.student_name)}<br><small>서버: ${escapeHtml(row.server_student_name || '—')}${row.server_student_id != null ? ` (#${Number(row.server_student_id)})` : ''}</small></td><td>${escapeHtml(row.studied_day)}</td><td>${row.studylog_id ? `#${Number(row.studylog_id)} ` : ''}${escapeHtml(row.book_title || '—')}</td><td>${escapeHtml(row.current_teacher ? userName(row.current_teacher) : '미지정')}</td><td>${escapeHtml(row.message)}</td></tr>`).join('');
             document.getElementById('teacher-assignment-preview-card').classList.remove('hidden');
         } catch (err) { feedback.show(err.message, 'error'); }
         finally { setTeacherAssignmentBusy(false); }
@@ -7886,10 +7886,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const selected = new Set([...document.querySelectorAll('.teacher-assignment-checkbox:checked')].map(box => Number(box.dataset.index)));
             const sourceFile = document.getElementById('teacher-assignment-file').files[0]?.name || '';
             const month = document.getElementById('teacher-assignment-month').value;
-            const rows = [['선택 여부', '원본 파일', '대상 월', '지정 선생님', '지정 선생님 계정', '시트', '행', '차시', '학생', '실제 학습일', '학습 기록 ID', '도서', '현재 선생님', '현재 선생님 계정', '지정 가능 여부', '판정 사유'],
+            const rows = [['선택 여부', '원본 파일', '대상 월', '지정 선생님', '지정 선생님 계정', '시트', '행', '차시', '파일 학생명', '서버 학생명', '서버 학생 ID', '실제 학습일', '학습 기록 ID', '도서', '현재 선생님', '현재 선생님 계정', '지정 가능 여부', '판정 사유'],
                 ...preview.rows.map((row, index) => [selected.has(index) ? '선택' : '미선택', sourceFile, month,
                     preview.teacher.name || preview.teacher.username, preview.teacher.username,
-                    row.sheet, row.row_number, row.column, row.student_name, row.studied_day,
+                    row.sheet, row.row_number, row.column, row.student_name, row.server_student_name, row.server_student_id, row.studied_day,
                     row.studylog_id ?? '', row.book_title, row.current_teacher ? userName(row.current_teacher) : '미지정',
                     row.current_teacher, row.ready ? '가능' : '제외', row.message])];
             const csvCell = value => {
