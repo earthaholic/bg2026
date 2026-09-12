@@ -7878,6 +7878,38 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { feedback.show(err.message, 'error'); }
         finally { setTeacherAssignmentBusy(false); }
     });
+    document.getElementById('btn-export-teacher-assignment')?.addEventListener('click', () => {
+        const preview = teacherAssignmentPreview;
+        if (!preview) return;
+        const feedback = createActionFeedback('#btn-export-teacher-assignment');
+        try {
+            const selected = new Set([...document.querySelectorAll('.teacher-assignment-checkbox:checked')].map(box => Number(box.dataset.index)));
+            const sourceFile = document.getElementById('teacher-assignment-file').files[0]?.name || '';
+            const month = document.getElementById('teacher-assignment-month').value;
+            const rows = [['선택 여부', '원본 파일', '대상 월', '지정 선생님', '지정 선생님 계정', '시트', '행', '차시', '학생', '실제 학습일', '학습 기록 ID', '도서', '현재 선생님', '현재 선생님 계정', '지정 가능 여부', '판정 사유'],
+                ...preview.rows.map((row, index) => [selected.has(index) ? '선택' : '미선택', sourceFile, month,
+                    preview.teacher.name || preview.teacher.username, preview.teacher.username,
+                    row.sheet, row.row_number, row.column, row.student_name, row.studied_day,
+                    row.studylog_id ?? '', row.book_title, row.current_teacher ? userName(row.current_teacher) : '미지정',
+                    row.current_teacher, row.ready ? '가능' : '제외', row.message])];
+            const csvCell = value => {
+                let text = String(value ?? '');
+                // 엑셀이 입력 문자열을 수식으로 실행하지 않도록 처리한다.
+                if (/^[\s]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
+                return '"' + text.replace(/"/g, '""') + '"';
+            };
+            const content = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+            const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `선생님_지정_미리보기_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            feedback.show(`미리보기 전체 ${preview.total_count}건을 CSV로 내보냈습니다.`, 'success');
+        } catch (err) { feedback.show(`CSV 내보내기 실패: ${err.message}`, 'error'); }
+    });
     document.getElementById('btn-apply-teacher-assignment')?.addEventListener('click', async () => {
         const feedback = createActionFeedback('#btn-apply-teacher-assignment');
         if (!teacherAssignmentPreview || teacherAssignmentBusy) return;
