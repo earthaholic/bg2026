@@ -197,6 +197,12 @@ class TeacherAssignmentTests(unittest.TestCase):
         rows = parse_assignment_file('이름,1차시\n검증학생,6/13\n'.encode(), '2026-7월.csv', '2026-06')
         self.assertEqual(rows[0]['studied_day'], '2026-06-13')
 
+    def test_large_csv_accepts_30000_lessons(self):
+        content = ('이름,일자\n' + '검증학생,2026-06-13\n' * 30000).encode()
+        self.assertEqual(len(parse_assignment_file(content, '차시.csv')), 30000)
+        with self.assertRaisesRegex(ValueError, '30,000차시'):
+            parse_assignment_file(content + '검증학생,2026-06-13\n'.encode(), '차시.csv')
+
     def test_payroll_footer_is_not_a_student(self):
         text = '구분,학년,이름,1차시,2차시\n목,초3,검증학생,6/13,\n,,초등개인반,수업단가,회의\n,,합계,8000,10000\n'
         rows = parse_assignment_file(text.encode(), '2026-7월.csv')

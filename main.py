@@ -56,6 +56,7 @@ from database import (
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
+from teacher_assignment import MAX_ASSIGNMENT_ROWS
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from jose import jwt
 
@@ -3178,8 +3179,8 @@ def preview_teacher_assignment(
                         'exp': datetime.utcnow() + timedelta(minutes=30)
                     }, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
                 results.append(result)
-                if len(results) > 10000:
-                    raise HTTPException(status_code=400, detail='기록 후보가 너무 많습니다. 대상 월로 범위를 줄여 주세요.')
+                if len(results) > MAX_ASSIGNMENT_ROWS:
+                    raise HTTPException(status_code=400, detail=f'기록 후보는 {MAX_ASSIGNMENT_ROWS:,}건까지 표시할 수 있습니다. 대상 월로 범위를 줄여 주세요.')
         return {'rows': results, 'teacher': teacher, 'ready_count': sum(r['ready'] for r in results),
                 'source_count': len(sources), 'total_count': len(results)}
     finally:
@@ -3189,8 +3190,8 @@ def preview_teacher_assignment(
 @app.post('/api/user/utilities/teacher-assignment/apply')
 def apply_teacher_assignment(payload: TeacherAssignmentApplyRequest, request: Request,
                              current_user: Dict[str, Any] = Depends(get_current_staff)):
-    if not payload.tokens or len(payload.tokens) > 3000:
-        raise HTTPException(status_code=400, detail='적용할 차시를 1~3,000건 선택해 주세요.')
+    if not payload.tokens or len(payload.tokens) > MAX_ASSIGNMENT_ROWS:
+        raise HTTPException(status_code=400, detail=f'적용할 학습 기록을 1~{MAX_ASSIGNMENT_ROWS:,}건 선택해 주세요.')
     claims = []
     try:
         for token_value in payload.tokens:

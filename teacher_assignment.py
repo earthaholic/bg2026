@@ -11,6 +11,10 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
+MAX_ASSIGNMENT_LESSONS = 30000
+MAX_ASSIGNMENT_ROWS = 60000
+MAX_ASSIGNMENT_SHEET_ROWS = 50000
+
 
 def read_xlsx_without_openpyxl(content):
     """선택 의존성이 없는 운영 환경에서 XLSX의 저장된 셀 값을 읽는다."""
@@ -49,8 +53,8 @@ def read_xlsx_without_openpyxl(content):
             rows = []
             for row in root.findall('s:sheetData/s:row', ns):
                 number = int(row.attrib.get('r', len(rows) + 1))
-                if number > 10000:
-                    raise ValueError('시트는 10,000행 이내로 준비해 주세요.')
+                if number > MAX_ASSIGNMENT_SHEET_ROWS:
+                    raise ValueError(f'시트는 {MAX_ASSIGNMENT_SHEET_ROWS:,}행 이내로 준비해 주세요.')
                 while len(rows) < number:
                     rows.append([])
                 values = rows[number - 1]
@@ -141,8 +145,8 @@ def parse_assignment_file(content, filename, month=''):
             sheet_month = f'{inferred[1]}-{int(inferred[2]):02d}' if inferred else month
             header = None
             for row_number, cells in enumerate(rows, 1):
-                if row_number > 10000:
-                    raise ValueError('시트는 10,000행 이내로 준비해 주세요.')
+                if row_number > MAX_ASSIGNMENT_SHEET_ROWS:
+                    raise ValueError(f'시트는 {MAX_ASSIGNMENT_SHEET_ROWS:,}행 이내로 준비해 주세요.')
                 values = [clean(v) for v in cells]
                 if '이름' in values and ('1차시' in values or '일자' in values):
                     header = values
@@ -174,8 +178,8 @@ def parse_assignment_file(content, filename, month=''):
                     except ValueError as exc:
                         item['error'] = str(exc)
                     results.append(item)
-                    if len(results) > 3000:
-                        raise ValueError('한 번에 3,000차시까지 처리할 수 있습니다. 기준 월로 범위를 줄여 주세요.')
+                    if len(results) > MAX_ASSIGNMENT_LESSONS:
+                        raise ValueError(f'한 번에 {MAX_ASSIGNMENT_LESSONS:,}차시까지 처리할 수 있습니다. 기준 월로 범위를 줄여 주세요.')
     finally:
         if workbook:
             workbook.close()
