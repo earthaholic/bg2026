@@ -3,6 +3,8 @@ import io
 import csv
 import re
 import json
+import logging
+import zipfile
 from threading import RLock
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
@@ -3125,10 +3127,13 @@ def preview_teacher_assignment(
         raise HTTPException(status_code=400, detail='파일은 5MB 이하로 준비해 주세요.')
     try:
         sources = parse_assignment_file(content, file.filename or '', month)
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail='정상적인 XLSX 파일이 아닙니다. 파일 확장자만 바꾸지 말고 Google Sheets에서 Microsoft Excel(.xlsx)로 내려받아 주세요.')
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
-        raise HTTPException(status_code=400, detail='파일을 읽을 수 없습니다. Google Sheets에서 XLSX 또는 CSV로 다시 내려받아 주세요.')
+        logging.getLogger(__name__).exception('교사 지정 차시표 읽기 실패')
+        raise HTTPException(status_code=400, detail='차시표 처리 중 오류가 발생했습니다. 관리자에게 서버 로그의 «교사 지정 차시표 읽기 실패» 항목을 확인하도록 요청해 주세요.')
     conn = get_db_connection()
     try:
         conn.execute('BEGIN')

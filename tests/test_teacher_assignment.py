@@ -82,6 +82,25 @@ class TeacherAssignmentTests(unittest.TestCase):
         self.assertEqual(rows[0]['studied_day'], '2026-06-13')
         self.assertEqual(rows[0]['error'], '')
 
+    def test_xlsx_without_optional_module(self):
+        import builtins
+        from unittest.mock import patch
+        workbook = Workbook()
+        workbook.active.title = '2026-7월'
+        workbook.active.append(['이름', '1차시'])
+        workbook.active.append(['검증학생', datetime(2026, 6, 13)])
+        content = io.BytesIO()
+        workbook.save(content)
+        normal = parse_assignment_file(content.getvalue(), '차시.xlsx', '2026-06')
+        original_import = builtins.__import__
+        def without_openpyxl(name, *args, **kwargs):
+            if name == 'openpyxl':
+                raise ModuleNotFoundError("No module named 'openpyxl'")
+            return original_import(name, *args, **kwargs)
+        with patch('builtins.__import__', side_effect=without_openpyxl):
+            fallback = parse_assignment_file(content.getvalue(), '차시.xlsx', '2026-06')
+        self.assertEqual(fallback, normal)
+
     def test_apply_is_audited_and_idempotent(self):
         preview = self.preview().json()
         self.assertEqual(preview['ready_count'], 1)
