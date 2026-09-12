@@ -1095,6 +1095,11 @@ body {
 .utility-controls .form-control { max-width: 180px; }
 .utility-csv-card { grid-column: 1 / -1; }
 .utility-csv-controls .form-control { max-width: 420px; }
+.utility-teacher-card { grid-column: 1 / -1; }
+.utility-teacher-controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+.utility-teacher-controls label { display: flex; flex-direction: column; gap: .4rem; flex: 1 1 180px; }
+.utility-teacher-controls .form-control { width: 100%; }
+#teacher-assignment-preview-card .table-responsive { max-height: 600px; overflow: auto; }
 .utility-match-select { min-width: 260px; }
 .utility-row-message { display: block; margin-top: .35rem; font-size: .78rem; }
 .utility-row-message.is-error { color: var(--danger); }

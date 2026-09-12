@@ -1099,7 +1099,8 @@ def write_audit_log(
     changed_fields: Optional[List[str]],
     username: str,
     user_role: str,
-    ip_address: str = ""
+    ip_address: str = "",
+    connection=None
 ) -> None:
     """감사 로그를 기록한다.
     
@@ -1113,11 +1114,12 @@ def write_audit_log(
         username: 작업 수행자 사용자명
         user_role: 작업 수행자 역할
         ip_address: 요청 IP 주소 (기본값: '')
+        connection: 지정하면 호출자가 변경 데이터와 함께 커밋·롤백하는 기존 연결
     """
     if action not in ('INSERT', 'UPDATE', 'DELETE'):
         raise ValueError(f"유효하지 않은 작업: {action}")
     
-    conn = get_db_connection()
+    conn = connection if connection is not None else get_db_connection()
     cursor = conn.cursor()
     
     old_data_json = json.dumps(old_data, ensure_ascii=False) if old_data else None
@@ -1129,8 +1131,9 @@ def write_audit_log(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (table_name, str(record_id), action, old_data_json, new_data_json, changed_fields_json, username, user_role, ip_address))
     
-    conn.commit()
-    conn.close()
+    if connection is None:
+        conn.commit()
+        conn.close()
 
 
 def get_record_snapshot(table_name: str, record_id: Any) -> Optional[Dict[str, Any]]:

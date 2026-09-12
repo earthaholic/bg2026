@@ -7801,9 +7801,101 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initUtilitiesView() {
         const month = document.getElementById('utility-backfill-month');
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
+        const teacherSelect = document.getElementById('teacher-assignment-teacher');
+        const previousTeacher = teacherSelect.value;
+        const data = await apiFetch('/api/user/teachers-options');
+        teacherSelect.innerHTML = '<option value="">선생님 선택</option>' + (data.teachers || []).map(t =>
+            `<option value="${escapeHtml(t.username)}">${escapeHtml(t.name || t.username)} (${escapeHtml(t.username)})</option>`).join('');
+        teacherSelect.value = previousTeacher;
+        if (teacherSelect.value !== previousTeacher) resetTeacherAssignment();
         await loadDuplicateBooksPreview();
         await loadStudyLogCsvRuns();
     }
+
+    let teacherAssignmentPreview = null;
+    let teacherAssignmentVersion = 0;
+    let teacherAssignmentBusy = false;
+
+    function resetTeacherAssignment() {
+        teacherAssignmentVersion++;
+        teacherAssignmentPreview = null;
+        document.getElementById('teacher-assignment-preview-card').classList.add('hidden');
+        document.getElementById('btn-apply-teacher-assignment').disabled = true;
+        document.getElementById('teacher-assignment-summary').textContent = '조건을 확인하고 미리보기를 실행해 주세요.';
+    }
+
+    function updateTeacherAssignmentSelection() {
+        const boxes = [...document.querySelectorAll('.teacher-assignment-checkbox')];
+        const selected = boxes.filter(box => box.checked).length;
+        const all = document.getElementById('teacher-assignment-select-all');
+        all.checked = boxes.length > 0 && selected === boxes.length;
+        all.indeterminate = selected > 0 && selected < boxes.length;
+        all.disabled = !boxes.length || teacherAssignmentBusy;
+        document.getElementById('btn-apply-teacher-assignment').disabled = !selected || teacherAssignmentBusy;
+        if (teacherAssignmentPreview) {
+            const p = teacherAssignmentPreview;
+            document.getElementById('teacher-assignment-summary').textContent = `${p.teacher.name || p.teacher.username} · 전체 ${p.total_count}건 · 지정 가능 ${p.ready_count}건 · 제외 ${p.total_count - p.ready_count}건 · 선택 ${selected}건`;
+        }
+    }
+
+    function setTeacherAssignmentBusy(busy) {
+        teacherAssignmentBusy = busy;
+        ['teacher-assignment-file', 'teacher-assignment-teacher', 'teacher-assignment-month', 'btn-preview-teacher-assignment'].forEach(id => {
+            document.getElementById(id).disabled = busy;
+        });
+        document.querySelectorAll('.teacher-assignment-checkbox').forEach(box => { box.disabled = busy; });
+        updateTeacherAssignmentSelection();
+    }
+
+    ['teacher-assignment-file', 'teacher-assignment-teacher', 'teacher-assignment-month'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', resetTeacherAssignment);
+    });
+    document.getElementById('teacher-assignment-select-all')?.addEventListener('change', event => {
+        document.querySelectorAll('.teacher-assignment-checkbox').forEach(box => { box.checked = event.target.checked; });
+        updateTeacherAssignmentSelection();
+    });
+    document.getElementById('teacher-assignment-preview-body')?.addEventListener('change', updateTeacherAssignmentSelection);
+    document.getElementById('btn-preview-teacher-assignment')?.addEventListener('click', async () => {
+        const feedback = createActionFeedback('#btn-preview-teacher-assignment');
+        resetTeacherAssignment();
+        const version = teacherAssignmentVersion;
+        try {
+            const file = document.getElementById('teacher-assignment-file').files[0];
+            const teacher = document.getElementById('teacher-assignment-teacher').value;
+            if (!file || !teacher) return feedback.show('파일과 실제 진행 선생님을 선택해 주세요.', 'warning');
+            if (file.size > 5 * 1024 * 1024) return feedback.show('파일은 5MB 이하로 준비해 주세요.', 'warning');
+            const form = new FormData();
+            form.append('file', file);
+            form.append('teacher_username', teacher);
+            form.append('month', document.getElementById('teacher-assignment-month').value);
+            setTeacherAssignmentBusy(true);
+            const data = await apiFetch('/api/user/utilities/teacher-assignment/preview', { method: 'POST', body: form });
+            if (version !== teacherAssignmentVersion) return;
+            teacherAssignmentPreview = data;
+            document.getElementById('teacher-assignment-preview-body').innerHTML = data.rows.map((row, index) =>
+                `<tr><td>${row.ready ? `<input type="checkbox" class="teacher-assignment-checkbox" data-index="${index}" checked aria-label="${escapeHtml(row.student_name)} ${escapeHtml(row.studied_day)} 선택">` : '—'}</td><td>${escapeHtml(row.sheet)} / ${row.row_number}행 / ${escapeHtml(row.column)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.studied_day)}</td><td>${row.studylog_id ? `#${Number(row.studylog_id)} ` : ''}${escapeHtml(row.book_title || '—')}</td><td>${escapeHtml(row.current_teacher ? userName(row.current_teacher) : '미지정')}</td><td>${escapeHtml(row.message)}</td></tr>`).join('');
+            document.getElementById('teacher-assignment-preview-card').classList.remove('hidden');
+        } catch (err) { feedback.show(err.message, 'error'); }
+        finally { setTeacherAssignmentBusy(false); }
+    });
+    document.getElementById('btn-apply-teacher-assignment')?.addEventListener('click', async () => {
+        const feedback = createActionFeedback('#btn-apply-teacher-assignment');
+        if (!teacherAssignmentPreview || teacherAssignmentBusy) return;
+        const preview = teacherAssignmentPreview;
+        const tokens = [...document.querySelectorAll('.teacher-assignment-checkbox:checked')].map(box => preview.rows[Number(box.dataset.index)].token);
+        if (!tokens.length) return;
+        setTeacherAssignmentBusy(true);
+        try {
+            if (!(await feedback.confirm(`선택한 ${tokens.length}건의 실제 진행 선생님을 ${preview.teacher.name || preview.teacher.username} (${preview.teacher.username}) 선생님으로 지정할까요?\n\n변경 이력이 기록됩니다. 이미 수업·정산에 연결된 기록은 정산 결과가 달라질 수 있습니다.`))) return;
+            const result = await apiFetch('/api/user/utilities/teacher-assignment/apply', { method: 'POST', body: JSON.stringify({ tokens }) });
+            resetTeacherAssignment();
+            document.getElementById('teacher-assignment-summary').textContent = result.message + ' 변경 이력 조회에서 확인할 수 있습니다.';
+            feedback.show(result.message, 'success');
+        } catch (err) {
+            resetTeacherAssignment();
+            feedback.show(err.message, 'error');
+        } finally { setTeacherAssignmentBusy(false); }
+    });
 
     let studyLogCsvPreview = null;
     let studyLogCsvFileName = '';

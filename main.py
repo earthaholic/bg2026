@@ -7,7 +7,7 @@ from threading import RLock
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Literal
-from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
@@ -53,6 +53,7 @@ from database import (
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from similarity import normalize_key, classify_match
+from teacher_assignment import parse_assignment_file, assignment_context, match_assignment, fingerprint
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from jose import jwt
 
@@ -3101,6 +3102,112 @@ def backfill_payroll_class_links(
                       current_user["username"], current_user["role"])
     return {"status": "success", "linked_count": len(candidates), "unmatched_count": unmatched,
             "message": f"{len(candidates)}건의 누락 학습 이력을 수업에 연결했습니다."}
+
+
+class TeacherAssignmentApplyRequest(BaseModel):
+    tokens: List[str]
+
+
+def _assignment_teacher(conn, username):
+    teacher = conn.execute('SELECT username, name, role FROM _app_users WHERE username=?', (username,)).fetchone()
+    if not teacher or teacher['role'] not in ('teacher', 'manager', 'subadmin'):
+        raise HTTPException(status_code=400, detail='운영에 등록된 실제 진행 선생님 계정을 선택해 주세요.')
+    return dict(teacher)
+
+
+@app.post('/api/user/utilities/teacher-assignment/preview')
+def preview_teacher_assignment(
+    file: UploadFile = File(...), teacher_username: str = Form(...), month: str = Form(''),
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail='파일은 5MB 이하로 준비해 주세요.')
+    try:
+        sources = parse_assignment_file(content, file.filename or '', month)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=400, detail='파일을 읽을 수 없습니다. Google Sheets에서 XLSX 또는 CSV로 다시 내려받아 주세요.')
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN')
+        teacher = _assignment_teacher(conn, teacher_username)
+        context = assignment_context(conn)
+        results, seen = [], set()
+        for source in sources:
+            record, message = match_assignment(source, teacher_username, context)
+            result = {**source, 'message': message, 'ready': False, 'token': '',
+                      'studylog_id': record['_rowid'] if record else None,
+                      'book_title': ' / '.join(sorted(context[5].get(str(record.get('BookId')), []))) if record else '',
+                      'current_teacher': (record.get('ActualTeacherUsername') or '') if record else ''}
+            if record and not message:
+                row_id = record['_rowid']
+                if row_id in seen:
+                    result['message'] = '파일 내 중복 차시입니다. 같은 기록은 한 번만 적용합니다.'
+                else:
+                    seen.add(row_id)
+                    result['ready'] = True
+                    result['message'] = '지정 가능'
+                    result['token'] = jwt.encode({
+                        'purpose': 'teacher-assignment', 'actor': current_user['username'],
+                        'teacher': teacher_username, 'row_id': row_id, 'source': source,
+                        'fingerprint': fingerprint(record),
+                        'exp': datetime.utcnow() + timedelta(minutes=30)
+                    }, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+            results.append(result)
+        return {'rows': results, 'teacher': teacher, 'ready_count': sum(r['ready'] for r in results),
+                'total_count': len(results)}
+    finally:
+        conn.close()
+
+
+@app.post('/api/user/utilities/teacher-assignment/apply')
+def apply_teacher_assignment(payload: TeacherAssignmentApplyRequest, request: Request,
+                             current_user: Dict[str, Any] = Depends(get_current_staff)):
+    if not payload.tokens or len(payload.tokens) > 3000:
+        raise HTTPException(status_code=400, detail='적용할 차시를 1~3,000건 선택해 주세요.')
+    claims = []
+    try:
+        for token_value in payload.tokens:
+            claim = jwt.decode(token_value, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            if claim.get('purpose') != 'teacher-assignment' or claim.get('actor') != current_user['username']:
+                raise ValueError('잘못된 미리보기')
+            claims.append(claim)
+        if len({c['teacher'] for c in claims}) != 1 or len({c['row_id'] for c in claims}) != len(claims):
+            raise ValueError('중복 또는 다른 선생님의 미리보기')
+    except Exception:
+        raise HTTPException(status_code=400, detail='미리보기가 만료되었거나 유효하지 않습니다. 다시 미리보기 해 주세요.')
+    conn = get_db_connection()
+    try:
+        # 재검증·변경·감사 기록을 하나의 트랜잭션으로 처리한다.
+        conn.execute('BEGIN IMMEDIATE')
+        teacher = _assignment_teacher(conn, claims[0]['teacher'])
+        context = assignment_context(conn)
+        records = []
+        for claim in claims:
+            record, message = match_assignment(claim['source'], teacher['username'], context)
+            if message or not record or record['_rowid'] != claim['row_id'] or fingerprint(record) != claim['fingerprint']:
+                raise HTTPException(status_code=409, detail='미리보기 이후 대상 기록이나 정산 상태가 바뀌었습니다. 다시 미리보기 해 주세요. 적용된 기록은 없습니다.')
+            records.append(record)
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        for record in records:
+            row_id = record['_rowid']
+            old = {key: value for key, value in record.items() if key != '_rowid'}
+            conn.execute('''UPDATE "StudyLogs" SET "ActualTeacherUsername"=?, "UpdatedBy"=?, "UpdatedAt"=?
+                            WHERE rowid=?''', (teacher['username'], current_user['username'], now, row_id))
+            new = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone())
+            write_audit_log('StudyLogs', row_id, 'UPDATE', old, new,
+                            [key for key in new if old.get(key) != new[key]],
+                            current_user['username'], current_user['role'],
+                            request.client.host if request.client else '', connection=conn)
+        conn.commit()
+        return {'success_count': len(records), 'message': f'{len(records)}건의 실제 진행 선생님을 지정했습니다.'}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _duplicate_book_groups(conn) -> List[Dict[str, Any]]:
