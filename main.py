@@ -299,13 +299,18 @@ def _count_general_lesson_sessions(
     end_date: str,
     include_end: bool = True
 ) -> int:
-    """특강을 제외하고 같은 날짜·수업 내용의 복수 도서를 한 차시로 계산한다."""
+    """특강·휴강을 제외하고 같은 날짜·수업 내용의 복수 도서를 한 차시로 계산한다."""
     end_operator = "<=" if include_end else "<"
     cursor.execute(f'''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
                        FROM "StudyLogs"
                        WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
                          AND "StudiedDay" >= ? AND "StudiedDay" {end_operator} ?
                          AND COALESCE("IsSpecial", 0) = 0
+                         AND NOT EXISTS (
+                             SELECT 1 FROM "Books" b
+                             WHERE (b.rowid = "StudyLogs"."BookId" OR b."Id" = "StudyLogs"."BookId")
+                               AND TRIM(b."Title") IN ('휴일', '휴강')
+                         )
                        ORDER BY "StudiedDay", rowid''',
                    (student_row_id, str(student_row_id), student_id, student_name, start_date, end_date))
     seen_sessions = set()
@@ -1964,10 +1969,13 @@ def build_monthly_report_text(
         studied_day = str(log.get("StudiedDay") or log.get("studied_day") or "").strip()
         lesson_content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
         is_special = bool(log.get("IsSpecial") or log.get("is_special"))
-        key = (studied_day, lesson_content, is_special) if studied_day and lesson_content else ("__single__", log_index)
+        title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
+        is_break = title in ("휴일", "휴강")
+        key = (studied_day, lesson_content, is_special, is_break) if studied_day and lesson_content else ("__single__", log_index)
         if key not in grouped_by_key:
             grouped = dict(log)
             grouped["_book_titles"] = []
+            grouped["_is_break"] = is_break
             grouped_by_key[key] = grouped
             grouped_logs.append(grouped)
         title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
@@ -1984,7 +1992,9 @@ def build_monthly_report_text(
             lines.append("")
 
         is_special = bool(log.get("IsSpecial") or log.get("is_special"))
-        if is_special:
+        if log.get("_is_break"):
+            lines.append("<휴강>")
+        elif is_special:
             if teacher_suffix:
                 lines.append(f"<특강> {teacher_suffix}")
             else:

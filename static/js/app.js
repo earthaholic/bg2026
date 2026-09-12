@@ -6512,11 +6512,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const studiedDay = String(log.StudiedDay || log.studied_day || '').trim();
             const lessonContent = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
             const isSpecial = !!(log.IsSpecial || log.is_special);
+            const isBreak = isMonthlyReportBreak(log);
             const key = studiedDay && lessonContent
-                ? JSON.stringify([studiedDay, lessonContent, isSpecial])
+                ? JSON.stringify([studiedDay, lessonContent, isSpecial, isBreak])
                 : JSON.stringify(['__single__', logIndex]);
             if (!groupedLogMap.has(key)) {
-                const grouped = { ...log, _bookTitles: [] };
+                const grouped = { ...log, _bookTitles: [], _isBreak: isBreak };
                 groupedLogMap.set(key, grouped);
                 groupedLogItems.push(grouped);
             }
@@ -6560,7 +6561,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const isSpecial = !!(log.IsSpecial || log.is_special);
-            if (isSpecial) {
+            if (log._isBreak) {
+                lines.push('<휴강>');
+            } else if (isSpecial) {
                 if (teacherSuffix) {
                     lines.push(`<특강> ${teacherSuffix}`);
                 } else {
@@ -6589,12 +6592,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!skipAutoLecture) updateMonthlyStartLecture(checkedLogItems);
     }
 
+    function isMonthlyReportBreak(log) {
+        const title = String(log.BookTitle || log.book_title || log.Title || '').trim();
+        return title === '휴일' || title === '휴강';
+    }
+
     async function updateMonthlyStartLecture(selectedLogs = getSelectedMonthlyLogs()) {
         const guide = document.getElementById('monthly-report-lecture-guide');
         const input = document.getElementById('monthly-report-start-lecture');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
         const generalDates = selectedLogs
-            .filter(log => !(log.IsSpecial || log.is_special))
+            .filter(log => !(log.IsSpecial || log.is_special) && !isMonthlyReportBreak(log))
             .map(log => String(log.StudiedDay || log.studied_day || '').slice(0, 10))
             .filter(Boolean)
             .sort();
