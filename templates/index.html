@@ -1118,8 +1118,13 @@
                                 <div id="teacher-assignment-summary" class="utility-summary" role="status">파일과 선생님을 선택해 주세요.</div>
                             </article>
                             <article class="card utility-card utility-csv-card">
-                                <div class="utility-card-copy"><h3>CSV 학습 기록 가져오기</h3><p><code>이름, 도서, 일자, 수업기록</code> 형식의 CSV를 분석합니다. 수업·정산·진행 선생님에는 연결하지 않으며, 도서명은 유사도를 계산한 뒤 미리 확인합니다.</p><div id="studylog-csv-summary" class="utility-summary">CSV 파일을 선택해 주세요.</div></div>
+                                <div class="utility-card-copy"><h3>CSV 학습 기록 가져오기</h3><p><code>이름, 도서, 일자, 수업기록</code> 형식의 CSV를 분석합니다. 수업·정산·진행 선생님에는 연결하지 않고 등록합니다. 등록 후 아래의 CSV 가져온 기록 수업 연결 기능으로 연결할 수 있습니다. 도서명은 유사도를 계산한 뒤 미리 확인합니다.</p><div id="studylog-csv-summary" class="utility-summary">CSV 파일을 선택해 주세요.</div></div>
                                 <div class="utility-controls utility-csv-controls"><input id="studylog-csv-file" class="form-control" type="file" accept=".csv,text/csv"><button id="btn-preview-studylog-csv" class="btn btn-primary">미리보기</button></div>
+                            </article>
+                            <article class="card utility-card utility-csv-class-links-card">
+                                <div class="utility-card-copy"><h3>CSV 가져온 기록 수업 연결</h3><p>가져오기 실행 이력을 선택한 뒤 기록별 과거 수업을 직접 확인해 주세요. 추천 수업은 현재 소속이 유일한 경우의 참고 정보이며, 과거 수업을 보장하지 않습니다.</p><p>미리보기는 30분간 유효합니다. 선택한 수업의 담당 선생님이 실제 진행 선생님으로 지정되며 정산에 반영될 수 있습니다.</p></div>
+                                <div class="utility-controls utility-csv-class-links-controls"><label for="studylog-csv-class-links-run">가져오기 실행 이력</label><select id="studylog-csv-class-links-run" class="form-control"><option value="">실행 이력 선택</option></select><button id="btn-preview-studylog-csv-class-links" class="btn btn-primary" disabled>수업 연결 미리보기</button></div>
+                                <div id="studylog-csv-class-links-summary" class="utility-summary" role="status">실행 이력을 선택해 주세요.</div>
                             </article>
                             <article class="card utility-card">
                                 <div class="utility-card-copy"><h3>누락 학습 이력 수업 연결</h3><p>선택한 월의 미연결 학습 이력을 학생별 일반·특강 수업이 정확히 하나인 경우에만 연결합니다.</p></div>
@@ -1133,6 +1138,10 @@
                         <div id="teacher-assignment-preview-card" class="card table-card hidden">
                             <div class="table-card-header utility-preview-header"><div><h3>선생님 지정 미리보기</h3><p>여러 학생·도서 후보는 자동 선택하지 않습니다. 서버 학생명과 도서별 기록을 확인해 선택해 주세요. 같은 기록 ID가 반복되면 한 번만 적용합니다. 미리보기는 30분간 유효합니다.</p></div><div class="utility-controls"><button id="btn-export-teacher-assignment" class="btn btn-outline">CSV 내보내기</button><button id="btn-apply-teacher-assignment" class="btn btn-success" disabled>선택 항목 적용</button></div></div>
                             <div class="table-responsive"><table class="modern-table utility-preview-table"><thead><tr><th><input id="teacher-assignment-select-all" type="checkbox" aria-label="지정 가능한 항목 전체 선택"></th><th>시트 / 행 / 차시</th><th>학생</th><th>실제 학습일</th><th>학습 기록 / 도서</th><th>현재 선생님</th><th>판정</th></tr></thead><tbody id="teacher-assignment-preview-body"></tbody></table></div>
+                        </div>
+                        <div id="studylog-csv-class-links-preview-card" class="card table-card hidden">
+                            <div class="table-card-header utility-preview-header"><div><h3>CSV 기록 수업 연결 미리보기</h3><p>기본 선택은 없습니다. 수업과 담당 선생님을 확인한 기록만 체크해 주세요. 수업을 선택하지 않은 행과 연결 불가 행은 전체 선택에서 제외됩니다.</p></div><button id="btn-apply-studylog-csv-class-links" class="btn btn-success" disabled>선택 기록 수업 연결</button></div>
+                            <div class="table-responsive"><table class="modern-table utility-preview-table"><thead><tr><th><input id="studylog-csv-class-links-select-all" type="checkbox" aria-label="연결 가능한 항목 전체 선택" disabled></th><th>기록 ID</th><th>학생</th><th>도서</th><th>학습일 / 특강</th><th>현재 진행 선생님</th><th>현재 수업</th><th>연결할 수업 / 담당 선생님</th><th>판정</th></tr></thead><tbody id="studylog-csv-class-links-preview-body"></tbody></table></div>
                         </div>
                         <div id="studylog-csv-preview-card" class="card table-card hidden">
                             <div class="table-card-header utility-preview-header"><div><h3><i class="fa-solid fa-file-csv"></i> 가져오기 미리보기</h3><p>오류가 없는 행만 등록됩니다. 불확실한 도서는 후보를 직접 선택할 수 있습니다.</p></div><button id="btn-import-studylog-csv" class="btn btn-success" disabled>등록 실행</button></div>

@@ -8255,6 +8255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let studyLogCsvPreview = null;
     let studyLogCsvFileName = '';
+    let studyLogCsvPreviewVersion = 0;
 
     function parseCsvText(text) {
         const rows = [];
@@ -8291,13 +8292,151 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('studylog-csv-summary').textContent = `전체 ${rows.length}건 · 등록 가능 ${ready}건 · 확인 필요 ${rows.length - ready}건`;
     }
 
+    let studyLogCsvClassLinksPreview = null;
+    let studyLogCsvClassLinksVersion = 0;
+    let studyLogCsvClassLinksBusy = false;
+    let studyLogCsvClassLinksExpiresAt = 0;
+    let studyLogCsvClassLinksTimer = null;
+    let studyLogCsvRunsVersion = 0;
+
+    function resetStudyLogCsvClassLinks(message = '실행 이력을 선택하고 미리보기를 실행해 주세요.') {
+        studyLogCsvClassLinksVersion++;
+        studyLogCsvClassLinksPreview = null;
+        studyLogCsvClassLinksExpiresAt = 0;
+        clearTimeout(studyLogCsvClassLinksTimer);
+        document.getElementById('studylog-csv-class-links-preview-card').classList.add('hidden');
+        document.getElementById('studylog-csv-class-links-preview-body').innerHTML = '';
+        document.getElementById('studylog-csv-class-links-summary').textContent = message;
+        updateStudyLogCsvClassLinksSelection();
+    }
+
+    function csvClassLinkOptions(row, classes) {
+        return classes.filter(item => !row.current_teacher || item.teacher_username === row.current_teacher);
+    }
+
+    function updateStudyLogCsvClassLinksSelection() {
+        const boxes = [...document.querySelectorAll('.csv-class-link-checkbox')];
+        const ready = boxes.filter(box => {
+            const index = Number(box.dataset.index);
+            const row = studyLogCsvClassLinksPreview?.rows[index];
+            const select = document.getElementById('csv-class-link-class-' + index);
+            const valid = Boolean(row?.token && select?.value);
+            box.disabled = studyLogCsvClassLinksBusy || !valid;
+            if (!valid) box.checked = false;
+            return valid;
+        });
+        const selected = ready.filter(box => box.checked).length;
+        const all = document.getElementById('studylog-csv-class-links-select-all');
+        all.checked = ready.length > 0 && selected === ready.length;
+        all.indeterminate = selected > 0 && selected < ready.length;
+        all.disabled = studyLogCsvClassLinksBusy || !ready.length;
+        document.getElementById('btn-apply-studylog-csv-class-links').disabled = studyLogCsvClassLinksBusy || !selected;
+        const runSelect = document.getElementById('studylog-csv-class-links-run');
+        document.getElementById('btn-preview-studylog-csv-class-links').disabled = studyLogCsvClassLinksBusy || !runSelect.value;
+        if (studyLogCsvClassLinksPreview) {
+            const p = studyLogCsvClassLinksPreview;
+            document.getElementById('studylog-csv-class-links-summary').textContent = '실행 #' + p.run_id + ' · ' + (p.source_file || '-') + ' · 전체 ' + p.total_count + '건 · 수업 선택 완료 ' + ready.length + '건 · 체크 ' + selected + '건';
+        }
+    }
+
+    function setStudyLogCsvClassLinksBusy(busy) {
+        studyLogCsvClassLinksBusy = busy;
+        document.getElementById('studylog-csv-class-links-run').disabled = busy;
+        document.querySelectorAll('.csv-class-link-class').forEach(select => {
+            select.disabled = busy || !studyLogCsvClassLinksPreview?.rows[Number(select.dataset.index)]?.token;
+        });
+        updateStudyLogCsvClassLinksSelection();
+    }
+
+    function renderStudyLogCsvClassLinks() {
+        const preview = studyLogCsvClassLinksPreview;
+        document.getElementById('studylog-csv-class-links-preview-body').innerHTML = preview.rows.map((row, index) => {
+            const classes = csvClassLinkOptions(row, preview.classes || []);
+            const groupedClasses = classes.map(item => ({ ...item, Id: item.id, ClassName: item.name, TeacherUsername: item.teacher_username, TeacherName: item.teacher_name }));
+            const options = '<option value="">수업 선택 안 함</option>' + groupedClassOptions(groupedClasses, item => '<option value="' + Number(item.id) + '" ' + (Number(item.id) === Number(row.suggested_class_id) ? 'selected' : '') + '>' + escapeHtml(item.name + ' · ' + (item.teacher_name || userName(item.teacher_username)) + ' (' + item.teacher_username + ')') + '</option>');
+            const teacher = (preview.classes || []).find(item => item.teacher_username === row.current_teacher);
+            const teacherName = row.current_teacher ? (teacher?.teacher_name || userName(row.current_teacher)) : '미지정';
+            const suggested = classes.some(item => Number(item.id) === Number(row.suggested_class_id));
+            return '<tr><td><input type="checkbox" class="csv-class-link-checkbox" data-index="' + index + '" aria-label="' + escapeHtml(row.student_name + ' ' + row.studied_day + ' 기록 ' + row.studylog_id + ' 선택') + '" disabled></td><td>#' + Number(row.studylog_id) + '</td><td>' + escapeHtml(row.student_name || '-') + '</td><td>' + escapeHtml(row.book_title || '-') + '</td><td>' + escapeHtml(row.studied_day || '-') + '<br><small>' + (row.is_special ? '특강' : '일반') + '</small></td><td>' + escapeHtml(teacherName) + '</td><td>' + escapeHtml(row.class_name || '미연결') + '</td><td><select id="csv-class-link-class-' + index + '" class="form-control csv-class-link-class" data-index="' + index + '" aria-label="기록 ' + Number(row.studylog_id) + ' 연결할 수업" ' + (!row.token ? 'disabled' : '') + '>' + options + '</select>' + (suggested ? '<small class="utility-row-message is-warning">현재 소속 기준 추천, 과거 수업 확인 필요</small>' : '') + '</td><td><span class="badge ' + (row.token ? 'badge-success' : 'badge-danger') + '">' + (row.token ? '선택 가능' : '연결 불가') + '</span><small class="utility-row-message">' + escapeHtml(row.reason || '') + '</small></td></tr>';
+        }).join('') || '<tr><td colspan="9" class="empty-state">이 실행 이력에 연결 대상 기록이 없습니다.</td></tr>';
+        document.getElementById('studylog-csv-class-links-preview-card').classList.remove('hidden');
+        updateStudyLogCsvClassLinksSelection();
+    }
+
+    async function loadStudyLogCsvClassLinks() {
+        const runId = document.getElementById('studylog-csv-class-links-run').value;
+        resetStudyLogCsvClassLinks();
+        if (!runId) return;
+        const version = studyLogCsvClassLinksVersion;
+        const feedback = createActionFeedback('#btn-preview-studylog-csv-class-links');
+        setStudyLogCsvClassLinksBusy(true);
+        try {
+            const data = await apiFetch('/api/user/utilities/studylog-csv/runs/' + Number(runId) + '/class-links');
+            if (version !== studyLogCsvClassLinksVersion) return;
+            studyLogCsvClassLinksPreview = data;
+            studyLogCsvClassLinksExpiresAt = Date.now() + 30 * 60 * 1000;
+            studyLogCsvClassLinksTimer = setTimeout(() => resetStudyLogCsvClassLinks('미리보기 유효 시간 30분이 지났습니다. 다시 불러와 주세요.'), 30 * 60 * 1000);
+            renderStudyLogCsvClassLinks();
+        } catch (err) {
+            if (version === studyLogCsvClassLinksVersion) {
+                resetStudyLogCsvClassLinks('미리보기를 불러오지 못했습니다. 다시 시도해 주세요.');
+                feedback.show(err.message, 'error');
+            }
+        } finally { setStudyLogCsvClassLinksBusy(false); }
+    }
+
+    document.getElementById('studylog-csv-class-links-run')?.addEventListener('change', () => resetStudyLogCsvClassLinks());
+    document.getElementById('btn-preview-studylog-csv-class-links')?.addEventListener('click', loadStudyLogCsvClassLinks);
+    document.getElementById('studylog-csv-class-links-preview-body')?.addEventListener('change', updateStudyLogCsvClassLinksSelection);
+    document.getElementById('studylog-csv-class-links-select-all')?.addEventListener('change', event => {
+        document.querySelectorAll('.csv-class-link-checkbox').forEach(box => { box.checked = !box.disabled && event.target.checked; });
+        updateStudyLogCsvClassLinksSelection();
+    });
+    document.getElementById('btn-apply-studylog-csv-class-links')?.addEventListener('click', async () => {
+        if (!studyLogCsvClassLinksPreview || studyLogCsvClassLinksBusy) return;
+        const feedback = createActionFeedback('#btn-apply-studylog-csv-class-links');
+        const version = studyLogCsvClassLinksVersion;
+        const links = [...document.querySelectorAll('.csv-class-link-checkbox:checked')].filter(box => !box.disabled).map(box => {
+            const index = Number(box.dataset.index);
+            return { token: studyLogCsvClassLinksPreview.rows[index].token, class_id: Number(document.getElementById('csv-class-link-class-' + index).value) };
+        }).filter(link => link.token && link.class_id);
+        if (!links.length) return;
+        setStudyLogCsvClassLinksBusy(true);
+        try {
+            if (!(await feedback.confirm('선택한 ' + links.length + '건을 지정한 수업에 연결할까요?\n\n수업 담당 선생님을 실제 진행 선생님으로 지정하며 정산에 반영될 수 있습니다. 현재 소속 추천은 과거 수업을 보장하지 않습니다. 학생·도서·학습일과 과거 수업을 직접 확인해 주세요.'))) return;
+            if (version !== studyLogCsvClassLinksVersion || Date.now() >= studyLogCsvClassLinksExpiresAt) {
+                resetStudyLogCsvClassLinks('미리보기가 변경되었거나 만료되었습니다. 다시 불러와 주세요.');
+                return feedback.show('미리보기를 다시 불러온 뒤 선택해 주세요.', 'warning');
+            }
+            const result = await apiFetch('/api/user/utilities/studylog-csv/class-links/apply', { method: 'POST', body: JSON.stringify({ links }) });
+            feedback.show(result.message || ('수업 연결 ' + result.linked_count + '건을 완료했습니다.'), 'success');
+            await loadStudyLogCsvClassLinks();
+        } catch (err) {
+            resetStudyLogCsvClassLinks('저장하지 못했습니다. 최신 미리보기를 다시 불러와 주세요.');
+            feedback.show(err.message, 'error');
+        } finally { setStudyLogCsvClassLinksBusy(false); }
+    });
+
     async function loadStudyLogCsvRuns() {
         const feedback = createActionFeedback();
         const body = document.getElementById('studylog-csv-runs-body');
+        const select = document.getElementById('studylog-csv-class-links-run');
+        const previousRun = select.value;
+        const version = ++studyLogCsvRunsVersion;
+        resetStudyLogCsvClassLinks();
+        select.innerHTML = '<option value="">실행 이력을 불러오는 중입니다.</option>';
+        updateStudyLogCsvClassLinksSelection();
         try {
-            const data = await apiFetch('/api/user/utilities/studylog-csv/runs');
-            body.innerHTML = data.runs.length ? data.runs.map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(userName(run.username))}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
+            const data = await apiFetch('/api/user/utilities/studylog-csv/runs?all_runs=true');
+            if (version !== studyLogCsvRunsVersion) return;
+            select.innerHTML = '<option value="">실행 이력 선택</option>' + data.runs.map(run => '<option value="' + Number(run.id) + '">#' + Number(run.id) + ' · ' + escapeHtml(run.source_file || '-') + ' · ' + escapeHtml(run.created_at) + '</option>').join('');
+            select.value = previousRun;
+            updateStudyLogCsvClassLinksSelection();
+            body.innerHTML = data.runs.length ? data.runs.slice(0, 20).map(run => `<tr><td>${escapeHtml(run.created_at)}</td><td>${escapeHtml(run.source_file || '-')}</td><td>${escapeHtml(userName(run.username))}</td><td>${Number(run.total_count)}</td><td>${Number(run.success_count)}</td><td>${Number(run.failure_count)}</td><td><button class="btn btn-sm btn-outline btn-studylog-csv-run-detail" data-run-id="${Number(run.id)}">보기</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">아직 CSV 실행 이력이 없습니다.</td></tr>';
         } catch (error) {
+            if (version !== studyLogCsvRunsVersion) return;
+            select.innerHTML = '<option value="">실행 이력을 불러오지 못했습니다.</option>';
+            updateStudyLogCsvClassLinksSelection();
             feedback.show(error.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`; }
     }
 
@@ -8310,8 +8449,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('studylog-csv-run-detail-card').classList.remove('hidden');
     });
 
+    document.getElementById('studylog-csv-file')?.addEventListener('change', () => {
+        studyLogCsvPreviewVersion++;
+        studyLogCsvPreview = null;
+        studyLogCsvFileName = '';
+        document.getElementById('studylog-csv-preview-card').classList.add('hidden');
+        document.getElementById('btn-import-studylog-csv').disabled = true;
+        document.getElementById('studylog-csv-summary').textContent = 'CSV 파일을 선택하고 미리보기를 실행해 주세요.';
+        resetStudyLogCsvClassLinks();
+    });
+
     document.getElementById('btn-preview-studylog-csv')?.addEventListener('click', async () => {
         const feedback = createActionFeedback();
+        const version = ++studyLogCsvPreviewVersion;
+        studyLogCsvPreview = null;
+        document.getElementById('studylog-csv-preview-card').classList.add('hidden');
+        document.getElementById('btn-import-studylog-csv').disabled = true;
+        resetStudyLogCsvClassLinks();
         try {
             const file = document.getElementById('studylog-csv-file').files[0];
             if (!file) return feedback.show('CSV 파일을 선택해 주세요.', 'warning');
@@ -8325,8 +8479,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const indexes = Object.fromEntries(required.map(name => [name, headers.indexOf(name)]));
             const rows = parsed.map((values, index) => ({ row_number: index + 2, student_name: (values[indexes['이름']] || '').trim(), book_title: (values[indexes['도서']] || '').trim(), studied_day: (values[indexes['일자']] || '').trim(), lesson_content: (values[indexes['수업기록']] || '').trim() })).filter(row => row.student_name || row.book_title || row.studied_day || row.lesson_content);
             if (!rows.length) return feedback.show('가져올 데이터 행이 없습니다.', 'warning');
+            const preview = await apiFetch('/api/user/utilities/studylog-csv/preview', { method: 'POST', body: JSON.stringify({ source_file: file.name, rows }) });
+            if (version !== studyLogCsvPreviewVersion) return;
             studyLogCsvFileName = file.name;
-            studyLogCsvPreview = await apiFetch('/api/user/utilities/studylog-csv/preview', { method: 'POST', body: JSON.stringify({ source_file: file.name, rows }) });
+            studyLogCsvPreview = preview;
             renderStudyLogCsvPreview();
         } catch (err) { feedback.show(err.message, 'error'); }
     });
@@ -8344,10 +8500,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-import-studylog-csv')?.addEventListener('click', async () => {
         const feedback = createActionFeedback();
+        const version = studyLogCsvPreviewVersion;
         try {
             const rows = studyLogCsvPreview?.rows || [];
             const readyCount = rows.filter(row => row.ready).length;
-            if (!readyCount || !(await feedback.confirm(`등록 가능한 ${readyCount}건을 학습 기록에 추가할까요?\n\n확인 필요 ${rows.length - readyCount}건은 실패 사유와 함께 실행 이력에 남습니다. 수업·정산·실제 진행 선생님에는 연결되지 않습니다.`))) return;
+            if (!readyCount || !(await feedback.confirm(`등록 가능한 ${readyCount}건을 학습 기록에 추가할까요?\n\n확인 필요 ${rows.length - readyCount}건은 실패 사유와 함께 실행 이력에 남습니다. 수업·정산·실제 진행 선생님에는 연결하지 않고 등록합니다. 등록 후 CSV 가져온 기록 수업 연결 기능으로 연결할 수 있습니다.`))) return;
+            if (version !== studyLogCsvPreviewVersion) return feedback.show('CSV 파일이 변경되었습니다. 다시 미리보기를 실행해 주세요.', 'warning');
             const button = document.getElementById('btn-import-studylog-csv');
             button.disabled = true;
             const result = await apiFetch('/api/user/utilities/studylog-csv/import', { method: 'POST', body: JSON.stringify({ source_file: studyLogCsvFileName, rows }) });

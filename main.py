@@ -59,6 +59,7 @@ from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
 from teacher_assignment import MAX_ASSIGNMENT_ROWS
 from activity import router as activity_router, activity_middleware, init_activity_tables
+from csv_class_links import router as csv_class_links_router
 from jose import jwt
 
 app = FastAPI(
@@ -68,6 +69,7 @@ app = FastAPI(
 
 app.middleware("http")(activity_middleware)
 app.include_router(activity_router)
+app.include_router(csv_class_links_router)
 
 # Mount static & template files
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -3558,11 +3560,12 @@ def import_studylog_csv(payload: StudyLogCsvRequest, current_user: Dict[str, Any
 
 
 @app.get("/api/user/utilities/studylog-csv/runs")
-def list_studylog_csv_runs(current_user: Dict[str, Any] = Depends(get_current_staff)):
+def list_studylog_csv_runs(all_runs: bool = Query(False), current_user: Dict[str, Any] = Depends(get_current_staff)):
     conn = get_db_connection()
     try:
-        rows = conn.execute('''SELECT id,source_file,total_count,success_count,failure_count,username,created_at
-                               FROM _app_studylog_import_runs ORDER BY id DESC LIMIT 20''').fetchall()
+        query = '''SELECT id,source_file,total_count,success_count,failure_count,username,created_at
+                   FROM _app_studylog_import_runs ORDER BY id DESC'''
+        rows = conn.execute(query if all_runs else query + ' LIMIT 20').fetchall()
         return {"runs": [dict(row) for row in rows]}
     finally:
         conn.close()

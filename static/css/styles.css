@@ -4559,3 +4559,9 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
         grid-column: 2;
     }
 }
+
+/* CSV 가져온 기록 수업 연결 */
+#view-utilities .utility-csv-class-links-card { grid-column: 1 / -1; }
+#view-utilities .utility-csv-class-links-controls { flex-wrap: wrap; }
+#view-utilities .utility-csv-class-links-controls .form-control { flex: 1; min-width: 220px; max-width: 640px; }
+#view-utilities .csv-class-link-class { min-width: 260px; }
