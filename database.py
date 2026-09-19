@@ -253,6 +253,23 @@ def init_system_tables():
         )
     """)
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_class_cancellations_class_day ON "ClassCancellations"("ClassId", "CancelledDay")')
+    # 결석은 수업 횟수·정산에서 제외하고 학생별 사유만 별도로 보관한다.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS "StudentAbsences" (
+            "Id" INTEGER PRIMARY KEY,
+            "StudentId" INTEGER NOT NULL,
+            "ClassId" INTEGER NOT NULL,
+            "StudiedDay" TEXT NOT NULL,
+            "AbsenceReason" TEXT NOT NULL DEFAULT '',
+            "IsSpecial" INTEGER NOT NULL DEFAULT 0,
+            "CreatedAt" TEXT DEFAULT (datetime('now','localtime')),
+            "CreatedBy" TEXT DEFAULT '',
+            "UpdatedBy" TEXT DEFAULT '',
+            "UpdatedAt" TEXT DEFAULT '',
+            UNIQUE("StudentId", "ClassId", "StudiedDay")
+        )
+    """)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_student_absences_student_day ON "StudentAbsences"("StudentId", "StudiedDay")')
     # ClassStudents에 특강 여부(IsSpecial) 컬럼 보완 (기존 DB 대응)
     try:
         cursor.execute('PRAGMA table_info("ClassStudents")')

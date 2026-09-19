@@ -5439,8 +5439,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== 수업(Class) 관리 ====================
     const DAY_LABELS = { '월': '월요일', '화': '화요일', '수': '수요일', '목': '목요일', '금': '금요일', '토': '토요일', '일': '일요일' };
-    const BATCH_STATUS_CLASS = { created: 'res-status-created', skipped: 'res-status-skipped', duplicate: 'res-status-skipped', error: 'res-status-error' };
-    const BATCH_STATUS_ICON = { created: 'fa-circle-check', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
+    const BATCH_STATUS_CLASS = { created: 'res-status-created', absent: 'res-status-created', skipped: 'res-status-skipped', duplicate: 'res-status-skipped', error: 'res-status-error' };
+    const BATCH_STATUS_ICON = { created: 'fa-circle-check', absent: 'fa-circle-check', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
 
     function formatDayOfWeek(d) {
         return DAY_LABELS[d] || d || '-';
@@ -6273,6 +6273,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     </td>
                 </tr>
+                <tr id="batch-absence-row-${sId}" class="batch-memo-row hidden">
+                    <td colspan="5">
+                        <label for="batch-absence-reason-${sId}" class="batch-memo-label">${name} 학생 결석 사유</label>
+                        <input id="batch-absence-reason-${sId}" class="form-control batch-absence-reason" data-student-id="${sId}" maxlength="500" placeholder="예: 수업 전 사정으로 (선택사항)" disabled>
+                        <p class="batch-absence-guide">월말 문자에 날짜와 함께 ‘입력한 사유 + 수업 불참’으로 표시됩니다. 비워 두면 ‘수업 불참’만 표시됩니다.</p>
+                    </td>
+                </tr>
                 <tr id="batch-memo-row-${sId}" class="batch-memo-row hidden">
                     <td colspan="5">
                         <label for="batch-description-${sId}" class="batch-memo-label"><i class="fa-solid fa-note-sticky"></i> ${name} 학생 메모</label>
@@ -6282,6 +6289,20 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
         classBatchStudentsBody.innerHTML = html;
+        classBatchStudentsBody.querySelectorAll('.batch-attend').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const studentId = checkbox.dataset.studentId;
+                document.getElementById(`batch-absence-row-${studentId}`).classList.toggle('hidden', checkbox.checked);
+                document.getElementById(`batch-absence-reason-${studentId}`).disabled = checkbox.checked;
+                const memoButton = classBatchStudentsBody.querySelector(`.btn-toggle-batch-memo[data-student-id="${studentId}"]`);
+                memoButton.disabled = !checkbox.checked;
+                if (!checkbox.checked) {
+                    document.getElementById(`batch-memo-row-${studentId}`).classList.add('hidden');
+                    memoButton.setAttribute('aria-expanded', 'false');
+                    memoButton.innerHTML = '<i class="fa-solid fa-plus"></i> 추가';
+                }
+            });
+        });
         classBatchStudentsBody.querySelectorAll('.btn-toggle-batch-memo').forEach(button => {
             button.addEventListener('click', () => {
                 const studentId = button.dataset.studentId;
@@ -6608,7 +6629,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const bookIds = Array.from(selectedBatchBooks.values()).map(book => book.id);
-        if (bookIds.length === 0) {
+        if (bookIds.length === 0 && classBatchStudentsBody.querySelector('.batch-attend:checked')) {
             classBatchResult.className = 'alert alert-danger';
             classBatchResult.textContent = '도서를 선택해 주세요.';
             classBatchResult.classList.remove('hidden');
@@ -6622,7 +6643,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const sid = parseInt(chk.getAttribute('data-student-id'));
             const specialEl = document.querySelector(`.batch-special[data-student-id="${sid}"]`);
             const descriptionEl = document.querySelector(`.batch-description[data-student-id="${sid}"]`);
-            logs.push({ StudentId: sid, include: chk.checked, is_special: specialEl ? specialEl.checked : false, Description: descriptionEl ? descriptionEl.value.trim() : '' });
+            const absenceReasonEl = document.getElementById(`batch-absence-reason-${sid}`);
+            logs.push({ StudentId: sid, include: chk.checked, is_special: specialEl ? specialEl.checked : false, Description: descriptionEl ? descriptionEl.value.trim() : '', AbsenceReason: !chk.checked && absenceReasonEl ? absenceReasonEl.value.trim() : '' });
         });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
@@ -6769,7 +6791,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const lessonContent = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
             const isSpecial = !!(log.IsSpecial || log.is_special);
             const isBreak = isMonthlyReportBreak(log);
-            const key = studiedDay && lessonContent
+            const key = studiedDay && lessonContent && !log.IsAbsence
                 ? JSON.stringify([studiedDay, lessonContent, isSpecial, isBreak])
                 : JSON.stringify(['__single__', logIndex]);
             if (!groupedLogMap.has(key)) {
@@ -6812,6 +6834,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         groupedLogItems.forEach((log, idx) => {
+            if (log.IsAbsence) {
+                if (idx > 0) lines.push('');
+                lines.push(`${formatDateKorean(log.StudiedDay)} ${formatMonthlyAbsenceReason(log.AbsenceReason)}`.trim());
+                return;
+            }
             if (log._isBreak) {
                 const dateStr = formatDateKorean(log.StudiedDay || log.studied_day || '');
                 const reason = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
@@ -6852,6 +6879,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!skipAutoLecture) updateMonthlyStartLecture(checkedLogItems);
     }
 
+    function formatMonthlyAbsenceReason(reason) {
+        const text = String(reason || '').trim().replace(/\s+/g, ' ');
+        if (!text) return '수업 불참';
+        return text.endsWith('수업 불참') ? text : `${text} 수업 불참`;
+    }
+
     function isMonthlyReportBreak(log) {
         const title = String(log.BookTitle || log.book_title || log.Title || '').trim();
         return title === '휴일' || title === '휴강';
@@ -6862,7 +6895,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = document.getElementById('monthly-report-start-lecture');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
         const generalDates = selectedLogs
-            .filter(log => !(log.IsSpecial || log.is_special) && !isMonthlyReportBreak(log))
+            .filter(log => !log.IsAbsence && !(log.IsSpecial || log.is_special) && !isMonthlyReportBreak(log))
             .map(log => String(log.StudiedDay || log.studied_day || '').slice(0, 10))
             .filter(Boolean)
             .sort();
@@ -6939,9 +6972,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="checkbox" class="chk-log-include" id="chk-log-${idx}" ${selectAll ? 'checked' : ''}>
                     <div class="report-log-info">
                         <div class="report-log-header"><span class="report-log-date">${formatDateKorean(log.StudiedDay || log.studied_day)}</span>
-                            ${isSpecial ? '<span class="tag-badge warning">특강</span>' : '<span class="tag-badge primary">일반강의</span>'}</div>
-                        <div class="report-log-book">도서: ${escapeHtml(log.BookTitle || log.book_title || '도서 제목 미입력')}</div>
-                        <div class="report-log-content">${escapeHtml(log.LessonContent || log.lesson_content || log.Description || '수업 내용 미입력')}</div>
+                            ${log.IsAbsence ? '<span class="tag-badge warning">결석 · 강의 번호 제외</span>' : isSpecial ? '<span class="tag-badge warning">특강</span>' : '<span class="tag-badge primary">일반강의</span>'}</div>
+                        ${log.IsAbsence ? '' : `<div class="report-log-book">도서: ${escapeHtml(log.BookTitle || log.book_title || '도서 제목 미입력')}</div>`}
+                        <div class="report-log-content">${escapeHtml(log.IsAbsence ? formatMonthlyAbsenceReason(log.AbsenceReason) : log.LessonContent || log.lesson_content || log.Description || '수업 내용 미입력')}</div>
                     </div>
                 </div>`;
         }).join('');
@@ -6985,13 +7018,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
             const res = await apiFetch(`/api/user/monthly-report/studylogs?${params.toString()}`);
-            currentMonthlyLogs = res.logs || []; // 최신순(StudiedDay DESC) 반환
+            currentMonthlyLogs = [
+                ...(res.logs || []),
+                ...(res.absences || []).map(absence => ({ ...absence, IsAbsence: true }))
+            ].sort((a, b) => String(b.StudiedDay || '').localeCompare(String(a.StudiedDay || '')));
 
             if (currentMonthlyLogs.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state-sm">
                         <i class="fa-solid fa-folder-open"></i>
-                        <p>선택한 기간에 등록된 학습 기록이 없습니다.</p>
+                        <p>선택한 기간에 등록된 학습 기록이나 결석 내역이 없습니다.</p>
                     </div>
                 `;
                 generateMonthlyReportText();

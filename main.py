@@ -231,6 +231,7 @@ class ClassStudyLogItem(BaseModel):
     include: bool = True
     is_special: bool = False
     Description: Optional[str] = ""
+    AbsenceReason: Optional[str] = ""
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: Optional[int] = None
@@ -1999,7 +2000,11 @@ def build_monthly_report_text(
     # 같은 날짜·수업 내용·특강 여부의 기록은 여러 도서를 사용했더라도 한 강으로 묶는다.
     grouped_logs: List[Dict[str, Any]] = []
     grouped_by_key: Dict[Any, Dict[str, Any]] = {}
-    for log_index, log in enumerate(logs):
+    sorted_logs = sorted(logs, key=lambda log: str(log.get("StudiedDay") or log.get("studied_day") or ""))
+    for log_index, log in enumerate(sorted_logs):
+        if log.get("IsAbsence"):
+            grouped_logs.append(dict(log))
+            continue
         studied_day = str(log.get("StudiedDay") or log.get("studied_day") or "").strip()
         lesson_content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
         is_special = bool(log.get("IsSpecial") or log.get("is_special"))
@@ -2022,6 +2027,15 @@ def build_monthly_report_text(
         teacher_suffix += " 선생님"
 
     for i, log in enumerate(grouped_logs):
+        if log.get("IsAbsence"):
+            if i > 0:
+                lines.append("")
+            date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
+            reason = " ".join(str(log.get("AbsenceReason") or "").split())
+            # 완성 문구를 입력한 경우 '수업 불참'을 중복해서 붙이지 않는다.
+            message = reason if reason.endswith("수업 불참") else f"{reason} 수업 불참".strip()
+            lines.append(f"{date_str} {message}".strip())
+            continue
         if log.get("_is_break"):
             date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
             reason = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
@@ -2127,13 +2141,31 @@ def user_get_monthly_report_studylogs(
     query += ' ORDER BY sl.StudiedDay DESC, sl.rowid DESC'
     cursor.execute(query, params)
     rows = cursor.fetchall()
+    absence_query = '''
+        SELECT a.* FROM "StudentAbsences" a
+        WHERE (a."StudentId" = ? OR a."StudentId" = ?)
+    '''
+    absence_params = [s_row_id, s_id]
+    if current_user.get("role") == "teacher":
+        absence_query += ' AND EXISTS (SELECT 1 FROM "Classes" c WHERE c."Id" = a."ClassId" AND c."TeacherUsername" = ?)'
+        absence_params.append(current_user["username"])
+    if date_from:
+        absence_query += ' AND a."StudiedDay" >= ?'
+        absence_params.append(date_from)
+    if date_to:
+        absence_query += ' AND a."StudiedDay" <= ?'
+        absence_params.append(date_to)
+    absence_query += ' ORDER BY a."StudiedDay" DESC, a."Id" DESC'
+    absences = [dict(row) for row in cursor.execute(absence_query, absence_params).fetchall()]
     conn.close()
 
     logs = [dict(r) for r in rows]
     return {
         "student": student,
         "logs": logs,
-        "total_count": len(logs)
+        "absences": absences,
+        "total_count": len(logs),
+        "absence_count": len(absences)
     }
 
 @app.post("/api/user/monthly-report/preview")
@@ -2778,6 +2810,10 @@ def user_batch_register_class_studylogs(
     day = (payload.StudiedDay or "").strip()
     if not day or not re.match(r'^\d{4}-\d{2}-\d{2}$', day):
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="존재하는 학습 일자를 입력해 주세요.")
 
     if payload.IsCancelled:
         conn = get_db_connection()
@@ -2795,6 +2831,8 @@ def user_batch_register_class_studylogs(
             ).fetchone()
             if studylog_exists:
                 raise HTTPException(status_code=409, detail="해당 날짜에 이미 학습 이력이 등록되어 있어 휴강으로 바꿀 수 없습니다.")
+            if cursor.execute('SELECT 1 FROM "StudentAbsences" WHERE "ClassId"=? AND "StudiedDay"=? LIMIT 1', (class_id, day)).fetchone():
+                raise HTTPException(status_code=409, detail="해당 날짜에 결석 기록이 있어 휴강으로 바꿀 수 없습니다.")
             cursor.execute('''
                 INSERT INTO "ClassCancellations" ("ClassId", "CancelledDay", "Reason", "CreatedBy")
                 VALUES (?, ?, ?, ?)
@@ -2820,7 +2858,7 @@ def user_batch_register_class_studylogs(
         book_id for book_id in (payload.BookIds or ([payload.BookId] if payload.BookId else []))
         if book_id and book_id > 0
     ))
-    if not book_ids:
+    if not book_ids and any(item.include for item in payload.logs):
         raise HTTPException(status_code=400, detail="도서를 선택해 주세요.")
     if not payload.logs:
         raise HTTPException(status_code=400, detail="등록할 학생이 없습니다.")
@@ -2878,58 +2916,92 @@ def user_batch_register_class_studylogs(
 
     created_count = 0
     skipped_count = 0
+    absence_count = 0
     results = []
 
     for item in payload.logs:
         sid = item.StudentId
         name = student_name(sid)
-
-        if not item.include:
-            skipped_count += 1
-            results.append({"StudentId": sid, "Name": name, "status": "skipped", "message": "결석 처리로 건너뜀"})
-            continue
-
         if sid not in allowed_student_ids:
             results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
             continue
 
-        for book_id in book_ids:
-            book_title = book_names[book_id]
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    'SELECT COUNT(*) as cnt FROM "StudyLogs" WHERE "StudentId" = ? AND "BookId" = ? AND "StudiedDay" = ?',
-                    (sid, book_id, day)
-                )
-                exists = cursor.fetchone()["cnt"] > 0
-                conn.close()
-                if exists:
-                    skipped_count += 1
-                    results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "duplicate", "message": "이미 등록된 학습 기록입니다."})
-                    continue
+        conn = get_db_connection()
+        student_results = []
+        student_created = 0
+        student_skipped = 0
+        try:
+            # 결석 변경과 감사 기록, 참석 전환은 학생별 한 트랜잭션으로 처리한다.
+            conn.execute('BEGIN IMMEDIATE')
+            old_row = conn.execute('SELECT * FROM "StudentAbsences" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=?',
+                                   (sid, class_id, day)).fetchone()
+            old_absence = dict(old_row) if old_row else None
+            if not item.include:
+                if conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=? LIMIT 1',
+                                (sid, class_id, day)).fetchone():
+                    raise ValueError("해당 날짜에 참석 학습 기록이 있어 결석으로 등록할 수 없습니다. 기존 기록을 먼저 확인해 주세요.")
+                reason = " ".join((item.AbsenceReason or "").split())
+                if old_absence:
+                    absence_id = old_absence["Id"]
+                    conn.execute('UPDATE "StudentAbsences" SET "AbsenceReason"=?, "IsSpecial"=?, "UpdatedBy"=?, "UpdatedAt"=datetime(\'now\',\'localtime\') WHERE "Id"=?',
+                                 (reason, int(item.is_special), current_user["username"], absence_id))
+                else:
+                    absence_id = conn.execute('INSERT INTO "StudentAbsences" ("StudentId", "ClassId", "StudiedDay", "AbsenceReason", "IsSpecial", "CreatedBy") VALUES (?, ?, ?, ?, ?, ?)',
+                                              (sid, class_id, day, reason, int(item.is_special), current_user["username"])).lastrowid
+                new_absence = dict(conn.execute('SELECT * FROM "StudentAbsences" WHERE "Id"=?', (absence_id,)).fetchone())
+                changed = [key for key in new_absence if (old_absence or {}).get(key) != new_absence[key]]
+                write_audit_log("StudentAbsences", absence_id, "UPDATE" if old_absence else "INSERT", old_absence, new_absence,
+                                changed if old_absence else None, current_user["username"], current_user["role"], connection=conn)
+                conn.commit()
+                absence_count += 1
+                results.append({"StudentId": sid, "Name": name, "status": "absent", "message": "결석 사유 저장 완료"})
+                continue
 
-                res = insert_table_row("StudyLogs", {
+            grade = _student_grade(sid)
+            for book_id in book_ids:
+                result = {"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_names[book_id]}
+                exists = conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "BookId"=? AND "StudiedDay"=? LIMIT 1',
+                                      (sid, book_id, day)).fetchone()
+                if exists:
+                    student_skipped += 1
+                    student_results.append(dict(result, status="duplicate", message="이미 등록된 학습 기록입니다."))
+                    continue
+                data = {
                     "StudentId": sid, "BookId": book_id, "StudiedDay": day,
                     "LessonContent": lesson_content, "Description": (item.Description or "").strip(),
-                    "IsSpecial": 1 if item.is_special else 0, "ClassId": class_id,
-                    "ActualTeacherUsername": actual_teacher,
-                    "SubstituteStatus": "approved",
-                    "GradeSnapshot": _student_grade(sid),
-                    "CreatedBy": current_user["username"]
-                })
-                new_snapshot = get_record_snapshot("StudyLogs", res.get("id"))
-                _audit_insert("StudyLogs", res.get("id"), new_snapshot,
-                              current_user["username"], current_user["role"])
-                created_count += 1
-                results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "created", "message": "등록 완료"})
-            except Exception as e:
-                results.append({"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_title, "status": "error", "message": f"등록 실패: {str(e)}"})
+                    "IsSpecial": int(item.is_special), "ClassId": class_id,
+                    "ActualTeacherUsername": actual_teacher, "SubstituteStatus": "approved",
+                    "GradeSnapshot": grade, "CreatedBy": current_user["username"]
+                }
+                columns = ', '.join('"' + column + '"' for column in data)
+                placeholders = ', '.join('?' for _ in data)
+                record_id = conn.execute(f'INSERT INTO "StudyLogs" ({columns}) VALUES ({placeholders})', list(data.values())).lastrowid
+                new_snapshot = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (record_id,)).fetchone())
+                write_audit_log("StudyLogs", record_id, "INSERT", None, new_snapshot, None,
+                                current_user["username"], current_user["role"], connection=conn)
+                student_created += 1
+                student_results.append(dict(result, status="created", message="등록 완료"))
+            # 실제로 같은 수업에 참석 기록이 존재할 때만 결석을 해제한다.
+            if old_absence and conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=? LIMIT 1',
+                                            (sid, class_id, day)).fetchone():
+                conn.execute('DELETE FROM "StudentAbsences" WHERE "Id"=?', (old_absence["Id"],))
+                write_audit_log("StudentAbsences", old_absence["Id"], "DELETE", old_absence, None, None,
+                                current_user["username"], current_user["role"], connection=conn)
+            conn.commit()
+            created_count += student_created
+            skipped_count += student_skipped
+            results.extend(student_results)
+        except Exception as e:
+            conn.rollback()
+            results.append({"StudentId": sid, "Name": name, "status": "error", "message": f"등록 실패: {str(e)}"})
+        finally:
+            conn.close()
 
     return {
         "status": "success",
-        "message": f"학습 이력 일괄 등록이 완료되었습니다. (등록 {created_count}건 / 건너뜀 {skipped_count}건)",
+        "message": f"학습 이력 일괄 등록이 완료되었습니다. (등록 {created_count}건 / 결석 {absence_count}건 / 건너뜀 {skipped_count}건)",
         "created_count": created_count,
+        "absence_count": absence_count,
         "skipped_count": skipped_count,
         "results": results
     }
