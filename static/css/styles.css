@@ -4424,3 +4424,23 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }
+
+/* 도서 등록 요청은 공통 등록 폼과 요청 내역을 한 흐름으로 표시한다. */
+#view-book-material-request {
+    overflow-y: auto;
+}
+
+#view-book-material-request .book-search-layout {
+    overflow: visible;
+    flex: 0 0 auto;
+}
+
+#view-book-material-request .form-card,
+#view-book-material-request .table-card {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+#view-book-material-request .table-responsive {
+    overflow-x: auto;
+}

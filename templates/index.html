@@ -1,3 +1,149 @@
+{% macro book_registration_fields(prefix) -%}
+<!-- 기본 도서 정보 -->
+<div class="form-section">
+    <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 기본 도서 정보</h4>
+    <div class="form-grid">
+        <div class="form-group span-2">
+            <label for="{{ prefix }}-title">도서명 <span class="required">*</span></label>
+            <input type="text" id="{{ prefix }}-title" name="Title" class="form-control" placeholder="예: 꿈꾸는봄결 독서 교재 1권" required>
+            <div id="{{ prefix }}-title-similar-box" class="title-similar-box hidden"></div>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-author">저자 <span class="required">*</span></label>
+            <input type="text" id="{{ prefix }}-author" name="Author" class="form-control" placeholder="저자명 입력" required>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-publisher">출판사 <span class="required">*</span></label>
+            <input type="text" id="{{ prefix }}-publisher" name="Publisher" class="form-control" placeholder="출판사명 입력" required>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-subject">주제 / 분야</label>
+            <input type="text" id="{{ prefix }}-subject" name="Subject" class="form-control" placeholder="예: 문학 / 인문 / 과학">
+        </div>
+        <div class="form-group span-2">
+            <label>난이도</label>
+            <div class="radio-group-inline">
+                <label class="radio-item"><input type="radio" name="Target" value="" checked> 선택안함</label>
+                <label class="radio-item"><input type="radio" name="Target" value="초등부"> 초등부</label>
+                <label class="radio-item"><input type="radio" name="Target" value="중등부"> 중등부</label>
+                <label class="radio-item"><input type="radio" name="Target" value="심화반"> 심화반</label>
+                <label class="radio-item"><input type="radio" name="Target" value="독서모임"> 독서모임</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-length">분량 / 페이지 수</label>
+            <select id="{{ prefix }}-length" name="BookLength" class="form-control">
+                <option value="0">0 (미입력)</option>
+                <option value="1">1 단계</option>
+                <option value="2">2 단계</option>
+                <option value="3">3 단계</option>
+                <option value="4">4 단계</option>
+                <option value="5">5 단계</option>
+                <option value="6">6 단계</option>
+                <option value="7">7 단계</option>
+                <option value="8">8 단계</option>
+                <option value="9">9 단계</option>
+                <option value="10">10 단계</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-voca">어휘 수준 / 개수</label>
+            <select id="{{ prefix }}-voca" name="Voca" class="form-control">
+                <option value="0">0 (미입력)</option>
+                <option value="1">1 단계</option>
+                <option value="2">2 단계</option>
+                <option value="3">3 단계</option>
+                <option value="4">4 단계</option>
+                <option value="5">5 단계</option>
+                <option value="6">6 단계</option>
+                <option value="7">7 단계</option>
+                <option value="8">8 단계</option>
+                <option value="9">9 단계</option>
+                <option value="10">10 단계</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="{{ prefix }}-metaphor">비유 / 상징 수준</label>
+            <select id="{{ prefix }}-metaphor" name="Metaphor" class="form-control">
+                <option value="0">0 (미입력)</option>
+                <option value="1">1 단계</option>
+                <option value="2">2 단계</option>
+                <option value="3">3 단계</option>
+                <option value="4">4 단계</option>
+                <option value="5">5 단계</option>
+                <option value="6">6 단계</option>
+                <option value="7">7 단계</option>
+                <option value="8">8 단계</option>
+                <option value="9">9 단계</option>
+                <option value="10">10 단계</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 학습자료 및 문제 보유 여부 -->
+<div class="form-section">
+    <h4 class="section-title"><i class="fa-solid fa-file-pen"></i> 학습자료 & 문제 보유 여부 (선택)</h4>
+    <div class="checkbox-grid">
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasQuiz" value="1">
+            <span><i class="fa-solid fa-spell-check"></i> 퀴즈</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasReadingQuestion" value="1">
+            <span><i class="fa-solid fa-circle-question"></i> 독서 문제</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasReadingAnswer" value="1">
+            <span><i class="fa-solid fa-circle-check"></i> 독서 답안</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasWritingQuestion" value="1">
+            <span><i class="fa-solid fa-pen-nib"></i> 글쓰기 문제</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasWritingAnswer" value="1">
+            <span><i class="fa-solid fa-check-double"></i> 글쓰기 답안</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasAdvancedMaterial" value="1">
+            <span><i class="fa-solid fa-graduation-cap"></i> 심화 자료</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="HasDebateMaterial" value="1">
+            <span><i class="fa-solid fa-comments"></i> 토론 자료</span>
+        </label>
+    </div>
+</div>
+
+<!-- 도서 포맷 및 유통 채널 -->
+<div class="form-section">
+    <h4 class="section-title"><i class="fa-solid fa-store"></i> 도서 포맷 및 유통 채널 (선택)</h4>
+    <div class="checkbox-grid">
+        <label class="checkbox-pill">
+            <input type="checkbox" name="IsPaperbookExist" value="1">
+            <span><i class="fa-solid fa-book"></i> 종이책 보유</span>
+        </label>
+        <label class="form-group"><span>PDF</span><select name="IsPdfExist" class="form-control"><option value="0">미보유</option><option value="1">PDF 보유(저작권 있음)</option><option value="2">PDF 보유(저작권 없음)</option></select></label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="IsYes24Exist" value="1">
+            <span><i class="fa-solid fa-shopping-cart"></i> YES24 등록</span>
+        </label>
+        <label class="checkbox-pill">
+            <input type="checkbox" name="IsMillieExist" value="1">
+            <span><i class="fa-solid fa-tablet-screen-button"></i> 밀리의 서재</span>
+        </label>
+    </div>
+</div>
+
+<!-- 상세 설명 및 메모 -->
+<div class="form-section">
+    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 상세 설명 및 메모</h4>
+    <div class="form-group">
+        <textarea id="{{ prefix }}-desc" name="Desc" class="form-control" rows="3" placeholder="도서에 대한 상세 소개, 메모 또는 기타 참고사항을 입력하세요."></textarea>
+    </div>
+</div>
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -11,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260912-teacher-assignment">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260919-book-request-form">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -221,43 +367,61 @@
                     </div>
                 </div>
 
-                <section id="view-book-material-request" class="workspace-view"><div class="book-search-layout">
-                    <div class="card form-card"><div class="card-header-styled"><div><h3><i class="fa-solid fa-file-circle-plus"></i> 도서·자료 등록 요청</h3><p class="subtitle">승인되면 도서에 반영되고 승인일 기준 월의 자료 제작 정산에 포함됩니다.</p></div></div>
-                    <form id="form-book-material-request" class="book-form"><div class="form-section"><div class="form-grid"><div class="form-group"><label>요청 유형</label><select id="material-request-type" class="form-control"><option value="material_add">기존 도서 자료 추가</option><option value="new_book">새 도서 등록</option></select></div><div class="form-group"><label>도서 분류</label><select id="material-book-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div></div></div><div id="material-existing-book-fields" class="form-section"><div class="form-group"><label>대상 도서 번호</label><input id="material-book-id" type="number" min="1" class="form-control" placeholder="도서 검색 목록의 번호"></div></div><div id="material-new-book-fields" class="form-section hidden">
-                            <h4 class="section-title">기본 도서 정보</h4>
-                            <div class="form-grid">
-                                <div class="form-group"><label for="material-new-title">도서명 <span class="required">*</span></label><input id="material-new-title" class="form-control"></div>
-                                <div class="form-group"><label for="material-new-author">저자</label><input id="material-new-author" class="form-control"></div>
-                                <div class="form-group"><label for="material-new-publisher">출판사</label><input id="material-new-publisher" class="form-control"></div>
-                                <div class="form-group"><label for="material-new-subject">주제 / 분야</label><input id="material-new-subject" class="form-control" placeholder="예: 문학 / 인문 / 과학"></div>
-                                <div class="form-group span-2">
-                                    <label for="material-new-target">난이도</label>
-                                    <select id="material-new-target" class="form-control">
-                                        <option value="">선택안함</option><option value="초등부">초등부</option><option value="중등부">중등부</option><option value="심화반">심화반</option><option value="독서모임">독서모임</option>
-                                    </select>
+                <section id="view-book-material-request" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card form-card">
+                            <div class="card-header-styled">
+                                <div>
+                                    <h3><i class="fa-solid fa-file-circle-plus"></i> 도서·자료 등록 요청</h3>
+                                    <p class="subtitle">승인되면 도서에 반영됩니다. 자료를 함께 요청하면 승인일 기준 월의 자료 제작 정산에 포함됩니다.</p>
                                 </div>
-                                {% for field_id, label in [('length', '분량 / 페이지 수'), ('voca', '어휘 수준 / 개수'), ('metaphor', '비유 / 상징 수준')] %}
-                                <div class="form-group">
-                                    <label for="material-new-{{ field_id }}">{{ label }}</label>
-                                    <select id="material-new-{{ field_id }}" class="form-control">
-                                        <option value="0">0 (미입력)</option>
-                                        {% for level in range(1, 11) %}<option value="{{ level }}">{{ level }} 단계</option>{% endfor %}
-                                    </select>
-                                </div>
-                                {% endfor %}
-                                <div class="form-group span-2">
-                                    <label>도서 포맷 및 유통 채널</label>
-                                    <div class="checkbox-grid">
-                                        <label class="checkbox-pill"><input id="material-new-paperbook" type="checkbox"><span>종이책 보유</span></label>
-                                        <label class="checkbox-pill"><input id="material-new-yes24" type="checkbox"><span>YES24 등록</span></label>
-                                        <label class="checkbox-pill"><input id="material-new-millie" type="checkbox"><span>밀리의 서재</span></label>
+                            </div>
+                            <form id="form-book-material-request" class="book-form">
+                                <div class="form-section">
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="material-request-type">요청 유형</label>
+                                            <select id="material-request-type" class="form-control"><option value="material_add">기존 도서 자료 추가</option><option value="new_book">새 도서 등록</option></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="material-book-category">도서 분류</label>
+                                            <select id="material-book-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="form-group span-2"><label for="material-new-desc">상세 설명 및 메모</label><textarea id="material-new-desc" class="form-control" rows="3" placeholder="도서에 대한 상세 소개, 메모 또는 기타 참고사항을 입력하세요."></textarea></div>
-                            </div>
-                        </div><div class="form-section"><h4 id="material-fields-title" class="section-title">추가할 자료 종류</h4><div class="checkbox-grid"><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasQuiz"><span>퀴즈</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingQuestion"><span>독서 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasReadingAnswer"><span>독서 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingQuestion"><span>글쓰기 문제</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasWritingAnswer"><span>글쓰기 답안</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasAdvancedMaterial"><span>심화 자료</span></label><label class="checkbox-pill"><input type="checkbox" name="material-field" value="HasDebateMaterial"><span>토론 자료</span></label><div class="form-group"><label for="material-pdf-status">PDF 자료</label><select id="material-pdf-status" class="form-control" aria-describedby="material-pdf-help"><option value="0">PDF 추가 안 함</option><option value="1">PDF 추가 (저작권 있음)</option><option value="2">PDF 추가 (저작권 없음)</option></select><small id="material-pdf-help">PDF 추가를 선택하면 해당 상태로 요청에 포함됩니다.</small></div></div></div><div class="form-submit-actions"><button class="btn btn-success btn-lg" type="submit">승인 요청 등록</button></div><div id="book-material-request-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
-</form></div>
-                    <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리 내용</th></tr></thead><tbody id="book-material-request-body"></tbody></table></div></div></div></section>
+                                <div id="material-existing-book-fields" class="form-section">
+                                    <div class="form-group">
+                                        <label for="material-book-id">대상 도서 번호 <span class="required">*</span></label>
+                                        <input id="material-book-id" type="number" min="1" step="1" class="form-control" placeholder="도서 검색 목록의 번호" required>
+                                    </div>
+                                </div>
+                                <div id="material-new-book-fields" class="book-form hidden">
+                                    {{ book_registration_fields('material-new') }}
+                                </div>
+                                <div id="material-add-fields" class="form-section">
+                                    <h4 class="section-title"><i class="fa-solid fa-file-pen"></i> 추가할 자료 종류</h4>
+                                    <div class="checkbox-grid">
+                                        {% for field, label, icon in [('HasQuiz', '퀴즈', 'spell-check'), ('HasReadingQuestion', '독서 문제', 'circle-question'), ('HasReadingAnswer', '독서 답안', 'circle-check'), ('HasWritingQuestion', '글쓰기 문제', 'pen-nib'), ('HasWritingAnswer', '글쓰기 답안', 'check-double'), ('HasAdvancedMaterial', '심화 자료', 'graduation-cap'), ('HasDebateMaterial', '토론 자료', 'comments')] %}
+                                        <label class="checkbox-pill"><input type="checkbox" name="material-field" value="{{ field }}"><span><i class="fa-solid fa-{{ icon }}"></i> {{ label }}</span></label>
+                                        {% endfor %}
+                                        <div class="form-group">
+                                            <label for="material-pdf-status">PDF 자료</label>
+                                            <select id="material-pdf-status" class="form-control" aria-describedby="material-pdf-help"><option value="0">PDF 추가 안 함</option><option value="1">PDF 추가 (저작권 있음)</option><option value="2">PDF 추가 (저작권 없음)</option></select>
+                                            <small id="material-pdf-help">PDF 추가를 선택하면 해당 상태로 요청에 포함됩니다.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-submit-actions">
+                                    <button id="btn-reset-material-request" class="btn btn-outline" type="button"><i class="fa-solid fa-rotate-left"></i> 폼 초기화</button>
+                                    <button class="btn btn-primary btn-lg btn-glow" type="submit"><i class="fa-solid fa-paper-plane"></i> 승인 요청 등록</button>
+                                </div>
+                                <div id="book-material-request-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
+                            </form>
+                        </div>
+                        <div class="results-bar"><h3>내 요청 내역</h3></div>
+                        <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리 내용</th></tr></thead><tbody id="book-material-request-body"></tbody></table></div></div>
+                    </div>
+                </section>
                 <section id="view-book-material-review" class="workspace-view"><div class="book-search-layout"><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>요청일</th><th>요청자</th><th>도서</th><th>분류</th><th>자료</th><th>상태</th><th>처리</th></tr></thead><tbody id="book-material-review-body"></tbody></table></div></div></div></section>
                 <section id="view-book-material-rates" class="workspace-view"><div class="book-search-layout"><div class="card form-card"><form id="form-book-material-rate" class="book-form"><div class="form-grid"><div class="form-group"><label>도서 분류</label><select id="material-rate-category" class="form-control"><option value="picture">그림책</option><option value="general">일반 도서</option></select></div><div class="form-group"><label>단가</label><input id="material-rate-amount" type="number" min="0" class="form-control" required></div><div class="form-group"><label>적용 시작일</label><input id="material-rate-date" type="date" class="form-control" required></div></div><div class="form-submit-actions"><button class="btn btn-primary" type="submit">단가 저장</button></div><div id="book-material-rate-msg" data-action-message role="status" aria-live="polite" aria-atomic="true" class="alert hidden"></div>
 </form></div><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>분류</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="book-material-rate-body"></tbody></table></div></div></div></section>
@@ -275,152 +439,7 @@
                             </div>
 
                             <form id="form-user-book-reg" class="book-form">
-                                <!-- Section 1: 기본 정보 -->
-                                <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 기본 도서 정보</h4>
-                                    <div class="form-grid">
-                                        <div class="form-group span-2">
-                                            <label for="book-title">도서명 (Title) <span class="required">*</span></label>
-                                            <input type="text" id="book-title" name="Title" class="form-control" placeholder="예: 꿈꾸는봄결 독서 교재 1권" required>
-                                            <div id="book-title-similar-box" class="title-similar-box hidden"></div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-author">저자 (Author) <span class="required">*</span></label>
-                                            <input type="text" id="book-author" name="Author" class="form-control" placeholder="저자명 입력" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-publisher">출판사 (Publisher) <span class="required">*</span></label>
-                                            <input type="text" id="book-publisher" name="Publisher" class="form-control" placeholder="출판사명 입력" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-subject">주제 / 분야 (Subject)</label>
-                                            <input type="text" id="book-subject" name="Subject" class="form-control" placeholder="예: 문학 / 인문 / 과학">
-                                        </div>
-                                        <div class="form-group span-2">
-                                            <label>난이도</label>
-                                            <div class="radio-group-inline">
-                                                <label class="radio-item"><input type="radio" name="Target" value="" checked> 선택안함</label>
-                                                <label class="radio-item"><input type="radio" name="Target" value="초등부"> 초등부</label>
-                                                <label class="radio-item"><input type="radio" name="Target" value="중등부"> 중등부</label>
-                                                <label class="radio-item"><input type="radio" name="Target" value="심화반"> 심화반</label>
-                                                <label class="radio-item"><input type="radio" name="Target" value="독서모임"> 독서모임</label>
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-length">분량 / 페이지 수 (BookLength)</label>
-                                            <select id="book-length" name="BookLength" class="form-control">
-                                                <option value="0">0 (미입력)</option>
-                                                <option value="1">1 단계</option>
-                                                <option value="2">2 단계</option>
-                                                <option value="3">3 단계</option>
-                                                <option value="4">4 단계</option>
-                                                <option value="5">5 단계</option>
-                                                <option value="6">6 단계</option>
-                                                <option value="7">7 단계</option>
-                                                <option value="8">8 단계</option>
-                                                <option value="9">9 단계</option>
-                                                <option value="10">10 단계</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-voca">어휘 수준 / 개수 (Voca)</label>
-                                            <select id="book-voca" name="Voca" class="form-control">
-                                                <option value="0">0 (미입력)</option>
-                                                <option value="1">1 단계</option>
-                                                <option value="2">2 단계</option>
-                                                <option value="3">3 단계</option>
-                                                <option value="4">4 단계</option>
-                                                <option value="5">5 단계</option>
-                                                <option value="6">6 단계</option>
-                                                <option value="7">7 단계</option>
-                                                <option value="8">8 단계</option>
-                                                <option value="9">9 단계</option>
-                                                <option value="10">10 단계</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="book-metaphor">비유 / 상징 수준 (Metaphor)</label>
-                                            <select id="book-metaphor" name="Metaphor" class="form-control">
-                                                <option value="0">0 (미입력)</option>
-                                                <option value="1">1 단계</option>
-                                                <option value="2">2 단계</option>
-                                                <option value="3">3 단계</option>
-                                                <option value="4">4 단계</option>
-                                                <option value="5">5 단계</option>
-                                                <option value="6">6 단계</option>
-                                                <option value="7">7 단계</option>
-                                                <option value="8">8 단계</option>
-                                                <option value="9">9 단계</option>
-                                                <option value="10">10 단계</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Section 2: 학습/교재 자료 유무 -->
-                                <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-file-pen"></i> 학습자료 & 문제 보유 여부 (선택)</h4>
-                                    <div class="checkbox-grid">
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasQuiz" value="1">
-                                            <span><i class="fa-solid fa-spell-check"></i> 퀴즈 (HasQuiz)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasReadingQuestion" value="1">
-                                            <span><i class="fa-solid fa-circle-question"></i> 독서 문제 (Reading Question)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasReadingAnswer" value="1">
-                                            <span><i class="fa-solid fa-circle-check"></i> 독서 답안 (Reading Answer)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasWritingQuestion" value="1">
-                                            <span><i class="fa-solid fa-pen-nib"></i> 글쓰기 문제 (Writing Question)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasWritingAnswer" value="1">
-                                            <span><i class="fa-solid fa-check-double"></i> 글쓰기 답안 (Writing Answer)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasAdvancedMaterial" value="1">
-                                            <span><i class="fa-solid fa-graduation-cap"></i> 심화 자료 (Advanced Material)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="HasDebateMaterial" value="1">
-                                            <span><i class="fa-solid fa-comments"></i> 토론 자료 (Debate Material)</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <!-- Section 3: 도서 형태 및 채널 유무 -->
-                                <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-store"></i> 도서 포맷 및 유통 채널 (선택)</h4>
-                                    <div class="checkbox-grid">
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="IsPaperbookExist" value="1">
-                                            <span><i class="fa-solid fa-book"></i> 종이책 보유 (Paperbook)</span>
-                                        </label>
-                                        <label class="form-group"><span>PDF</span><select name="IsPdfExist" class="form-control"><option value="0">미보유</option><option value="1">PDF 보유(저작권 있음)</option><option value="2">PDF 보유(저작권 없음)</option></select></label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="IsYes24Exist" value="1">
-                                            <span><i class="fa-solid fa-shopping-cart"></i> YES24 등록 (YES24)</span>
-                                        </label>
-                                        <label class="checkbox-pill">
-                                            <input type="checkbox" name="IsMillieExist" value="1">
-                                            <span><i class="fa-solid fa-tablet-screen-button"></i> 밀리의 서재 (Millie)</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <!-- Section 4: 도서 메모 -->
-                                <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 상세 설명 및 메모 (Desc)</h4>
-                                    <div class="form-group">
-                                        <textarea id="book-desc" name="Desc" class="form-control" rows="3" placeholder="도서에 대한 상세 소개, 메모 또는 기타 참고사항을 입력하세요."></textarea>
-                                    </div>
-                                </div>
-
-
+                                {{ book_registration_fields('book') }}
 
                                 <div class="form-submit-actions">
                                     <button type="button" id="btn-reset-book-form" class="btn btn-outline">
@@ -634,12 +653,12 @@
                                     <h4 class="section-title"><i class="fa-solid fa-user"></i> 학생 기본 인적사항</h4>
                                     <div class="form-grid">
                                         <div class="form-group span-2">
-                                            <label for="student-name">학생 이름 (Name) <span class="required">*</span></label>
+                                            <label for="student-name">학생 이름 <span class="required">*</span></label>
                                             <input type="text" id="student-name" name="Name" class="form-control" placeholder="예) 김봄결" autocomplete="off" required>
                                             <div id="student-name-similar-box" class="title-similar-box hidden"></div>
                                         </div>
                                         <div class="form-group">
-                                            <label for="student-sex">성별 (Sex)</label>
+                                            <label for="student-sex">성별</label>
                                             <select id="student-sex" name="Sex" class="form-control">
                                                 <option value="">성별 선택 (미선택)</option>
                                                 <option value="남">남</option>
@@ -647,7 +666,7 @@
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <label for="student-grade">학년 (Grade)</label>
+                                            <label for="student-grade">학년</label>
                                             <input type="text" id="student-grade" name="Grade" class="form-control" list="student-grade-options" placeholder="예) 초3" autocomplete="off">
                                             <datalist id="student-grade-options">
                                                 <option value="초1"></option><option value="초2"></option><option value="초3"></option>
@@ -674,7 +693,7 @@
                                 </div>
 
                                 <div class="form-section">
-                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 참고사항 (Description)</h4>
+                                    <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 참고사항</h4>
                                     <div class="form-group">
                                         <textarea id="student-desc" name="Description" class="form-control" rows="4" placeholder="학생의 독서 습관, 성향, 특이사항 또는 메모를 입력하세요."></textarea>
                                     </div>
@@ -887,7 +906,7 @@
                                     <h4 class="section-title"><i class="fa-solid fa-calendar-days"></i> 4. 학습 수행 일자</h4>
                                     <div class="form-grid">
                                         <div class="form-group">
-                                            <label for="studylog-date">학습 일자 (StudiedDay) <span class="required">*</span></label>
+                                            <label for="studylog-date">학습 일자 <span class="required">*</span></label>
                                             <input type="date" id="studylog-date" name="StudiedDay" class="form-control" required>
                                         </div>
                                     </div>
@@ -1392,7 +1411,7 @@
                         <div class="card-header-styled">
                             <div>
                                 <h2><i class="fa-solid fa-user-gear"></i> 선생님 계정 관리</h2>
-                                <p class="subtitle">부관리자(subadmin), 관리 선생님(manager), 선생님(teacher) 계정을 발급·수정·삭제할 수 있습니다. 사이트 관리자(admin) 계정은 여기서 변경할 수 없습니다.</p>
+                                <p class="subtitle">부관리자, 관리 선생님, 선생님 계정을 발급·수정·삭제할 수 있습니다. 사이트 관리자 계정은 여기서 변경할 수 없습니다.</p>
                             </div>
                             <button id="btn-open-user-create" class="btn btn-success">
                                 <i class="fa-solid fa-plus"></i> 새 계정 발급
@@ -1485,12 +1504,12 @@
                                     <label class="filter-label" for="audit-filter-table">대상 테이블</label>
                                     <select id="audit-filter-table" class="form-control">
                                         <option value="">전체 테이블</option>
-                                        <option value="Books">도서 (Books)</option>
-                                        <option value="Students">학생 (Students)</option>
-                                        <option value="StudyLogs">학습 기록 (StudyLogs)</option>
-                                        <option value="Classes">수업 (Classes)</option>
-                                        <option value="MonthlyReports">월말보고 (MonthlyReports)</option>
-                                        <option value="_app_users">계정 (_app_users)</option>
+                                        <option value="Books">도서</option>
+                                        <option value="Students">학생</option>
+                                        <option value="StudyLogs">학습 기록</option>
+                                        <option value="Classes">수업</option>
+                                        <option value="MonthlyReports">월말보고</option>
+                                        <option value="_app_users">계정</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
@@ -1640,7 +1659,7 @@
                             <div class="card-header-styled">
                                 <div>
                                     <h2><i class="fa-solid fa-calendar-plus"></i> 꿈꾸는봄결 새 수업 등록</h2>
-                                    <p class="subtitle">담당 선생님, 요일·시간, 수강 학생을 지정하여 수업(Class)을 등록합니다. 학생은 정규 수업과 특강에 각각 1개씩만 등록할 수 있습니다.</p>
+                                    <p class="subtitle">담당 선생님, 요일·시간, 수강 학생을 지정하여 수업을 등록합니다. 학생은 정규 수업과 특강에 각각 1개씩만 등록할 수 있습니다.</p>
                                 </div>
                             </div>
 
@@ -1795,7 +1814,7 @@
                 </section>
 
                 <section id="view-tuition-fee-settings" class="workspace-view">
-                    <div class="book-search-layout"><div class="card search-filter-card"><div class="card-header-styled"><div><h3><i class="fa-solid fa-sliders"></i> 반별 기본 수업료 설정</h3><p class="subtitle">모든 금액을 입력한 후 한 번에 저장할 수 있습니다.</p></div><button id="btn-save-all-tuition-settings" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 전체 저장</button></div><div id="tuition-settings-msg" class="alert hidden"></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>반 정보</th><th>결제차시</th><th>기본 수업료 (KRW)</th></tr></thead><tbody id="tuition-settings-body"></tbody></table></div></div></div>
+                    <div class="book-search-layout"><div class="card search-filter-card"><div class="card-header-styled"><div><h3><i class="fa-solid fa-sliders"></i> 반별 기본 수업료 설정</h3><p class="subtitle">모든 금액을 입력한 후 한 번에 저장할 수 있습니다.</p></div><button id="btn-save-all-tuition-settings" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 전체 저장</button></div><div id="tuition-settings-msg" class="alert hidden"></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>반 정보</th><th>결제차시</th><th>기본 수업료 (원)</th></tr></thead><tbody id="tuition-settings-body"></tbody></table></div></div></div>
                 </section>
 
                 <!-- View 10: 학습 이력 일괄 등록 (수업 단위) -->
@@ -2421,6 +2440,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260912-teacher-assignment-candidates"></script>
+    <script src="/static/js/app.js?v=20260919-book-request-form"></script>
 </body>
 </html>

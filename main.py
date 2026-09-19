@@ -919,7 +919,7 @@ def user_register_student(
     current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
     if not payload.Name or not payload.Name.strip():
-        raise HTTPException(status_code=400, detail="학생 이름(Name)은 필수 입력 항목입니다.")
+        raise HTTPException(status_code=400, detail="학생 이름은 필수 입력 항목입니다.")
 
     student_data = payload.dict()
     student_data["Name"] = student_data["Name"].strip()
@@ -4310,7 +4310,7 @@ def admin_create_user(
     if payload.role not in ("subadmin", "manager", "teacher"):
         raise HTTPException(
             status_code=400,
-            detail="발급 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
+            detail="발급 가능한 역할은 부관리자, 관리 선생님, 선생님입니다."
         )
 
     try:
@@ -4338,7 +4338,7 @@ def admin_reset_user_password(
 
     user = _resolve_target_user(user_id)
     if user["role"] == "admin":
-        raise HTTPException(status_code=400, detail="관리자(admin) 계정은 비밀번호를 변경할 수 없습니다.")
+        raise HTTPException(status_code=400, detail="관리자 계정은 비밀번호를 변경할 수 없습니다.")
 
     update_user_password(user_id, payload.password)
     write_audit_log("_app_users", user_id, "UPDATE", None, None, ["password_hash"],
@@ -4355,12 +4355,12 @@ def admin_update_user_role(
     if payload.role not in ("subadmin", "manager", "teacher"):
         raise HTTPException(
             status_code=400,
-            detail="변경 가능한 역할은 부관리자(subadmin), 관리 선생님(manager), 선생님(teacher)입니다."
+            detail="변경 가능한 역할은 부관리자, 관리 선생님, 선생님입니다."
         )
 
     user = _resolve_target_user(user_id)
     if user["role"] == "admin":
-        raise HTTPException(status_code=400, detail="관리자(admin) 계정의 역할은 변경할 수 없습니다.")
+        raise HTTPException(status_code=400, detail="관리자 계정의 역할은 변경할 수 없습니다.")
 
     update_user_role(user_id, payload.role)
     _audit_update("_app_users", user_id,
@@ -4377,7 +4377,7 @@ def admin_delete_user(
 ):
     user = _resolve_target_user(user_id)
     if user["role"] == "admin":
-        raise HTTPException(status_code=400, detail="관리자(admin) 계정은 삭제할 수 없습니다.")
+        raise HTTPException(status_code=400, detail="관리자 계정은 삭제할 수 없습니다.")
     if current_admin["id"] == user_id:
         raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다.")
 

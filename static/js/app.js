@@ -542,54 +542,59 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Book Title Similarity Warning (등록 폼 중복 경고)
+    // 등록과 요청 폼의 중복 도서 안내 상태를 각각 관리한다.
     const bookTitleInput = document.getElementById('book-title');
-    const bookTitleSimilarBox = document.getElementById('book-title-similar-box');
-    let bookSimilarSeq = 0;
+    function createBookSimilarity(prefix) {
+        const bookTitleSimilarBox = document.getElementById(`${prefix}-title-similar-box`);
+        let bookSimilarSeq = 0;
 
-    function renderBookSimilar(data) {
-        const { total, summary, matches } = data;
-        if (!total) { bookTitleSimilarBox.classList.add('hidden'); return; }
-        let html = '';
-        if (summary.exact > 0) {
-            html += `<span class="badge badge-danger"><i class="fa-solid fa-circle-exclamation"></i> 같은 제목의 도서 ${summary.exact}건이 이미 등록되어 있습니다.</span>`;
-        } else {
-            html += `<span class="badge badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> 유사한 제목의 도서 ${summary.contains + summary.similar}건이 등록되어 있습니다.</span>`;
+        function renderBookSimilar(data) {
+            const { total, summary, matches } = data;
+            if (!total) { bookTitleSimilarBox.classList.add('hidden'); return; }
+            let html = '';
+            if (summary.exact > 0) {
+                html += `<span class="badge badge-danger"><i class="fa-solid fa-circle-exclamation"></i> 같은 제목의 도서 ${summary.exact}건이 이미 등록되어 있습니다.</span>`;
+            } else {
+                html += `<span class="badge badge-warning"><i class="fa-solid fa-triangle-exclamation"></i> 유사한 제목의 도서 ${summary.contains + summary.similar}건이 등록되어 있습니다.</span>`;
+            }
+            if (matches.length > 0) {
+                html += `<div class="title-similar-list">`;
+                matches.forEach(m => {
+                    const title = escapeHtml(m.Title || '');
+                    const meta = escapeHtml([m.Author, m.Publisher].filter(Boolean).join(' · '));
+                    html += `<div class="title-similar-item"><span class="tsi-title">${title}</span>${meta ? `<span class="tsi-meta">${meta}</span>` : ''}</div>`;
+                });
+                html += `</div>`;
+                if (total > matches.length) { html += `<div class="text-muted">... 외 ${total - matches.length}건</div>`; }
+            }
+            bookTitleSimilarBox.innerHTML = html;
+            bookTitleSimilarBox.classList.remove('hidden');
         }
-        if (matches.length > 0) {
-            html += `<div class="title-similar-list">`;
-            matches.forEach(m => {
-                const title = escapeHtml(m.Title || '');
-                const meta = escapeHtml([m.Author, m.Publisher].filter(Boolean).join(' · '));
-                html += `<div class="title-similar-item"><span class="tsi-title">${title}</span>${meta ? `<span class="tsi-meta">${meta}</span>` : ''}</div>`;
-            });
-            html += `</div>`;
-            if (total > matches.length) { html += `<div class="text-muted">... 외 ${total - matches.length}건</div>`; }
+
+        async function fetchBookSimilar(title) {
+            const seq = ++bookSimilarSeq;
+            try {
+                const data = await apiFetch(`/api/user/books/similar?q=${encodeURIComponent(title)}`);
+                if (seq !== bookSimilarSeq) return;
+                renderBookSimilar(data);
+            } catch (err) {
+                if (seq !== bookSimilarSeq) return;
+                bookTitleSimilarBox.classList.add('hidden');
+                console.warn('[도서 중복 경고] 조회 실패:', err.message);
+            }
         }
-        bookTitleSimilarBox.innerHTML = html;
-        bookTitleSimilarBox.classList.remove('hidden');
+
+        const debouncedBookSimilar = debounce((e) => {
+            const title = (e.target.value || '').trim();
+            if (!title) { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); return; }
+            fetchBookSimilar(title);
+        }, 300);
+
+        function clearBookSimilar() { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); }
+        return { onInput: debouncedBookSimilar, clear: clearBookSimilar };
     }
-
-    async function fetchBookSimilar(title) {
-        const seq = ++bookSimilarSeq;
-        try {
-            const data = await apiFetch(`/api/user/books/similar?q=${encodeURIComponent(title)}`);
-            if (seq !== bookSimilarSeq) return;
-            renderBookSimilar(data);
-        } catch (err) {
-            if (seq !== bookSimilarSeq) return;
-            bookTitleSimilarBox.classList.add('hidden');
-            console.warn('[도서 중복 경고] 조회 실패:', err.message);
-        }
-    }
-
-    const debouncedBookSimilar = debounce((e) => {
-        const title = (e.target.value || '').trim();
-        if (!title) { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); return; }
-        fetchBookSimilar(title);
-    }, 300);
-
-    function clearBookSimilar() { bookSimilarSeq++; bookTitleSimilarBox.classList.add('hidden'); }
+    const { onInput: debouncedBookSimilar, clear: clearBookSimilar } = createBookSimilarity('book');
+    const { onInput: debouncedMaterialBookSimilar, clear: clearMaterialBookSimilar } = createBookSimilarity('material-new');
 
     // Student Name Similarity Warning (동명이인 경고)
     const studentNameInput = document.getElementById('student-name');
@@ -913,7 +918,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const materialForm = document.getElementById('form-book-material-request');
         const materialRateForm = document.getElementById('form-book-material-rate');
         if (materialType) materialType.addEventListener('change', toggleMaterialRequestType);
-        if (materialForm) materialForm.addEventListener('submit', submitBookMaterialRequest);
+        if (materialForm) {
+            materialForm.addEventListener('submit', submitBookMaterialRequest);
+            document.getElementById('material-new-title').addEventListener('input', debouncedMaterialBookSimilar);
+            document.getElementById('btn-reset-material-request').addEventListener('click', resetMaterialRequestForm);
+            toggleMaterialRequestType();
+        }
         if (materialRateForm) materialRateForm.addEventListener('submit', submitBookMaterialRate);
 
         // User Student Registration Form Submit
@@ -1321,13 +1331,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnBatchCalendarNext) btnBatchCalendarNext.addEventListener('click', () => changeBatchCalendarMonth(1));
     }
 
-    // User Book Registration Handler
-    async function handleUserBookSubmit(e) {
-        e.preventDefault();
-        userBookMsg.classList.add('hidden');
-
-        const formData = new FormData(formUserBookReg);
-        const payload = {
+    // 도서 등록과 승인 요청에서 같은 입력 항목을 읽는다.
+    function collectBookFormData(form) {
+        const formData = new FormData(form);
+        return {
             Title: (formData.get('Title') || '').trim(),
             Author: (formData.get('Author') || '').trim(),
             Publisher: (formData.get('Publisher') || '').trim(),
@@ -1349,6 +1356,14 @@ document.addEventListener('DOMContentLoaded', () => {
             IsMillieExist: formData.get('IsMillieExist') ? 1 : 0,
             Desc: (formData.get('Desc') || '').trim()
         };
+
+    }
+
+    // 새 도서 등록 처리
+    async function handleUserBookSubmit(e) {
+        e.preventDefault();
+        userBookMsg.classList.add('hidden');
+        const payload = collectBookFormData(formUserBookReg);
 
         if (!payload.Title || !payload.Author || !payload.Publisher) {
             userBookMsg.className = 'alert alert-danger';
@@ -1384,11 +1399,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleMaterialRequestType() {
         const isNew = document.getElementById('material-request-type').value === 'new_book';
-        document.getElementById('material-existing-book-fields').classList.toggle('hidden', isNew);
-        document.getElementById('material-new-book-fields').classList.toggle('hidden', !isNew);
-        document.querySelectorAll('#material-new-book-fields input, #material-new-book-fields select, #material-new-book-fields textarea').forEach(field => { field.disabled = !isNew; });
-        document.getElementById('material-new-title').required = isNew;
-        document.getElementById('material-fields-title').textContent = isNew ? '추가할 자료 종류 (선택 사항 · 도서만 요청 가능)' : '추가할 자료 종류';
+        for (const [id, visible] of [['material-new-book-fields', isNew], ['material-existing-book-fields', !isNew], ['material-add-fields', !isNew]]) {
+            const section = document.getElementById(id);
+            section.classList.toggle('hidden', !visible);
+            section.querySelectorAll('input, select, textarea').forEach(field => { field.disabled = !visible; });
+        }
+        clearMaterialBookSimilar();
+    }
+
+    function resetMaterialRequestForm() {
+        document.getElementById('form-book-material-request').reset();
+        document.getElementById('book-material-request-msg').classList.add('hidden');
+        toggleMaterialRequestType();
     }
 
     function requestBookTitle(item) {
@@ -1399,29 +1421,28 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const msg = document.getElementById('book-material-request-msg');
         const requestType = document.getElementById('material-request-type').value;
-        const fields = [...document.querySelectorAll('input[name="material-field"]:checked')].map(el => el.value);
-        const pdfStatus = Number(document.getElementById('material-pdf-status').value);
-        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields };
-        if (pdfStatus > 0) {
-            fields.push('IsPdfExist');
-            payload.PdfStatus = pdfStatus;
+        msg.classList.add('hidden');
+        const isNew = requestType === 'new_book';
+        const bookData = isNew ? collectBookFormData(e.target) : null;
+        if (isNew && (!bookData.Title || !bookData.Author || !bookData.Publisher)) {
+            msg.className = 'alert alert-danger';
+            msg.textContent = '도서명, 저자, 출판사는 필수 입력 항목입니다.';
+            return;
         }
-        if (requestType === 'new_book') {
-            payload.BookData = {
-                Title: document.getElementById('material-new-title').value.trim(),
-                Author: document.getElementById('material-new-author').value.trim(),
-                Publisher: document.getElementById('material-new-publisher').value.trim(),
-                Subject: document.getElementById('material-new-subject').value.trim(),
-                Target: document.getElementById('material-new-target').value,
-                BookLength: Number(document.getElementById('material-new-length').value),
-                Voca: Number(document.getElementById('material-new-voca').value),
-                Metaphor: Number(document.getElementById('material-new-metaphor').value),
-                IsPaperbookExist: Number(document.getElementById('material-new-paperbook').checked),
-                IsYes24Exist: Number(document.getElementById('material-new-yes24').checked),
-                IsMillieExist: Number(document.getElementById('material-new-millie').checked),
-                Desc: document.getElementById('material-new-desc').value.trim()
-            };
-        } else payload.BookId = Number(document.getElementById('material-book-id').value);
+        const fields = isNew
+            ? Object.keys(MATERIAL_FIELD_LABELS).filter(field => bookData[field] > 0)
+            : [...e.target.querySelectorAll('#material-add-fields input[name="material-field"]:checked')].map(el => el.value);
+        const pdfStatus = isNew ? bookData.IsPdfExist : Number(document.getElementById('material-pdf-status').value);
+        if (pdfStatus > 0 && !fields.includes('IsPdfExist')) fields.push('IsPdfExist');
+        if (!isNew && !fields.length) {
+            msg.className = 'alert alert-danger';
+            msg.textContent = '추가할 자료 종류를 한 개 이상 선택해 주세요.';
+            return;
+        }
+        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields };
+        if (pdfStatus > 0) payload.PdfStatus = pdfStatus;
+        if (isNew) payload.BookData = bookData;
+        else payload.BookId = Number(document.getElementById('material-book-id').value);
         try {
             const result = await apiFetch('/api/user/book-material-requests', { method: 'POST', body: JSON.stringify(payload) });
             msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden');
@@ -1503,7 +1524,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!payload.Name) {
             userStudentMsg.className = 'alert alert-danger';
-            userStudentMsg.textContent = '학생 이름(Name)은 필수 입력 항목입니다.';
+            userStudentMsg.textContent = '학생 이름은 필수 입력 항목입니다.';
             userStudentMsg.classList.remove('hidden');
             return;
         }
@@ -3491,15 +3512,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="book-detail-information">
                 <div class="detail-grid">
                     <div class="detail-metric-card">
-                        <div class="label">분량 (BookLength)</div>
+                        <div class="label">분량</div>
                         <div class="val">${b.BookLength ? b.BookLength + '단계' : '0 (미입력)'}</div>
                     </div>
                     <div class="detail-metric-card">
-                        <div class="label">어휘 수준 (Voca)</div>
+                        <div class="label">어휘 수준</div>
                         <div class="val">${b.Voca ? b.Voca + '단계' : '0 (미입력)'}</div>
                     </div>
                     <div class="detail-metric-card">
-                        <div class="label">비유/상징 (Metaphor)</div>
+                        <div class="label">비유/상징</div>
                         <div class="val">${b.Metaphor ? b.Metaphor + '단계' : '0 (미입력)'}</div>
                     </div>
                 </div>
@@ -4099,11 +4120,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h4 class="section-title"><i class="fa-solid fa-user"></i> 기본 인적사항 수정</h4>
                     <div class="form-grid">
                         <div class="form-group span-2">
-                            <label>학생 이름 (Name) <span class="required">*</span></label>
+                            <label>학생 이름 <span class="required">*</span></label>
                             <input type="text" name="Name" class="form-control" value="${escapeHtml(s.Name || '')}" required>
                         </div>
                         <div class="form-group">
-                            <label>성별 (Sex)</label>
+                            <label>성별</label>
                             <select name="Sex" class="form-control">
                                 <option value="" ${!s.Sex ? 'selected' : ''}>성별 선택 (미선택)</option>
                                 <option value="남" ${formatSex(s.Sex) === '남' ? 'selected' : ''}>남</option>
@@ -4111,7 +4132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>학년 (Grade)</label>
+                            <label>학년</label>
                             <input type="text" name="Grade" class="form-control" value="${escapeHtml(s.Grade || '')}">
                         </div>
                         <div class="form-group">
@@ -4119,7 +4140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="text" name="School" class="form-control" value="${escapeHtml(s.School || '')}">
                         </div>
                         <div class="form-group">
-                            <label>추천인 (Referrer)</label>
+                            <label>추천인</label>
                             <input type="text" name="Referrer" class="form-control" value="${escapeHtml(s.Referrer || '')}">
                         </div>
                     </div>
@@ -4180,7 +4201,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!data.Name) {
             modalEditAlert.className = 'alert alert-danger';
-            modalEditAlert.textContent = '학생 이름(Name)은 필수 입력 항목입니다.';
+            modalEditAlert.textContent = '학생 이름은 필수 입력 항목입니다.';
             modalEditAlert.classList.remove('hidden');
             return;
         }
@@ -4270,19 +4291,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> 기본 정보 수정</h4>
                     <div class="form-grid">
                         <div class="form-group span-2">
-                            <label>도서명 (Title) <span class="required">*</span></label>
+                            <label>도서명 <span class="required">*</span></label>
                             <input type="text" name="Title" class="form-control" value="${escapeHtml(b.Title || '')}" required>
                         </div>
                         <div class="form-group">
-                            <label>저자 (Author)</label>
+                            <label>저자</label>
                             <input type="text" name="Author" class="form-control" value="${escapeHtml(b.Author || '')}">
                         </div>
                         <div class="form-group">
-                            <label>출판사 (Publisher)</label>
+                            <label>출판사</label>
                             <input type="text" name="Publisher" class="form-control" value="${escapeHtml(b.Publisher || '')}">
                         </div>
                         <div class="form-group">
-                            <label>주제 / 분야 (Subject)</label>
+                            <label>주제 / 분야</label>
                             <input type="text" name="Subject" class="form-control" value="${escapeHtml(b.Subject || '')}">
                         </div>
                         <div class="form-group span-2">
@@ -4296,19 +4317,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>분량 / 페이지 수 (BookLength)</label>
+                            <label>분량 / 페이지 수</label>
                             <select name="BookLength" class="form-control">
                                 ${renderSelectOptions(b.BookLength)}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>어휘 수준 / 개수 (Voca)</label>
+                            <label>어휘 수준 / 개수</label>
                             <select name="Voca" class="form-control">
                                 ${renderSelectOptions(b.Voca)}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>비유 / 상징 수준 (Metaphor)</label>
+                            <label>비유 / 상징 수준</label>
                             <select name="Metaphor" class="form-control">
                                 ${renderSelectOptions(b.Metaphor)}
                             </select>
@@ -4429,7 +4450,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!data.Title) {
             modalEditAlert.className = 'alert alert-danger';
-            modalEditAlert.textContent = '도서명(Title)은 필수 입력 항목입니다.';
+            modalEditAlert.textContent = '도서명은 필수 입력 항목입니다.';
             modalEditAlert.classList.remove('hidden');
             return;
         }
@@ -4588,7 +4609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             headHtml += `<th>${col.name} ${col.pk ? '<i class="fa-solid fa-key" style="color: var(--warning); font-size: 0.7rem;"></i>' : ''}</th>`;
         });
         if (isAdmin()) {
-            headHtml += '<th style="text-align: right;">작업 (Admin)</th>';
+            headHtml += '<th style="text-align: right;">작업</th>';
         }
         tableHeadTr.innerHTML = headHtml;
 
