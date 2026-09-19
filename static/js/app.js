@@ -279,8 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 data = await apiFetch(`/api/user/classes?page=${page++}&limit=100`);
                 classes.push(...data.classes);
             } while (page <= data.total_pages);
-            plannedClassSelect.innerHTML = '<option value="">수업 선택</option>' + classes.map(cls =>
-                `<option value="${Number(cls.Id)}">${escapeHtml(cls.ClassName)} · ${escapeHtml(userName(cls.TeacherUsername))} · ${escapeHtml(cls.DayOfWeek)} ${escapeHtml(cls.StartTime || '')}${cls.IsEnded ? ' (종료)' : ''}</option>`).join('');
+            plannedClassSelect.innerHTML = '<option value="">수업 선택</option>' + groupedClassOptions(classes, cls =>
+                `<option value="${Number(cls.Id)}">${escapeHtml(cls.ClassName)} · ${escapeHtml(userName(cls.TeacherUsername))} · ${escapeHtml(cls.DayOfWeek)} ${escapeHtml(cls.StartTime || '')}${cls.IsEnded ? ' (종료)' : ''}</option>`);
             plannedSubmit.disabled = !classes.length;
             if (!classes.length) plannedStatus.textContent = '등록 가능한 수업이 없습니다.';
         } catch (err) {
@@ -661,6 +661,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!username || ['-', '미지정', '정보 없음'].includes(username)) return username || '-';
         return userDisplayNames[username] || '이름 미등록';
     }
+    // 수업 선택 메뉴는 계정별로 묶고 이름, 요일, 시간, 수업명 순으로 정렬한다.
+    function groupedClassOptions(classes, renderOption) {
+        const compare = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko', { numeric: true });
+        const dayOrder = day => {
+            const value = String(day || '').trim().replace(/요일$/, '').toUpperCase();
+            const index = ['월', '화', '수', '목', '금', '토', '일'].indexOf(value);
+            const legacyIndex = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].indexOf(value);
+            return index >= 0 ? index : legacyIndex >= 0 ? legacyIndex : 7;
+        };
+        const groups = new Map();
+        classes.forEach(cls => {
+            const username = cls.TeacherUsername || '';
+            if (!groups.has(username)) groups.set(username, {
+                username,
+                name: username ? (cls.TeacherName || userName(username)) : '담당 선생님 미지정',
+                classes: []
+            });
+            groups.get(username).classes.push(cls);
+        });
+        const nameCounts = new Map();
+        groups.forEach(group => nameCounts.set(group.name, (nameCounts.get(group.name) || 0) + 1));
+        return Array.from(groups.values()).sort((a, b) =>
+            Number(!a.username) - Number(!b.username) || compare(a.name, b.name) || compare(a.username, b.username)
+        ).map(group => {
+            const label = group.name + (group.username && nameCounts.get(group.name) > 1 ? ` (${group.username})` : '');
+            const options = group.classes.slice().sort((a, b) =>
+                dayOrder(a.DayOfWeek) - dayOrder(b.DayOfWeek)
+                || compare(a.StartTime || '99:99', b.StartTime || '99:99')
+                || compare(a.ClassName, b.ClassName)
+                || compare(a.Id ?? a.row_id, b.Id ?? b.row_id)
+            ).map(renderOption).join('');
+            return `<optgroup label="${escapeHtml(label)}">${options}</optgroup>`;
+        }).join('');
+    }
+
     async function loadUserDisplayNames() {
         const data = await apiFetch('/api/user/display-names');
         userDisplayNames = Object.assign(Object.create(null), data.names);
@@ -2643,9 +2678,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const current = data.classes.find(c => String(c.Id) === selected);
                     const keepCurrent = current && !matches.includes(current);
                     const visible = keepCurrent ? [current, ...matches] : matches;
-                    select.innerHTML = '<option value="">배정 없음</option>' + visible.map(c =>
+                    select.innerHTML = '<option value="">배정 없음</option>' + groupedClassOptions(visible, c =>
                         `<option value="${c.Id}">${keepCurrent && c === current ? '[현재 선택] ' : ''}${escapeHtml(classLabel(c))}</option>`
-                    ).join('');
+                    );
                     select.value = selected;
                     status.textContent = `${matches.length ? `수업 ${matches.length}개` : '검색 결과가 없습니다.'}${keepCurrent ? ' · 현재 선택한 수업은 유지됩니다.' : ''}`;
                 };
@@ -3060,9 +3095,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const classOptions = '<option value="">수업 없음</option>' + classes.map(cls =>
+        const classOptions = '<option value="">수업 없음</option>' + groupedClassOptions(classes, cls =>
             `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
-        ).join('');
+        );
         const teacherOptions = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
             `<option value="${escapeHtml(teacher.username)}" ${teacher.username === (log.ActualTeacherUsername || '') ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}</option>`
         ).join('');
@@ -3235,9 +3270,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const teacherData = isStaff() ? await apiFetch('/api/user/teachers-options') : { teachers: [currentUser] };
             const categoryData = isStaff() ? await apiFetch('/api/user/payroll/categories') : { categories: [] };
             const emptyLabel = currentUser?.role === 'teacher' ? '담당 수업을 선택해 주세요' : '정산에 연결하지 않음';
-            classSelect.innerHTML = `<option value="">${emptyLabel}</option>` + (classData.classes || []).map(cls =>
+            classSelect.innerHTML = `<option value="">${emptyLabel}</option>` + groupedClassOptions(classData.classes || [], cls =>
                 `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}">${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
-            ).join('');
+            );
             classSelect.value = selectedClass;
             document.getElementById('studylog-class-required')?.classList.toggle('hidden', currentUser?.role !== 'teacher');
             const actualTeacherSelect = document.getElementById('studylog-actual-teacher');
@@ -3303,9 +3338,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await apiFetch('/api/user/classes?limit=100');
             const classes = data.classes || [];
-            bookStudyClassSelect.innerHTML = '<option value="">수업을 선택해 수강생 전체 추가</option>' + classes.map(cls =>
-                `<option value="${cls.Id || cls.row_id}">${escapeHtml(cls.ClassName || '이름 없는 수업')}${cls.DayOfWeek ? ` (${escapeHtml(cls.DayOfWeek)}${cls.StartTime ? ' ' + escapeHtml(cls.StartTime) : ''})` : ''}</option>`
-            ).join('');
+            bookStudyClassSelect.innerHTML = '<option value="">수업을 선택해 수강생 전체 추가</option>' + groupedClassOptions(classes, cls =>
+                `<option value="${cls.Id || cls.row_id}">${escapeHtml(cls.ClassName || '이름 없는 수업')} · ${escapeHtml(userName(cls.TeacherUsername))}${cls.DayOfWeek ? ` (${escapeHtml(cls.DayOfWeek)}${cls.StartTime ? ' ' + escapeHtml(cls.StartTime) : ''})` : ''}</option>`
+            );
         } catch (err) {
             // 수업 목록을 사용할 수 없더라도 개별 학생 필터는 정상적으로 제공한다.
             bookStudyClassSelect.innerHTML = '<option value="">수업 목록을 불러오지 못했습니다</option>';
@@ -6195,14 +6230,12 @@ document.addEventListener('DOMContentLoaded', () => {
             classBatchSelect.innerHTML = '<option value="">-- 수업을 불러오는 중... --</option>';
             const data = await apiFetch('/api/user/classes?limit=100');
             const classes = data.classes || [];
-            let html = '<option value="">-- 수업을 선택해 주세요 --</option>';
-            classes.forEach(c => {
+            classBatchSelect.innerHTML = '<option value="">-- 수업을 선택해 주세요 --</option>' + groupedClassOptions(classes, c => {
                 const name = escapeHtml(c.ClassName || '수업명 없음');
-                const day = formatDayOfWeek(c.DayOfWeek);
+                const day = escapeHtml(formatDayOfWeek(c.DayOfWeek));
                 const teacher = escapeHtml(userName(c.TeacherUsername || ''));
-                html += `<option value="${c.Id}">${name} (${day} ${c.StartTime ? c.StartTime : ''} · ${teacher})</option>`;
+                return `<option value="${c.Id}">${name} (${day} ${escapeHtml(c.StartTime || '')} · ${teacher})</option>`;
             });
-            classBatchSelect.innerHTML = html;
             if (preselectClassId) {
                 classBatchSelect.value = String(preselectClassId);
                 loadClassBatchForm(preselectClassId);
