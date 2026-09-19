@@ -2444,6 +2444,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedCount = studylogBulkSelected.size;
         if (studylogBulkSelectedCount) studylogBulkSelectedCount.textContent = `현재 페이지에서 ${selectedCount}건 선택됨`;
         if (btnOpenStudylogBulkDelete) btnOpenStudylogBulkDelete.disabled = selectedCount < 1 || selectedCount > 50;
+        const transferButton = document.getElementById('btn-open-studylog-bulk-transfer');
+        if (transferButton) transferButton.disabled = !isStaff() || selectedCount < 1 || selectedCount > 50;
         const selectable = Array.from(document.querySelectorAll('.studylog-row-select:not(:disabled)'));
         const selectedOnPage = selectable.filter(input => input.checked).length;
         if (studylogSelectAll) {
@@ -2527,6 +2529,115 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 선택 기록 학생 이동: 삭제 선택 상태를 공유하되 이동 대상은 열 때 고정한다.
+    const transferModal = document.getElementById('modal-studylog-bulk-transfer');
+    const transferConfirm = document.getElementById('studylog-transfer-confirm');
+    const transferSubmit = document.getElementById('btn-submit-studylog-bulk-transfer');
+    const transferQuery = document.getElementById('studylog-transfer-student-q');
+    const transferResults = document.getElementById('studylog-transfer-student-results');
+    const transferTargetLabel = document.getElementById('studylog-transfer-target');
+    const transferError = document.getElementById('studylog-transfer-error');
+    let studylogTransferSnapshot = [];
+    let studylogTransferTarget = null;
+    let studylogTransferBusy = false;
+    let studylogTransferSearchId = 0;
+
+    function updateStudylogTransferSubmit() {
+        if (transferSubmit) transferSubmit.disabled = studylogTransferBusy || !isStaff() || !studylogTransferTarget || !studylogTransferSnapshot.length || transferConfirm.value !== '선택한 기록 이동';
+    }
+
+    function closeStudylogBulkTransferModal() {
+        if (!transferModal || studylogTransferBusy) return;
+        transferModal.classList.add('hidden');
+        studylogTransferSearchId++;
+        studylogTransferSnapshot = [];
+        studylogTransferTarget = null;
+        transferConfirm.value = '';
+        updateStudylogTransferSubmit();
+    }
+
+    function openStudylogBulkTransferModal() {
+        if (!isStaff() || studylogTransferBusy || isStudylogBulkDeleting || studylogBulkSelected.size < 1 || studylogBulkSelected.size > 50) return;
+        closeStudylogBulkTransferModal();
+        studylogTransferSnapshot = Array.from(studylogBulkSelected.values(), item => ({ ...item }));
+        document.getElementById('studylog-bulk-transfer-count').textContent = '학습 기록 ' + studylogTransferSnapshot.length + '건의 학생을 변경합니다.';
+        document.getElementById('studylog-bulk-transfer-list').innerHTML = studylogTransferSnapshot.map(item => '<div class="studylog-bulk-delete-item"><strong>#' + item.id + '</strong><span>' + escapeHtml(item.studentName) + '</span><span>' + escapeHtml(item.bookTitle) + '</span><time>' + escapeHtml(item.studiedDay) + '</time></div>').join('');
+        transferQuery.value = '';
+        transferResults.innerHTML = '';
+        transferTargetLabel.textContent = '이동 받을 학생을 선택해 주세요.';
+        transferError.classList.add('hidden');
+        transferConfirm.disabled = false;
+        transferQuery.disabled = false;
+        transferModal.classList.remove('hidden');
+        transferQuery.focus();
+        searchStudylogTransferStudents();
+    }
+
+    async function searchStudylogTransferStudents() {
+        if (studylogTransferBusy || !isStaff() || transferModal.classList.contains('hidden')) return;
+        const requestId = ++studylogTransferSearchId;
+        const query = transferQuery.value.trim();
+        transferResults.textContent = '학생 검색 중...';
+        try {
+            const data = await apiFetch('/api/user/picker/students?' + new URLSearchParams({ q: query, include_ended: 'true', limit: '100' }));
+            if (requestId !== studylogTransferSearchId || studylogTransferBusy || transferModal.classList.contains('hidden')) return;
+            transferResults.innerHTML = data.students.length ? data.students.map(student => '<button type="button" class="btn btn-outline" data-transfer-student="' + Number(student.row_id || student.Id) + '">' + escapeHtml(student.Name || '이름 없음') + ' · ' + escapeHtml(formatGrade(student.Grade)) + ' · 학생 #' + Number(student.row_id || student.Id) + '</button>').join('') : '<p class="text-muted">검색 결과가 없습니다.</p>';
+            transferResults.querySelectorAll('[data-transfer-student]').forEach(button => button.addEventListener('click', () => {
+                if (studylogTransferBusy) return;
+                const id = Number(button.dataset.transferStudent);
+                const student = data.students.find(item => Number(item.row_id || item.Id) === id);
+                studylogTransferTarget = { id, name: student.Name || '이름 없음' };
+                transferTargetLabel.textContent = '받을 학생: ' + studylogTransferTarget.name + ' · ' + formatGrade(student.Grade) + ' · 학생 #' + id;
+                transferConfirm.value = '';
+                updateStudylogTransferSubmit();
+                transferConfirm.focus();
+            }));
+        } catch (err) {
+            if (requestId === studylogTransferSearchId) transferResults.textContent = '학생 검색 실패: ' + err.message;
+        }
+    }
+
+    async function submitStudylogBulkTransfer() {
+        if (studylogTransferBusy || !isStaff() || !studylogTransferTarget || transferConfirm.value !== '선택한 기록 이동') return;
+        const logIds = studylogTransferSnapshot.map(item => item.id);
+        if (!logIds.length || logIds.length > 50) return;
+        const target = { ...studylogTransferTarget };
+        studylogTransferBusy = true;
+        studylogTransferSearchId++;
+        transferConfirm.disabled = true;
+        transferQuery.disabled = true;
+        updateStudylogTransferSubmit();
+        transferError.classList.add('hidden');
+        try {
+            await apiFetch('/api/user/studylogs/bulk-transfer', { method: 'POST', body: JSON.stringify({ log_ids: logIds, target_student_id: target.id, confirmation: '선택한 기록 이동' }) });
+        } catch (err) {
+            studylogTransferSnapshot = [];
+            clearStudylogBulkSelection();
+            transferError.textContent = '이동 요청을 완료하지 못했습니다. ' + err.message + ' 통신 오류인 경우 이미 처리되었을 수 있으므로, 취소 후 목록을 새로고침하여 확인하고 다시 선택해 주세요.';
+            transferError.classList.remove('hidden');
+            return;
+        } finally {
+            studylogTransferBusy = false;
+            transferConfirm.disabled = false;
+            transferQuery.disabled = false;
+            transferConfirm.value = '';
+            updateStudylogTransferSubmit();
+        }
+        closeStudylogBulkTransferModal();
+        clearStudylogBulkSelection();
+        createActionFeedback().show(logIds.length + '건의 학습 기록을 ' + target.name + ' 학생에게 이동했습니다.', 'success');
+        await Promise.all([loadStudyLogSearchResults(), loadRecentStudyLogs()]);
+    }
+
+    document.getElementById('btn-open-studylog-bulk-transfer')?.addEventListener('click', openStudylogBulkTransferModal);
+    document.getElementById('btn-close-studylog-bulk-transfer')?.addEventListener('click', closeStudylogBulkTransferModal);
+    document.getElementById('btn-cancel-studylog-bulk-transfer')?.addEventListener('click', closeStudylogBulkTransferModal);
+    document.getElementById('btn-search-studylog-transfer-student')?.addEventListener('click', searchStudylogTransferStudents);
+    transferQuery?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchStudylogTransferStudents(); } });
+    transferQuery?.addEventListener('input', () => { studylogTransferSearchId++; });
+    transferConfirm?.addEventListener('input', updateStudylogTransferSubmit);
+    transferSubmit?.addEventListener('click', submitStudylogBulkTransfer);
+
     // Load StudyLog Search Results Grid
     async function loadStudyLogSearchResults(directSearch = false) {
         const feedback = createActionFeedback();
@@ -2534,6 +2645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const requestId = ++studylogSearchRequestId;
         clearStudylogBulkSelection();
         if (!isStudylogBulkDeleting) closeStudylogBulkDeleteModal();
+        closeStudylogBulkTransferModal();
         try {
             studylogCardsGrid.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div></td></tr>';
             updateStudylogBulkSelectionUI();

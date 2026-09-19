@@ -4565,3 +4565,10 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
 #view-utilities .utility-csv-class-links-controls { flex-wrap: wrap; }
 #view-utilities .utility-csv-class-links-controls .form-control { flex: 1; min-width: 220px; max-width: 640px; }
 #view-utilities .csv-class-link-class { min-width: 260px; }
+
+/* 선택한 학습 기록의 학생 이동 */
+#view-studylog-search .studylog-bulk-actions { flex-wrap: wrap; }
+.studylog-transfer-search { display: flex; gap: 0.5rem; }
+.studylog-transfer-student-results { max-height: 180px; overflow-y: auto; margin-top: 0.5rem; }
+.studylog-transfer-student-results .btn { display: block; width: 100%; text-align: left; margin-bottom: 0.4rem; white-space: normal; }
+.studylog-transfer-target { padding: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--primary); border-radius: var(--radius-md); font-weight: 700; }

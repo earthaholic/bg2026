@@ -122,6 +122,12 @@ class StudyLogBulkDeleteRequest(BaseModel):
     log_ids: List[StrictInt]
     confirmation: str
 
+
+class StudyLogBulkTransferRequest(BaseModel):
+    log_ids: List[StrictInt]
+    target_student_id: StrictInt
+    confirmation: str
+
 class RowUpdateRequest(BaseModel):
     pk_col: str
     pk_val: Any
@@ -4119,6 +4125,114 @@ def user_bulk_delete_studylogs(
         conn.rollback()
         logging.exception("학습 기록 선택 삭제 실패")
         raise HTTPException(status_code=500, detail="선택 삭제 처리 중 오류가 발생하여 전체 삭제를 취소했습니다.")
+    finally:
+        conn.close()
+
+
+def _resolve_transfer_identity(conn, table, value, label):
+    """원본 Id와 rowid 중 어느 별칭으로 조회해도 같은 한 행이어야 한다."""
+    if table not in ("Students", "Books"):
+        raise ValueError("허용되지 않은 테이블입니다.")
+    rows = conn.execute(f'SELECT rowid AS _row_id, * FROM "{table}" WHERE rowid=? OR "Id"=?',
+                        (value, value)).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"{label} 정보를 찾을 수 없어 전체 이동을 취소했습니다.")
+    if len(rows) != 1:
+        raise HTTPException(status_code=409, detail=f"{label} 식별자가 중복되어 전체 이동을 취소했습니다.")
+    record = dict(rows[0])
+    aliases = tuple(dict.fromkeys(v for v in (record['_row_id'], record['Id']) if v is not None))
+    marks = ','.join('?' for _ in aliases)
+    matches = conn.execute(f'SELECT rowid FROM "{table}" WHERE rowid IN ({marks}) OR "Id" IN ({marks})',
+                           aliases + aliases).fetchall()
+    if len(matches) != 1:
+        raise HTTPException(status_code=409, detail=f"{label}의 원본 ID와 행 식별자가 충돌하여 전체 이동을 취소했습니다.")
+    return record, aliases
+
+
+@app.post("/api/user/studylogs/bulk-transfer")
+def user_bulk_transfer_studylogs(
+    payload: StudyLogBulkTransferRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    """학생 귀속만 원자적으로 이동한다. 과거 학년 스냅샷도 그대로 보존한다.
+
+    현재 반 소속은 과거 수업의 소속을 보장하지 않으므로 이동 조건으로 사용하지 않는다.
+    """
+    if payload.confirmation != "선택한 기록 이동":
+        raise HTTPException(status_code=400, detail="이동 확인란에 '선택한 기록 이동'을 정확히 입력해 주세요.")
+    log_ids = payload.log_ids
+    if not 1 <= len(log_ids) <= 50 or any(row_id <= 0 for row_id in log_ids):
+        raise HTTPException(status_code=400, detail="이동할 학습 기록을 1개 이상 50개 이하로 선택해 주세요.")
+    if len(set(log_ids)) != len(log_ids):
+        raise HTTPException(status_code=400, detail="이동 대상에 중복된 학습 기록이 있습니다.")
+    if payload.target_student_id <= 0:
+        raise HTTPException(status_code=400, detail="이동할 학생을 올바르게 선택해 주세요.")
+
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        target, student_aliases = _resolve_transfer_identity(conn, "Students", payload.target_student_id, "이동할 학생")
+        student_marks = ','.join('?' for _ in student_aliases)
+        snapshots = []
+        batch_keys = set()
+        for row_id in log_ids:
+            # 입력은 검색 결과의 row_id이며 원본 Id로 대체 조회하지 않는다.
+            row = conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"학습 기록 #{row_id}을 찾을 수 없어 전체 이동을 취소했습니다.")
+            old = dict(row)
+            source, _ = _resolve_transfer_identity(conn, "Students", old['StudentId'], "기존 학생")
+            if source['_row_id'] == target['_row_id']:
+                raise HTTPException(status_code=400, detail=f"학습 기록 #{row_id}은 이미 선택한 학생의 기록입니다.")
+            book, book_aliases = _resolve_transfer_identity(conn, "Books", old['BookId'], "학습 도서")
+            day = old['StudiedDay']
+            key = (book['_row_id'], day)
+            book_marks = ','.join('?' for _ in book_aliases)
+            if key in batch_keys or conn.execute(
+                    f'''SELECT 1 FROM "StudyLogs" WHERE "StudentId" IN ({student_marks})
+                        AND "BookId" IN ({book_marks}) AND "StudiedDay"=? LIMIT 1''',
+                    student_aliases + book_aliases + (day,)).fetchone():
+                raise HTTPException(status_code=409, detail="이동 후 같은 학생·도서·날짜의 학습 기록이 중복되어 전체 이동을 취소했습니다.")
+            batch_keys.add(key)
+            if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId"=?', (row_id,)).fetchone():
+                raise HTTPException(status_code=409, detail=f"학습 기록 #{row_id}은 마감 정산에 포함되어 이동할 수 없습니다.")
+            teacher = str(old.get('ActualTeacherUsername') or '').strip()
+            class_id = old.get('ClassId')
+            if class_id:
+                if not teacher:
+                    class_row = conn.execute('SELECT "TeacherUsername" FROM "Classes" WHERE "Id"=?', (class_id,)).fetchone()
+                    teacher = str(class_row['TeacherUsername'] or '').strip() if class_row else ''
+                if conn.execute('SELECT 1 FROM "ClassCancellations" WHERE "ClassId"=? AND "CancelledDay"=?',
+                                (class_id, day)).fetchone():
+                    raise HTTPException(status_code=409, detail="해당 수업·날짜가 휴강으로 등록되어 전체 이동을 취소했습니다.")
+                if conn.execute(f'''SELECT 1 FROM "StudentAbsences" WHERE "ClassId"=? AND "StudiedDay"=?
+                                    AND "StudentId" IN ({student_marks})''',
+                                (class_id, day) + student_aliases).fetchone():
+                    raise HTTPException(status_code=409, detail="이동할 학생의 해당 수업·날짜에 결석 기록이 있어 전체 이동을 취소했습니다.")
+            if teacher and conn.execute(
+                    'SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                    (str(day or '')[:7], teacher)).fetchone():
+                raise HTTPException(status_code=409, detail="진행 선생님의 해당 월 정산이 마감되어 전체 이동을 취소했습니다.")
+            snapshots.append((row_id, old))
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        for row_id, old in snapshots:
+            conn.execute('''UPDATE "StudyLogs" SET "StudentId"=?, "UpdatedBy"=?, "UpdatedAt"=? WHERE rowid=?''',
+                         (target['_row_id'], current_user['username'], now, row_id))
+            new = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone())
+            write_audit_log("StudyLogs", row_id, "UPDATE", old, new,
+                            [field for field in new if old.get(field) != new[field]],
+                            current_user['username'], current_user['role'], connection=conn)
+        conn.commit()
+        return {"status": "success", "updated_rows": len(snapshots),
+                "message": f"선택한 학습 기록 {len(snapshots)}건을 다른 학생에게 이동했습니다."}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        logging.exception("학습 기록 선택 이동 실패")
+        raise HTTPException(status_code=500, detail="선택 이동 처리 중 오류가 발생하여 전체 이동을 취소했습니다.")
     finally:
         conn.close()
 

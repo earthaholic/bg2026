@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260919-studylog-bulk-delete">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260919-studylog-bulk-transfer">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -999,6 +999,7 @@
                             </div>
                             <div class="studylog-bulk-actions" aria-live="polite">
                                 <span id="studylog-bulk-selected-count" class="text-muted">현재 페이지에서 0건 선택됨</span>
+                                <button type="button" id="btn-open-studylog-bulk-transfer" class="btn btn-sm btn-primary staff-only" disabled><i class="fa-solid fa-arrow-right-arrow-left"></i> 학생 이동</button>
                                 <button type="button" id="btn-open-studylog-bulk-delete" class="btn btn-sm btn-danger" disabled><i class="fa-solid fa-trash-can"></i> 선택 삭제</button>
                             </div>
                         </div>
@@ -2222,6 +2223,37 @@
     </div>
 
     <!-- 학습 기록 일괄 삭제 확인 모달 -->
+    <div id="modal-studylog-bulk-transfer" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="studylog-bulk-transfer-title">
+        <div class="modal-card studylog-bulk-delete-card">
+            <div class="modal-header">
+                <h3 id="studylog-bulk-transfer-title">선택한 학습 기록 학생 이동</h3>
+                <button type="button" id="btn-close-studylog-bulk-transfer" class="btn-close" aria-label="학생 이동 창 닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info studylog-bulk-delete-warning">학생만 변경합니다. 기록 번호·도서·날짜·수업·진행 선생님·특강 여부·내용·당시 학년은 유지되며 학생의 현재 소속 수업은 바뀌지 않습니다. 수강 차시는 이동한 학생에게 반영됩니다.</div>
+                <p id="studylog-bulk-transfer-count" class="studylog-bulk-delete-count"></p>
+                <div id="studylog-bulk-transfer-list" class="studylog-bulk-delete-list" aria-label="이동할 학습 기록 목록"></div>
+                <div class="form-group">
+                    <label for="studylog-transfer-student-q">이동 받을 학생 검색</label>
+                    <p class="text-muted">수업 종료 학생도 포함하여 최대 100명을 표시합니다. 원하는 학생이 없으면 이름으로 검색해 주세요.</p>
+                    <div class="studylog-transfer-search"><input id="studylog-transfer-student-q" class="form-control" placeholder="학생 이름으로 검색" autocomplete="off"><button type="button" id="btn-search-studylog-transfer-student" class="btn btn-outline">검색</button></div>
+                    <div id="studylog-transfer-student-results" class="studylog-transfer-student-results" aria-live="polite"></div>
+                </div>
+                <p id="studylog-transfer-target" class="studylog-transfer-target" aria-live="polite">이동 받을 학생을 선택해 주세요.</p>
+                <p class="text-muted">관리 선생님 이상만 이용할 수 있습니다. 중복 기록·결석·휴강·정산 마감 등으로 한 건이라도 이동할 수 없으면 전체 이동을 취소합니다. 저장된 월말 보고 문구는 자동으로 바뀌지 않으므로 다시 확인해 주세요.</p>
+                <div class="form-group">
+                    <label for="studylog-transfer-confirm">선택한 기록과 받을 학생을 확인한 뒤 <strong>선택한 기록 이동</strong>을 입력해 주세요.</label>
+                    <input id="studylog-transfer-confirm" class="form-control" autocomplete="off" placeholder="선택한 기록 이동">
+                </div>
+                <div id="studylog-transfer-error" class="alert alert-danger hidden" role="alert"></div>
+                <div class="modal-actions studylog-bulk-delete-actions">
+                    <button type="button" id="btn-cancel-studylog-bulk-transfer" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-studylog-bulk-transfer" class="btn btn-primary" disabled>선택한 기록 최종 이동</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-studylog-bulk-delete" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-studylog-bulk-delete-title">
         <div class="modal-card confirm-delete-card studylog-bulk-delete-card">
             <div class="modal-header studylog-bulk-delete-header">
@@ -2480,6 +2512,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260919-studylog-bulk-delete"></script>
+    <script src="/static/js/app.js?v=20260919-studylog-bulk-transfer"></script>
 </body>
 </html>

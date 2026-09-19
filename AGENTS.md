@@ -115,3 +115,11 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `csv_class_links.py`의 미리보기 `GET /api/user/utilities/studylog-csv/runs/{run_id}/class-links`와 적용 `POST /api/user/utilities/studylog-csv/class-links/apply`는 staff 전용이다. 가져오기 성공 기록만 대상으로 하며, 계정에 귀속된 30분 유효 서명 토큰으로 기록·수업 정보 변경 여부를 재검증한다.
 - 기존 수업·정산 카테고리 연결, 정산 마감, 기존 진행 선생님 불일치, 대상 휴강·결석을 보호한다. 연결 시 날짜·도서·내용·특강 여부는 유지하고 수업 및 담당 진행 선생님을 지정한다. 기록 변경과 감사 로그는 하나의 트랜잭션으로 처리하며 하나라도 실패하면 전부 취소한다.
 - 실행 이력의 `all_runs=true` 조회는 오래된 가져오기도 선택하도록 지원한다. 일반 조회는 최근 20건을 유지한다. 회귀 검증은 `tests/test_csv_class_links.py`, `tests/test_csv_class_links_ui.js`에 있다.
+
+
+## 학습 기록 선택 학생 이동
+- 학습 기록 검색의 현재 페이지 선택 후 `학생 이동`으로 받을 학생을 지정한다. 관리자·부관리자·관리 선생님만 가능하며 일반 선생님의 학생 변경 권한은 확대하지 않는다.
+- `POST /api/user/studylogs/bulk-transfer`는 `{log_ids: [row_id, ...], target_student_id: 학생 식별자, confirmation: "선택한 기록 이동"}`를 받는다. 1~50개의 서로 다른 양의 정수 기록 row_id만 허용한다.
+- 복제·삭제하지 않고 `StudentId`와 수정 감사 메타데이터만 변경한다. 원본 기록 번호·도서·날짜·내용·수업·진행 선생님·특강·당시 학년 스냅샷은 보존한다. 현재 반 소속을 제한하거나 자동 변경하지 않는다. 수업 종료 학생도 대상으로 검색할 수 있다.
+- 학생·도서의 rowid/Id 식별자 충돌, 같은 학생으로 이동, 기존/선택 내부의 학생·도서·날짜 중복, 정산 행·월 마감, 대상 학생 결석·수업 휴강을 검사한다. 전체 검사·변경·UPDATE 감사 이력은 하나의 트랜잭션이며 한 건이라도 실패하면 모두 취소한다.
+- 기존 저장 월말 보고 문구는 자동 변경하지 않는다. 화면에 재확인 안내를 표시한다. 회귀 테스트: `tests/test_studylog_bulk_transfer.py`, `tests/test_studylog_bulk_transfer_ui.js`.
