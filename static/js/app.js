@@ -1386,7 +1386,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const isNew = document.getElementById('material-request-type').value === 'new_book';
         document.getElementById('material-existing-book-fields').classList.toggle('hidden', isNew);
         document.getElementById('material-new-book-fields').classList.toggle('hidden', !isNew);
-        document.querySelector('#form-book-material-request .checkbox-grid').previousElementSibling.textContent = isNew ? '추가할 자료 종류 (선택 사항 · 도서만 요청 가능)' : '추가할 자료 종류';
+        document.querySelectorAll('#material-new-book-fields input, #material-new-book-fields select, #material-new-book-fields textarea').forEach(field => { field.disabled = !isNew; });
+        document.getElementById('material-new-title').required = isNew;
+        document.getElementById('material-fields-title').textContent = isNew ? '추가할 자료 종류 (선택 사항 · 도서만 요청 가능)' : '추가할 자료 종류';
     }
 
     function requestBookTitle(item) {
@@ -1398,9 +1400,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const msg = document.getElementById('book-material-request-msg');
         const requestType = document.getElementById('material-request-type').value;
         const fields = [...document.querySelectorAll('input[name="material-field"]:checked')].map(el => el.value);
-        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields, PdfStatus: Number(document.getElementById('material-pdf-status').value) };
+        const pdfStatus = Number(document.getElementById('material-pdf-status').value);
+        const payload = { RequestType: requestType, BookCategory: document.getElementById('material-book-category').value, MaterialFields: fields };
+        if (pdfStatus > 0) {
+            fields.push('IsPdfExist');
+            payload.PdfStatus = pdfStatus;
+        }
         if (requestType === 'new_book') {
-            payload.BookData = { Title: document.getElementById('material-new-title').value.trim(), Author: document.getElementById('material-new-author').value.trim(), Publisher: document.getElementById('material-new-publisher').value.trim() };
+            payload.BookData = {
+                Title: document.getElementById('material-new-title').value.trim(),
+                Author: document.getElementById('material-new-author').value.trim(),
+                Publisher: document.getElementById('material-new-publisher').value.trim(),
+                Subject: document.getElementById('material-new-subject').value.trim(),
+                Target: document.getElementById('material-new-target').value,
+                BookLength: Number(document.getElementById('material-new-length').value),
+                Voca: Number(document.getElementById('material-new-voca').value),
+                Metaphor: Number(document.getElementById('material-new-metaphor').value),
+                IsPaperbookExist: Number(document.getElementById('material-new-paperbook').checked),
+                IsYes24Exist: Number(document.getElementById('material-new-yes24').checked),
+                IsMillieExist: Number(document.getElementById('material-new-millie').checked),
+                Desc: document.getElementById('material-new-desc').value.trim()
+            };
         } else payload.BookId = Number(document.getElementById('material-book-id').value);
         try {
             const result = await apiFetch('/api/user/book-material-requests', { method: 'POST', body: JSON.stringify(payload) });
