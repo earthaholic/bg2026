@@ -13,7 +13,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, Upl
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 
 from config import settings
 from database import (
@@ -54,6 +54,7 @@ from database import (
     get_audit_username_options
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
+from studylog_permissions import mutation_permission, validate_teacher_update
 from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
 from teacher_assignment import MAX_ASSIGNMENT_ROWS
@@ -113,6 +114,11 @@ class UserRoleUpdateRequest(BaseModel):
 
 class RowDataRequest(BaseModel):
     data: Dict[str, Any]
+
+
+class StudyLogBulkDeleteRequest(BaseModel):
+    log_ids: List[StrictInt]
+    confirmation: str
 
 class RowUpdateRequest(BaseModel):
     pk_col: str
@@ -1733,9 +1739,9 @@ def user_search_studylogs(
         conditions.append('sl.StudiedDay LIKE ?')
         params.append(f"%{studied_day.strip()}%")
 
-    # 일반 선생님은 본인 수업에 배정된 학생의 학습 기록만 조회할 수 있다.
+    # 담당 학생의 조회 범위를 유지하면서, 반 이동 후에도 본인 진행 기록을 찾을 수 있게 한다.
     if current_user.get("role") == "teacher":
-        conditions.append('''EXISTS (
+        conditions.append('''(EXISTS (
             SELECT 1
             FROM "ClassStudents" cs
             JOIN "Classes" c ON c."Id" = cs."ClassId"
@@ -1743,8 +1749,12 @@ def user_search_studylogs(
               AND (cs."StudentId" = sl."StudentId"
                    OR cs."StudentId" = s.rowid
                    OR cs."StudentId" = s."Id")
-        )''')
-        params.append(current_user["username"])
+        ) OR TRIM(sl."ActualTeacherUsername") = ?
+          OR (COALESCE(TRIM(sl."ActualTeacherUsername"), '') = '' AND EXISTS (
+              SELECT 1 FROM "Classes" own_class
+              WHERE own_class."Id" = sl."ClassId" AND own_class."TeacherUsername" = ?
+          )))''')
+        params.extend([current_user["username"]] * 3)
 
     where_str = ""
     if conditions:
@@ -1790,9 +1800,17 @@ def user_search_studylogs(
         {where_str}
         ORDER BY {order_by} LIMIT {limit} OFFSET {offset}
     '''
-    cursor.execute(data_query, params)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor.execute(data_query, params)
+        studylogs = []
+        for row in cursor.fetchall():
+            log = dict(row)
+            blocked = mutation_permission(conn, log, log["row_id"], current_user)
+            log.update(CanEdit=blocked is None, CanDelete=blocked is None,
+                       MutationBlockedReason=blocked[1] if blocked else "")
+            studylogs.append(log)
+    finally:
+        conn.close()
 
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
 
@@ -1801,7 +1819,7 @@ def user_search_studylogs(
         "limit": limit,
         "total_count": total_count,
         "total_pages": total_pages,
-        "studylogs": [dict(r) for r in rows]
+        "studylogs": studylogs
     }
 
 @app.get("/api/user/studylogs/{log_id}")
@@ -1827,12 +1845,18 @@ def user_get_studylog_detail(
         LEFT JOIN "ClassCategories" pc ON sl."PayrollCategoryId" = pc."Id"
         WHERE sl.rowid = ? OR sl.Id = ?
     '''
-    cursor.execute(query, (log_id, log_id))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
-    return {"studylog": dict(row)}
+    try:
+        cursor.execute(query, (log_id, log_id))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
+        log = dict(row)
+        blocked = mutation_permission(conn, log, log["row_id"], current_user)
+        log.update(CanEdit=blocked is None, CanDelete=blocked is None,
+                   MutationBlockedReason=blocked[1] if blocked else "")
+        return {"studylog": log}
+    finally:
+        conn.close()
 
 # --- 월말 보고 문자 양식 생성 APIs ---
 
@@ -3977,12 +4001,114 @@ def user_delete_student(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"학생 삭제 중 오류가 발생했습니다: {str(e)}")
 
+@app.post("/api/user/studylogs/bulk-delete")
+def user_bulk_delete_studylogs(
+    payload: StudyLogBulkDeleteRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """목록의 row_id로 선택한 기록을 전부 검증한 뒤 감사 이력과 함께 삭제한다."""
+    if payload.confirmation != "선택한 기록 삭제":
+        raise HTTPException(status_code=400, detail="삭제 확인란에 '선택한 기록 삭제'를 정확히 입력해 주세요.")
+    log_ids = payload.log_ids
+    if not 1 <= len(log_ids) <= 50 or any(log_id <= 0 for log_id in log_ids):
+        raise HTTPException(status_code=400, detail="삭제할 학습 기록을 1개 이상 50개 이하로 선택해 주세요.")
+    if len(set(log_ids)) != len(log_ids):
+        raise HTTPException(status_code=400, detail="삭제 대상에 중복된 학습 기록이 있습니다. 목록을 새로고침해 주세요.")
+
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        snapshots = []
+        for row_id in log_ids:
+            # 검색 응답의 row_id만 사용하여 원본 Id와의 충돌로 다른 기록이 삭제되지 않게 한다.
+            row = conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"학습 기록 #{row_id}을 찾을 수 없어 전체 삭제를 취소했습니다. 목록을 새로고침해 주세요.")
+            log = dict(row)
+            blocked = mutation_permission(conn, log, row_id, current_user)
+            if blocked:
+                raise HTTPException(status_code=blocked[0], detail=f"학습 기록 #{row_id}: {blocked[1]} 전체 삭제를 취소했습니다.")
+            snapshots.append((row_id, log))
+
+        for row_id, log in snapshots:
+            conn.execute('DELETE FROM "StudyLogs" WHERE rowid=?', (row_id,))
+            write_audit_log("StudyLogs", row_id, "DELETE", log, None, None,
+                            current_user["username"], current_user["role"], connection=conn)
+        conn.commit()
+        return {"status": "success", "deleted_rows": len(snapshots),
+                "message": f"선택한 학습 기록 {len(snapshots)}건을 삭제했습니다."}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        logging.exception("학습 기록 선택 삭제 실패")
+        raise HTTPException(status_code=500, detail="선택 삭제 처리 중 오류가 발생하여 전체 삭제를 취소했습니다.")
+    finally:
+        conn.close()
+
+
+def _mutate_teacher_studylog(log_id, current_user, data=None):
+    """소유권 검사부터 변경·감사 기록까지 하나의 트랜잭션으로 처리한다."""
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute('SELECT rowid AS _row_id, * FROM "StudyLogs" WHERE rowid=? OR "Id"=?',
+                           (log_id, log_id)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
+        old = dict(row)
+        row_id = old.pop("_row_id")
+        blocked = mutation_permission(conn, old, row_id, current_user)
+        if blocked:
+            raise HTTPException(status_code=blocked[0], detail=blocked[1])
+        if data is not None:
+            updates = validate_teacher_update(conn, data)
+            blocked = mutation_permission(conn, old, row_id, current_user, updates.get("StudiedDay"))
+            if blocked:
+                raise HTTPException(status_code=blocked[0], detail=blocked[1])
+            target_day = updates.get("StudiedDay", old.get("StudiedDay"))
+            target_book = updates.get("BookId", old.get("BookId"))
+            if target_day != old.get("StudiedDay") or target_book != old.get("BookId"):
+                if old.get("ClassId") and conn.execute(
+                        'SELECT 1 FROM "ClassCancellations" WHERE "ClassId"=? AND "CancelledDay"=?',
+                        (old["ClassId"], target_day)).fetchone():
+                    raise HTTPException(status_code=409, detail="휴강으로 등록된 날짜로 변경할 수 없습니다.")
+                if conn.execute('''SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "BookId"=?
+                                   AND "StudiedDay"=? AND rowid!=?''',
+                                (old.get("StudentId"), target_book, target_day, row_id)).fetchone():
+                    raise HTTPException(status_code=409, detail="같은 학생·도서·날짜의 학습 기록이 이미 있습니다.")
+            updates["UpdatedBy"] = current_user["username"]
+            updates["UpdatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            columns = ', '.join(f'"{field}"=?' for field in updates)
+            conn.execute(f'UPDATE "StudyLogs" SET {columns} WHERE rowid=?', list(updates.values()) + [row_id])
+            new = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone())
+            changed = [field for field in new if old.get(field) != new[field]]
+            write_audit_log("StudyLogs", row_id, "UPDATE", old, new, changed,
+                            current_user["username"], current_user["role"], connection=conn)
+            result = {"status": "success", "message": "학습 기록이 성공적으로 수정되었습니다.", "updated_rows": 1}
+        else:
+            conn.execute('DELETE FROM "StudyLogs" WHERE rowid=?', (row_id,))
+            write_audit_log("StudyLogs", row_id, "DELETE", old, None, None,
+                            current_user["username"], current_user["role"], connection=conn)
+            result = {"status": "success", "message": "학습 기록이 성공적으로 삭제되었습니다.", "deleted_rows": 1}
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @app.put("/api/user/studylogs/{log_id}")
 def user_update_studylog(
     log_id: int,
     payload: RowDataRequest,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    if current_user["role"] not in ("admin", "subadmin", "manager"):
+        return _mutate_teacher_studylog(log_id, current_user, payload.data)
     row_id = _resolve_domain_pk("StudyLogs", log_id)
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")
@@ -4082,8 +4208,10 @@ def user_update_studylog(
 @app.delete("/api/user/studylogs/{log_id}")
 def user_delete_studylog(
     log_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    if current_user["role"] not in ("admin", "subadmin", "manager"):
+        return _mutate_teacher_studylog(log_id, current_user)
     row_id = _resolve_domain_pk("StudyLogs", log_id)
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 학습 기록을 찾을 수 없습니다.")

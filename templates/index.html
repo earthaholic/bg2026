@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260919-book-request-form">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260919-studylog-bulk-delete">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -992,9 +992,15 @@
                         </div>
 
                         <!-- StudyLog Results Summary Bar -->
-                        <div class="results-bar">
-                            <span id="studylog-search-total-count" class="badge badge-info">총 0 건의 학습 기록</span>
-                            <span class="text-muted">목록에서 항목을 클릭하여 상세 정보를 확인하거나 특강 여부를 즉시 토글할 수 있습니다.</span>
+                        <div class="results-bar studylog-results-bar">
+                            <div class="studylog-results-summary">
+                                <span id="studylog-search-total-count" class="badge badge-info">총 0 건의 학습 기록</span>
+                                <span class="text-muted">상세 화면에서 수정·삭제할 수 있습니다. 일반 선생님은 본인 진행 기록 중 정산 미마감 기록만 변경할 수 있습니다.</span>
+                            </div>
+                            <div class="studylog-bulk-actions" aria-live="polite">
+                                <span id="studylog-bulk-selected-count" class="text-muted">현재 페이지에서 0건 선택됨</span>
+                                <button type="button" id="btn-open-studylog-bulk-delete" class="btn btn-sm btn-danger" disabled><i class="fa-solid fa-trash-can"></i> 선택 삭제</button>
+                            </div>
                         </div>
 
                         <!-- StudyLog List Table Card -->
@@ -1003,6 +1009,7 @@
                                 <table class="modern-table">
                                     <thead>
                                         <tr>
+                                            <th class="studylog-select-column"><input type="checkbox" id="studylog-select-all" aria-label="현재 페이지의 삭제 가능한 학습 기록 전체 선택" disabled></th>
                                             <th>ID</th>
                                             <th>학습 일자</th>
                                             <th>학생 이름</th>
@@ -1016,7 +1023,7 @@
                                     </thead>
                                     <tbody id="studylog-cards-grid">
                                         <tr>
-                                            <td colspan="9" class="text-center p-4">
+                                            <td colspan="10" class="text-center p-4">
                                                 <div class="empty-state">
                                                     <i class="fa-solid fa-book-bookmark fa-3x"></i>
                                                     <p>학습 기록을 검색해 주세요.</p>
@@ -2012,7 +2019,7 @@
                     <div class="hint-item"><span class="badge badge-admin">Admin</span> 사이트 관리자 (전체 권한 + 시스템 데이터 Studio)</div>
                     <div class="hint-item"><span class="badge badge-subadmin">Subadmin</span> 부관리자 (사이트 관리자와 동일한 기능 권한)</div>
                     <div class="hint-item"><span class="badge badge-manager">Manager</span> 관리 선생님 (도서·학생·학습기록 등록/수정/삭제)</div>
-                    <div class="hint-item"><span class="badge badge-teacher">Teacher</span> 선생님 (각 섹션 조회 전용)</div>
+                    <div class="hint-item"><span class="badge badge-teacher">Teacher</span> 선생님 (조회 및 본인 수업 기록 등록·수정·삭제)</div>
                 </div>
             </div>
         </div>
@@ -2205,6 +2212,30 @@
         </div>
     </div>
 
+    <!-- 학습 기록 일괄 삭제 확인 모달 -->
+    <div id="modal-studylog-bulk-delete" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-studylog-bulk-delete-title">
+        <div class="modal-card confirm-delete-card studylog-bulk-delete-card">
+            <div class="modal-header studylog-bulk-delete-header">
+                <h3 id="modal-studylog-bulk-delete-title"><i class="fa-solid fa-triangle-exclamation"></i> 선택한 학습 기록 삭제</h3>
+                <button id="btn-close-studylog-bulk-delete" class="btn-close" aria-label="일괄 삭제 모달 닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger studylog-bulk-delete-warning"><i class="fa-solid fa-triangle-exclamation"></i> 선택한 기록은 화면에서 복구할 수 없습니다. 삭제 후에도 감사 이력은 보존됩니다.</div>
+                <p id="studylog-bulk-delete-count" class="studylog-bulk-delete-count">0건을 삭제합니다.</p>
+                <div id="studylog-bulk-delete-list" class="studylog-bulk-delete-list" aria-label="삭제할 학습 기록 목록"></div>
+                <div class="form-group">
+                    <label for="input-studylog-bulk-delete-confirm">최종 삭제를 진행하려면 <strong>선택한 기록 삭제</strong>를 정확히 입력해 주세요.</label>
+                    <input type="text" id="input-studylog-bulk-delete-confirm" class="form-control" autocomplete="off" placeholder="선택한 기록 삭제">
+                </div>
+                <div id="studylog-bulk-delete-error" class="alert alert-danger hidden" role="alert"></div>
+                <div class="modal-actions studylog-bulk-delete-actions">
+                    <button type="button" id="btn-cancel-studylog-bulk-delete" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-studylog-bulk-delete" class="btn btn-danger" disabled><i class="fa-solid fa-trash-can"></i> 선택한 기록 최종 삭제</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Admin StudyLog Delete Safety Confirmation Prompt Modal -->
     <div id="modal-studylog-delete-confirm" class="modal-backdrop hidden">
         <div class="modal-card confirm-delete-card">
@@ -2214,7 +2245,7 @@
             </div>
             <div class="modal-body">
                 <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
-                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 정말로 이 학습 기록을 삭제하시겠습니까?<br>삭제된 데이터는 복구할 수 없습니다.
+                    <i class="fa-solid fa-triangle-exclamation"></i> <strong>경고:</strong> 이 개별 학습 기록을 삭제하시겠습니까?<br>삭제된 기록은 복구할 수 없지만, 변경 이력은 보존됩니다.
                 </div>
                 <div class="modal-actions" style="margin-top: 1.5rem;">
                     <button type="button" id="btn-cancel-studylog-delete-confirm" class="btn btn-outline">취소</button>
@@ -2440,6 +2471,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260919-book-request-form"></script>
+    <script src="/static/js/app.js?v=20260919-studylog-bulk-delete"></script>
 </body>
 </html>

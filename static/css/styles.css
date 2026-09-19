@@ -1596,6 +1596,20 @@ body {
     color: var(--text-muted);
 }
 
+#modal-studylog-detail .detail-meta-row {
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+#modal-studylog-detail .studylog-date-editor {
+    flex-basis: 100%;
+}
+
+#modal-studylog-detail .studylog-date-editor label,
+#modal-studylog-detail .studylog-date-editor button {
+    white-space: nowrap;
+}
+
 .studylog-date-editor {
     display: flex;
     align-items: center;
@@ -4443,4 +4457,100 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
 
 #view-book-material-request .table-responsive {
     overflow-x: auto;
+}
+
+
+/* 학습 기록 현재 페이지 선택 및 일괄 삭제 */
+#view-studylog-search .studylog-results-bar,
+#view-studylog-search .studylog-results-summary,
+#view-studylog-search .studylog-bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+#view-studylog-search .studylog-results-bar {
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+#view-studylog-search .studylog-results-summary {
+    flex-wrap: wrap;
+}
+
+.studylog-select-column {
+    width: 2.75rem;
+    text-align: center;
+}
+
+.studylog-select-column input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.studylog-select-column input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+.studylog-bulk-delete-card {
+    max-width: 760px;
+}
+
+.studylog-bulk-delete-header {
+    border-bottom-color: rgba(239, 68, 68, 0.3);
+}
+
+.studylog-bulk-delete-header h3 {
+    color: var(--danger);
+}
+
+.studylog-bulk-delete-warning {
+    margin-bottom: 1rem;
+}
+
+.studylog-bulk-delete-count {
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+}
+
+.studylog-bulk-delete-list {
+    max-height: 260px;
+    margin-bottom: 1rem;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.studylog-bulk-delete-item {
+    display: grid;
+    grid-template-columns: 72px minmax(100px, 1fr) minmax(140px, 2fr) 110px;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.studylog-bulk-delete-item:last-child {
+    border-bottom: 0;
+}
+
+.studylog-bulk-delete-item span,
+.studylog-bulk-delete-item time {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.studylog-bulk-delete-actions {
+    margin-top: 1.5rem;
+}
+
+@media (max-width: 640px) {
+    .studylog-bulk-delete-item {
+        grid-template-columns: 60px 1fr;
+    }
+
+    .studylog-bulk-delete-item span:nth-of-type(2),
+    .studylog-bulk-delete-item time {
+        grid-column: 2;
+    }
 }

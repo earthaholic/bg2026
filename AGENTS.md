@@ -89,3 +89,16 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 실제 컬럼은 `Books.IsPdfExist`(INTEGER)이며 `0=미보유`, `1=PDF 보유(저작권 있음)`, `2=PDF 보유(저작권 없음)`이다. 기존 보유 값 1은 그대로 유지한다. 불리언 변환으로 상태 2를 잃지 않도록 주의한다.
 - 도서 검색의 `pdf_status=0|1|2`는 정확한 상태를 조회하고, 기존 `has_pdf=1`은 상태 1과 2 모두를 조회한다.
 - 자료 요청의 `PdfStatus=1|2`는 `BookData.IsPdfExist`에 보관하여 승인 시 반영한다. 과거 요청에 값이 없으면 1로 처리한다.
+
+## 일반 선생님 학습 기록 정정 권한
+- `studylog_permissions.py`가 상세 조회와 수정·삭제 API의 공통 권한을 판별한다. 실제 진행 선생님(`ActualTeacherUsername`)을 우선하고, 비어 있으면 연결 수업의 `TeacherUsername`을 사용한다. 학생 소속이나 등록자만으로 변경 권한을 부여하지 않는다. 귀속 미확인 기록은 관리 선생님에게 요청한다.
+- 일반 선생님도 본인 기록의 `BookId`, `StudiedDay`, `IsSpecial`, `LessonContent`, `Description`을 수정하고 개별 기록을 삭제할 수 있다. 학생·수업·진행 선생님·정산 필드 변경은 허용하지 않는다.
+- 일반 선생님은 기존/변경 대상 월 정산이 마감되었거나 `TeacherPayrollLines`에 포함된 기록을 수정·삭제할 수 없다. 변경과 감사 로그는 하나의 트랜잭션으로 처리하며, 감사 실패 시 변경도 롤백한다. 관리자·부관리자·관리 선생님의 기존 권한은 유지한다.
+- 상세 API의 `CanEdit`, `CanDelete`, `MutationBlockedReason`을 UI에서 사용하며 서버는 저장 시 권한을 다시 검증한다. 학생이 반을 옮겨도 본인이 진행한 기록은 검색할 수 있다.
+- 프런트엔드 JS는 현재 `static/js/app.js`로 분리되어 있다. 회귀 검증: `.venv\Scripts\python.exe -m unittest discover -s tests -p test_*.py` (도구 환경의 `PYTHONHOME`이 충돌하면 해당 환경변수를 제거 후 실행).
+
+## 학습 기록 선택 삭제
+- 검색 응답에 행별 `CanDelete`/`MutationBlockedReason`을 포함한다. 현재 페이지의 삭제 가능한 기록만 선택할 수 있으며, 검색·정렬·페이지 이동·목록 재로딩 시 선택을 초기화한다.
+- `POST /api/user/studylogs/bulk-delete`는 `{log_ids: [row_id, ...], confirmation: "선택한 기록 삭제"}`를 받는다. 원본 `Id`가 아닌 검색 결과 `row_id`를 사용한다. 1~50개의 서로 다른 양의 정수만 허용하며 서버도 확인 문자열을 정확히 검증한다.
+- 삭제 확인 모달은 대상 학생·도서·날짜·ID와 개수를 표시한다. 확인 문자열을 직접 입력하기 전에는 최종 삭제 버튼을 활성화하지 않는다.
+- 서버에서 모든 대상의 존재와 기존 변경 권한을 다시 검증한다. 하나라도 실패하면 전체 삭제를 취소한다. 모든 삭제 및 개별 감사 이력을 한 트랜잭션으로 처리하므로 부분 삭제가 발생하지 않는다. 일반 선생님의 본인 기록·정산 마감 제한과 staff의 기존 권한은 동일하게 유지한다.

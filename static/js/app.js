@@ -1675,6 +1675,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStudyLogSearchPrev = document.getElementById('btn-studylog-search-prev');
     const btnStudyLogSearchNext = document.getElementById('btn-studylog-search-next');
     const studylogSearchCurrentPageSpan = document.getElementById('studylog-search-current-page');
+    const studylogSelectAll = document.getElementById('studylog-select-all');
+    const studylogBulkSelectedCount = document.getElementById('studylog-bulk-selected-count');
+    const btnOpenStudylogBulkDelete = document.getElementById('btn-open-studylog-bulk-delete');
+    const modalStudylogBulkDelete = document.getElementById('modal-studylog-bulk-delete');
+    const inputStudylogBulkDeleteConfirm = document.getElementById('input-studylog-bulk-delete-confirm');
+    const btnSubmitStudylogBulkDelete = document.getElementById('btn-submit-studylog-bulk-delete');
+    const studylogBulkDeleteError = document.getElementById('studylog-bulk-delete-error');
+    const studylogBulkDeleteCount = document.getElementById('studylog-bulk-delete-count');
+    const studylogBulkDeleteList = document.getElementById('studylog-bulk-delete-list');
 
     // StudyLog Detail Modal Elements
     const modalStudyLogDetail = document.getElementById('modal-studylog-detail');
@@ -1840,6 +1849,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // StudyLog bulk selection and delete modal
+        if (e.target.closest('#btn-open-studylog-bulk-delete')) {
+            openStudylogBulkDeleteModal();
+            return;
+        }
+        if (e.target.closest('#btn-close-studylog-bulk-delete, #btn-cancel-studylog-bulk-delete')) {
+            closeStudylogBulkDeleteModal();
+            return;
+        }
+
         // Close StudyLog Detail Modal
         if (e.target.closest('#btn-close-studylog-detail')) {
             const modal = document.getElementById('modal-studylog-detail');
@@ -1865,7 +1884,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Realtime Search Input Events
     document.addEventListener('input', (e) => {
-        if (e.target.id === 'input-picker-student-q') {
+        if (e.target.id === 'input-studylog-bulk-delete-confirm') {
+            updateStudylogBulkDeleteSubmitState();
+        } else if (e.target.id === 'input-picker-student-q') {
             loadPickerStudents();
         } else if (e.target.id === 'input-picker-book-q') {
             loadPickerBooks();
@@ -2372,13 +2393,115 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let studylogSortBy = 'row_id';
     let studylogSortDirection = 'desc';
+    let studylogBulkSelected = new Map();
+    let studylogBulkDeleteSnapshot = [];
+    let isStudylogBulkDeleting = false;
+    let studylogSearchTotalCountValue = 0;
+    let studylogSearchRequestId = 0;
+
+    function clearStudylogBulkSelection() {
+        studylogBulkSelected.clear();
+        document.querySelectorAll('.studylog-row-select').forEach(input => { input.checked = false; });
+        updateStudylogBulkSelectionUI();
+    }
+
+    function updateStudylogBulkSelectionUI() {
+        const selectedCount = studylogBulkSelected.size;
+        if (studylogBulkSelectedCount) studylogBulkSelectedCount.textContent = `현재 페이지에서 ${selectedCount}건 선택됨`;
+        if (btnOpenStudylogBulkDelete) btnOpenStudylogBulkDelete.disabled = selectedCount < 1 || selectedCount > 50;
+        const selectable = Array.from(document.querySelectorAll('.studylog-row-select:not(:disabled)'));
+        const selectedOnPage = selectable.filter(input => input.checked).length;
+        if (studylogSelectAll) {
+            studylogSelectAll.disabled = selectable.length === 0;
+            studylogSelectAll.checked = selectable.length > 0 && selectedOnPage === selectable.length;
+            studylogSelectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < selectable.length;
+        }
+    }
+
+    function syncStudylogRowSelection(input) {
+        const logId = Number(input.value);
+        if (!Number.isInteger(logId) || logId <= 0) return;
+        if (input.checked) {
+            studylogBulkSelected.set(logId, { id: logId, studentName: input.dataset.studentName || '학생 미상', bookTitle: input.dataset.bookTitle || '도서 미상', studiedDay: input.dataset.studiedDay || '일자 미상' });
+        } else {
+            studylogBulkSelected.delete(logId);
+        }
+        updateStudylogBulkSelectionUI();
+    }
+
+    function resetStudylogBulkDeleteModal() {
+        studylogBulkDeleteSnapshot = [];
+        inputStudylogBulkDeleteConfirm.value = '';
+        inputStudylogBulkDeleteConfirm.disabled = false;
+        studylogBulkDeleteError.textContent = '';
+        studylogBulkDeleteError.classList.add('hidden');
+        btnSubmitStudylogBulkDelete.disabled = true;
+    }
+
+    function openStudylogBulkDeleteModal() {
+        if (isStudylogBulkDeleting || studylogBulkSelected.size < 1 || studylogBulkSelected.size > 50) return;
+        resetStudylogBulkDeleteModal();
+        studylogBulkDeleteSnapshot = Array.from(studylogBulkSelected.values());
+        studylogBulkDeleteCount.textContent = `${studylogBulkDeleteSnapshot.length}건을 삭제합니다.`;
+        studylogBulkDeleteList.innerHTML = studylogBulkDeleteSnapshot.map(item => `<div class="studylog-bulk-delete-item"><strong>#${item.id}</strong><span>${escapeHtml(item.studentName)}</span><span>${escapeHtml(item.bookTitle)}</span><time>${escapeHtml(item.studiedDay)}</time></div>`).join('');
+        modalStudylogBulkDelete.classList.remove('hidden');
+        inputStudylogBulkDeleteConfirm.focus();
+    }
+
+    function closeStudylogBulkDeleteModal() {
+        if (isStudylogBulkDeleting) return;
+        modalStudylogBulkDelete.classList.add('hidden');
+        resetStudylogBulkDeleteModal();
+    }
+
+    function updateStudylogBulkDeleteSubmitState() {
+        btnSubmitStudylogBulkDelete.disabled = isStudylogBulkDeleting || studylogBulkDeleteSnapshot.length < 1 || inputStudylogBulkDeleteConfirm.value !== '선택한 기록 삭제';
+    }
+
+    btnSubmitStudylogBulkDelete?.addEventListener('click', async () => {
+        if (isStudylogBulkDeleting || inputStudylogBulkDeleteConfirm.value !== '선택한 기록 삭제') return;
+        const logIds = studylogBulkDeleteSnapshot.map(item => item.id).filter(id => Number.isInteger(id) && id > 0);
+        if (logIds.length < 1 || logIds.length > 50 || logIds.length !== studylogBulkDeleteSnapshot.length) return;
+        isStudylogBulkDeleting = true;
+        inputStudylogBulkDeleteConfirm.disabled = true;
+        btnSubmitStudylogBulkDelete.disabled = true;
+        try {
+            await apiFetch('/api/user/studylogs/bulk-delete', { method: 'POST', body: JSON.stringify({ log_ids: logIds, confirmation: '선택한 기록 삭제' }) });
+            modalStudylogBulkDelete.classList.add('hidden');
+            resetStudylogBulkDeleteModal();
+            const remainingCount = Math.max(0, studylogSearchTotalCountValue - logIds.length);
+            const lastValidPage = Math.max(1, Math.ceil(remainingCount / studylogSearchLimit));
+            if (studylogSearchPage > lastValidPage) studylogSearchPage = lastValidPage;
+            clearStudylogBulkSelection();
+            createActionFeedback().show(`${logIds.length}건의 학습 기록을 삭제했습니다.`, 'success');
+            await Promise.all([loadStudyLogSearchResults(), loadRecentStudyLogs()]);
+        } catch (err) {
+            studylogBulkDeleteError.textContent = `삭제 요청을 완료하지 못했습니다. ${err.message} 통신 오류인 경우 이미 처리되었을 수 있으므로, 취소 후 목록을 새로고침하여 확인하고 다시 선택해 주세요.`;
+            studylogBulkDeleteSnapshot = [];
+            clearStudylogBulkSelection();
+            studylogBulkDeleteError.classList.remove('hidden');
+            inputStudylogBulkDeleteConfirm.value = '';
+            inputStudylogBulkDeleteConfirm.disabled = false;
+            updateStudylogBulkDeleteSubmitState();
+        } finally {
+            isStudylogBulkDeleting = false;
+            if (!modalStudylogBulkDelete.classList.contains('hidden')) {
+                inputStudylogBulkDeleteConfirm.disabled = false;
+                updateStudylogBulkDeleteSubmitState();
+            }
+        }
+    });
 
     // Load StudyLog Search Results Grid
     async function loadStudyLogSearchResults(directSearch = false) {
         const feedback = createActionFeedback();
         if (!token) return;
+        const requestId = ++studylogSearchRequestId;
+        clearStudylogBulkSelection();
+        if (!isStudylogBulkDeleting) closeStudylogBulkDeleteModal();
         try {
-            studylogCardsGrid.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div></td></tr>';
+            studylogCardsGrid.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div></td></tr>';
+            updateStudylogBulkSelectionUI();
 
             const q = studylogSearchQ.value.trim();
             const date = studylogFilterDate.value.trim();
@@ -2393,7 +2516,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (date) queryParams.append('studied_day', date);
 
             const data = await apiFetch(`/api/user/studylogs/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (requestId !== studylogSearchRequestId) return;
             studylogSearchTotalPages = data.total_pages;
+            studylogSearchTotalCountValue = data.total_count;
+            if (studylogSearchPage > studylogSearchTotalPages) {
+                studylogSearchPage = Math.max(1, studylogSearchTotalPages);
+                return loadStudyLogSearchResults(directSearch);
+            }
 
             studylogSearchTotalCount.textContent = `총 ${data.total_count} 건의 학습 기록`;
             studylogSearchPaginationInfo.textContent = `${studylogSearchPage} / ${studylogSearchTotalPages} 페이지 (총 ${data.total_count}건)`;
@@ -2403,8 +2532,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudyLogCards(data.studylogs);
         } catch (err) {
+            if (requestId !== studylogSearchRequestId) return;
             feedback.show(err.message, 'error');
-            studylogCardsGrid.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p class="alert alert-danger">${escapeHtml(err.message)}</p></div></td></tr>`;
+            studylogCardsGrid.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p class="alert alert-danger">${escapeHtml(err.message)}</p></div></td></tr>`;
+            updateStudylogBulkSelectionUI();
         }
     }
 
@@ -2569,7 +2700,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStudyLogCards(studylogs) {
         if (studylogs.length === 0) {
-            studylogCardsGrid.innerHTML = '<tr><td colspan="9" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div></td></tr>';
+            studylogCardsGrid.innerHTML = '<tr><td colspan="10" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-book-bookmark fa-2x"></i><p>검색 조건에 일치하는 학습 기록이 없습니다.</p></div></td></tr>';
+            updateStudylogBulkSelectionUI();
             return;
         }
 
@@ -2582,18 +2714,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const dc = escapeHtml((l.Description || '').trim() || '-');
             const logId = l.row_id || l.Id;
             const isSpecial = !!(l.IsSpecial == 1);
+            const canDelete = Boolean(l.CanDelete);
+            const blockedReason = escapeHtml(l.MutationBlockedReason || '이 학습 기록은 삭제할 수 없습니다.');
 
             html += `
                 <tr data-log-id="${logId}">
+                    <td class="studylog-select-column">${canDelete
+                        ? `<input type="checkbox" class="studylog-row-select" value="${logId}" data-student-name="${sName}" data-book-title="${bTitle}" data-studied-day="${day}" aria-label="#${logId} 학습 기록 선택">`
+                        : `<input type="checkbox" disabled aria-label="#${logId} 학습 기록 선택 불가: ${blockedReason}" title="${blockedReason}">`}</td>
                     <td><strong>#${logId}</strong></td>
                     <td><span class="badge badge-warning"><i class="fa-solid fa-calendar-check"></i> ${day}</span></td>
                     <td class="fw-semibold">${sName}</td>
                     <td>${escapeHtml(l.TeacherName || '미지정')}</td>
                     <td class="text-primary text-truncate-cell" title="${bTitle}">${bTitle}</td>
                     <td class="text-center">
-                        <button type="button" class="btn-toggle-status ${isSpecial ? 'is-special' : 'is-normal'} btn-toggle-studylog-special" data-log-id="${logId}" data-current="${isSpecial ? 1 : 0}">
-                            ${isSpecial ? '<i class="fa-solid fa-star"></i> 특강' : '<i class="fa-regular fa-star"></i> 일반'}
-                        </button>
+                        ${isStaff()
+                            ? `<button type="button" class="btn-toggle-status ${isSpecial ? 'is-special' : 'is-normal'} btn-toggle-studylog-special" data-log-id="${logId}" data-current="${isSpecial ? 1 : 0}">
+                                ${isSpecial ? '<i class="fa-solid fa-star"></i> 특강' : '<i class="fa-regular fa-star"></i> 일반'}
+                            </button>`
+                            : `<span class="btn-toggle-status ${isSpecial ? 'is-special' : 'is-normal'}" aria-label="특강 여부 표시">
+                                ${isSpecial ? '<i class="fa-solid fa-star"></i> 특강' : '<i class="fa-regular fa-star"></i> 일반'}
+                            </span>`}
+
                     </td>
                     <td class="text-truncate-cell" title="${lc}">${lc}</td>
                     <td class="text-muted text-truncate-cell" title="${dc}">${dc}</td>
@@ -2608,6 +2750,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         studylogCardsGrid.innerHTML = html;
 
+        document.querySelectorAll('.studylog-row-select').forEach(input => {
+            input.addEventListener('change', () => syncStudylogRowSelection(input));
+        });
+        studylogSelectAll.onchange = () => {
+            const checked = studylogSelectAll.checked;
+            document.querySelectorAll('.studylog-row-select:not(:disabled)').forEach(input => {
+                input.checked = checked;
+                syncStudylogRowSelection(input);
+            });
+        };
+        updateStudylogBulkSelectionUI();
+
         document.querySelectorAll('.btn-open-studylog-detail').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2616,15 +2770,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        document.querySelectorAll('.btn-toggle-studylog-special').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const logId = btn.getAttribute('data-log-id');
-                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
-                const newVal = currentVal === 1 ? 0 : 1;
-                await toggleStudyLogSpecial(logId, newVal, btn);
+        if (isStaff()) {
+            document.querySelectorAll('.btn-toggle-studylog-special').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const logId = btn.getAttribute('data-log-id');
+                    const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
+                    await toggleStudyLogSpecial(logId, currentVal === 1 ? 0 : 1, btn);
+                });
             });
-        });
+        }
     }
 
     // Open StudyLog Detail Modal
@@ -2638,21 +2793,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await fetchDetail(`/api/user/studylogs/${logId}`);
             const l = data.studylog;
 
-            if (isStaff()) {
+            const canEdit = Boolean(l.CanEdit);
+            const canDelete = Boolean(l.CanDelete);
+            const mutationBlockedReason = escapeHtml(l.MutationBlockedReason || '이 학습 기록은 현재 수정하거나 삭제할 수 없습니다.');
+            if (canEdit || canDelete) {
                 modalStudyLogDetailActions.innerHTML = `
-                    <button id="btn-modal-edit-studylog" class="btn btn-sm btn-primary">
-                        <i class="fa-solid fa-pen-to-square"></i> 수정
-                    </button>
-                    <button id="btn-modal-delete-studylog" class="btn btn-sm btn-danger">
-                        <i class="fa-solid fa-trash-can"></i> 학습 기록 삭제
-                    </button>
+                    ${canEdit ? '<button id="btn-modal-edit-studylog" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>' : ''}
+                    ${canDelete ? '<button id="btn-modal-delete-studylog" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash-can"></i> 학습 기록 삭제</button>' : ''}
                 `;
-                document.getElementById('btn-modal-edit-studylog').addEventListener('click', () => {
-                    renderStudyLogDetailEditForm(l, logId);
-                });
-                document.getElementById('btn-modal-delete-studylog').addEventListener('click', () => {
-                    openAdminStudyLogDeleteSafetyModal(l, logId);
-                });
+                document.getElementById('btn-modal-edit-studylog')?.addEventListener('click', () => renderStudyLogDetailEditForm(l, logId));
+                document.getElementById('btn-modal-delete-studylog')?.addEventListener('click', () => openAdminStudyLogDeleteSafetyModal(l, logId));
             }
 
             const sName = escapeHtml(l.StudentName || '학생 미상');
@@ -2663,7 +2813,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const bPublisher = escapeHtml(l.BookPublisher || '출판사 미상');
             const bSubject = escapeHtml(l.BookSubject || '분야 미상');
             const studiedDay = String(l.StudiedDay || '').trim().split('T')[0].split(' ')[0];
-            const studiedDayHtml = isStaff()
+            const studiedDayHtml = canEdit
                 ? `<div class="studylog-date-editor">
                     <label for="input-studylog-studied-day"><i class="fa-solid fa-calendar-check"></i> 학습 수행 일자</label>
                     <div class="studylog-date-editor-controls">
@@ -2693,7 +2843,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
+            const mutationBlockedHtml = !canEdit || !canDelete
+                ? `<div class="alert alert-warning"><i class="fa-solid fa-circle-info"></i> ${mutationBlockedReason}</div>`
+                : '';
+
             let html = `
+                ${mutationBlockedHtml}
                 <div class="detail-header-block">
                     <div class="detail-title"><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${sName} (${sSex})${sRef} 학생의 학습 기록 ${l.IsSpecial ? '<span class="badge" style="margin-left: 0.5rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : ''}</div>
                     <div class="detail-meta-row">
@@ -2877,26 +3032,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function renderStudyLogDetailEditForm(log, logId) {
+        const isTeacher = currentUser?.role === 'teacher';
         const studiedDay = String(log.StudiedDay || '').trim().split('T')[0].split(' ')[0];
+        const currentBookId = String(log.BookId || log.book_id || '');
+        let selectedBookId = currentBookId;
+        let bookSearchTimer = null;
         modalStudyLogDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 학습 기록 수정';
         modalStudyLogDetailActions.innerHTML = '';
         modalStudyLogDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 수정 항목을 불러오는 중...</div>';
+
         let classes = [];
         let teachers = [];
         let categories = [];
-        try {
-            const [classData, teacherData, categoryData] = await Promise.all([
-                apiFetch('/api/user/classes?limit=100'),
-                apiFetch('/api/user/teachers-options'),
-                apiFetch('/api/user/payroll/categories')
-            ]);
-            classes = classData.classes || [];
-            teachers = teacherData.teachers || [];
-            categories = categoryData.categories || [];
-        } catch (err) {
-            modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">수정 항목 로딩 실패: ${escapeHtml(err.message)}</div>`;
-            return;
+        if (!isTeacher) {
+            try {
+                const [classData, teacherData, categoryData] = await Promise.all([
+                    apiFetch('/api/user/classes?limit=100'),
+                    apiFetch('/api/user/teachers-options'),
+                    apiFetch('/api/user/payroll/categories')
+                ]);
+                classes = classData.classes || [];
+                teachers = teacherData.teachers || [];
+                categories = categoryData.categories || [];
+            } catch (err) {
+                modalStudyLogDetailBody.innerHTML = `<div class="alert alert-danger">수정 항목 로딩 실패: ${escapeHtml(err.message)}</div>`;
+                return;
+            }
         }
+
         const classOptions = '<option value="">수업 없음</option>' + classes.map(cls =>
             `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
         ).join('');
@@ -2906,21 +3069,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const categoryOptions = '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
             `<option value="${category.Id}" ${Number(log.PayrollCategoryId) === Number(category.Id) ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
         ).join('');
+        const assignmentFields = isTeacher ? '' : `
+            <div class="form-group"><label for="edit-studylog-class">연결 수업</label><select id="edit-studylog-class" class="form-control">${classOptions}</select></div>
+            <div class="form-group"><label for="edit-studylog-actual-teacher">실제 진행 선생님</label><select id="edit-studylog-actual-teacher" class="form-control">${teacherOptions}</select></div>
+            <div class="form-group"><label for="edit-studylog-payroll-category">정산 카테고리</label><select id="edit-studylog-payroll-category" class="form-control">${categoryOptions}</select><div class="text-muted">수업이 없을 때 실제 진행 선생님과 함께 지정하면 정산에 포함됩니다.</div></div>
+        `;
+        const teacherNotice = isTeacher ? '<div class="alert alert-info"><i class="fa-solid fa-circle-info"></i> 학생, 수업, 실제 진행 선생님 변경은 관리자에게 문의해 주세요.</div>' : '';
+
         modalStudyLogDetailBody.innerHTML = `
             <form id="form-edit-studylog-detail" class="modal-edit-form">
                 <div class="detail-header-block">
                     <div class="detail-title">${escapeHtml(log.StudentName || '학생 미상')} · ${escapeHtml(log.BookTitle || '도서 미상')}</div>
                     <div class="detail-meta-row"><span><i class="fa-solid fa-hashtag"></i> Log ID: <strong>#${log.row_id || log.Id}</strong></span></div>
                 </div>
+                ${teacherNotice}
                 <div class="form-section">
                     <h4 class="section-title"><i class="fa-solid fa-calendar-check"></i> 수업 기본 정보</h4>
                     <div class="form-grid">
                         <div class="form-group"><label for="edit-studylog-studied-day">학습 수행 일자 <span class="required">*</span></label><input id="edit-studylog-studied-day" class="form-control" type="date" value="${escapeHtml(studiedDay)}" required></div>
                         <div class="form-group"><label>수업 구분</label><label class="checkbox-pill"><input id="edit-studylog-is-special" type="checkbox" ${log.IsSpecial ? 'checked' : ''}><span><i class="fa-solid fa-star"></i> 특강 수업</span></label></div>
-                        <div class="form-group"><label for="edit-studylog-class">연결 수업</label><select id="edit-studylog-class" class="form-control">${classOptions}</select></div>
-                        <div class="form-group"><label for="edit-studylog-actual-teacher">실제 진행 선생님</label><select id="edit-studylog-actual-teacher" class="form-control">${teacherOptions}</select></div>
-                        <div class="form-group"><label for="edit-studylog-payroll-category">정산 카테고리</label><select id="edit-studylog-payroll-category" class="form-control">${categoryOptions}</select><div class="text-muted">수업이 없을 때 실제 진행 선생님과 함께 지정하면 정산에 포함됩니다.</div></div>
+                        ${assignmentFields}
                     </div>
+                </div>
+                <div class="form-section">
+                    <h4 class="section-title"><i class="fa-solid fa-book"></i> 학습 도서</h4>
+                    <div class="form-group"><label for="edit-studylog-book-search">도서 검색</label><input id="edit-studylog-book-search" class="form-control" type="search" placeholder="제목, 저자, 출판사로 검색"></div>
+                    <div id="edit-studylog-selected-book" class="picker-item-row selected"><div class="item-main"><div class="item-title"><i class="fa-solid fa-book"></i> ${escapeHtml(log.BookTitle || '도서 미상')}</div><div class="item-sub">현재 선택 도서 ID: #${escapeHtml(currentBookId || '-')}</div></div></div>
+                    <div id="edit-studylog-book-results"></div>
                 </div>
                 <div class="form-section">
                     <h4 class="section-title"><i class="fa-solid fa-book-open"></i> 수업 내용</h4>
@@ -2930,46 +3105,85 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h4 class="section-title"><i class="fa-solid fa-note-sticky"></i> 수업 내용 메모</h4>
                     <div class="form-group"><textarea id="edit-studylog-description" class="form-control" rows="5" placeholder="학생별 메모나 전달 사항을 입력하세요.">${escapeHtml(log.Description || '')}</textarea></div>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" id="btn-cancel-edit-studylog" class="btn btn-outline">취소</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 변경사항 저장</button>
-                </div>
+                <div class="modal-actions"><button type="button" id="btn-cancel-edit-studylog" class="btn btn-outline">취소</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 변경사항 저장</button></div>
             </form>
         `;
+
+        const selectedBookEl = document.getElementById('edit-studylog-selected-book');
+        const bookResultsEl = document.getElementById('edit-studylog-book-results');
+        const renderSelectedBook = (book) => {
+            selectedBookEl.innerHTML = `<div class="item-main"><div class="item-title"><i class="fa-solid fa-book"></i> ${escapeHtml(book.Title || book.title || '제목 없음')}</div><div class="item-sub">선택 도서 ID: #${escapeHtml(String(book.row_id || book.Id || book.id || ''))}</div></div>`;
+        };
+        const searchBooks = async () => {
+            const query = document.getElementById('edit-studylog-book-search')?.value.trim() || '';
+            bookResultsEl.innerHTML = '<div class="loading-spinner">도서 검색 중...</div>';
+            try {
+                const data = await apiFetch(`/api/user/picker/books?q=${encodeURIComponent(query)}`);
+                if ((document.getElementById('edit-studylog-book-search')?.value.trim() || '') !== query) return;
+                const books = data.books || [];
+                bookResultsEl.innerHTML = books.length ? books.map(book => {
+                    const bookId = book.row_id || book.Id;
+                    return `<div class="picker-item-row"><div class="item-main"><div class="item-title">${escapeHtml(book.Title || '제목 없음')}</div><div class="item-sub">${escapeHtml(book.Author || '저자 미상')} · ${escapeHtml(book.Publisher || '출판사 미상')} · ID: #${bookId}</div></div><button type="button" class="btn btn-sm btn-success btn-select-edit-studylog-book" data-book-id="${bookId}">선택</button></div>`;
+                }).join('') : '<div class="empty-state-sm">검색 조건에 맞는 도서가 없습니다.</div>';
+                bookResultsEl.querySelectorAll('.btn-select-edit-studylog-book').forEach(button => button.addEventListener('click', () => {
+                    const book = books.find(item => String(item.row_id || item.Id) === button.dataset.bookId);
+                    if (!book) return;
+                    selectedBookId = String(book.row_id || book.Id);
+                    renderSelectedBook(book);
+                    bookResultsEl.innerHTML = '';
+                }));
+            } catch (err) {
+                bookResultsEl.innerHTML = `<div class="alert alert-danger">도서 검색 실패: ${escapeHtml(err.message)}</div>`;
+            }
+        };
+        document.getElementById('edit-studylog-book-search').addEventListener('input', () => {
+            clearTimeout(bookSearchTimer);
+            bookSearchTimer = setTimeout(searchBooks, 250);
+        });
+
         const editClassSelect = document.getElementById('edit-studylog-class');
         const editTeacherSelect = document.getElementById('edit-studylog-actual-teacher');
         const editCategorySelect = document.getElementById('edit-studylog-payroll-category');
-        const updateEditAssignmentOptions = (applyAssignedTeacher = true) => {
-            const hasClass = Boolean(editClassSelect.value);
-            editCategorySelect.disabled = hasClass;
-            if (hasClass) {
-                editCategorySelect.value = '';
-                const assignedTeacher = editClassSelect.selectedOptions[0]?.dataset.teacher || '';
-                if (applyAssignedTeacher && assignedTeacher) editTeacherSelect.value = assignedTeacher;
-            }
-        };
-        editClassSelect.addEventListener('change', () => updateEditAssignmentOptions(true));
-        updateEditAssignmentOptions(false);
+        if (!isTeacher) {
+            const updateEditAssignmentOptions = (applyAssignedTeacher = true) => {
+                const hasClass = Boolean(editClassSelect.value);
+                editCategorySelect.disabled = hasClass;
+                if (hasClass) {
+                    editCategorySelect.value = '';
+                    const assignedTeacher = editClassSelect.selectedOptions[0]?.dataset.teacher || '';
+                    if (applyAssignedTeacher && assignedTeacher) editTeacherSelect.value = assignedTeacher;
+                }
+            };
+            editClassSelect.addEventListener('change', () => updateEditAssignmentOptions(true));
+            updateEditAssignmentOptions(false);
+        }
         document.getElementById('btn-cancel-edit-studylog').addEventListener('click', () => openStudyLogDetailModal(logId));
         document.getElementById('form-edit-studylog-detail').addEventListener('submit', async event => {
             const feedback = createActionFeedback(event);
             event.preventDefault();
-            const classId = parseInt(editClassSelect.value || '0') || null;
-            const actualTeacherUsername = editTeacherSelect.value || '';
-            const payrollCategoryId = parseInt(editCategorySelect.value || '0') || null;
-            if (!classId && payrollCategoryId && !actualTeacherUsername) {
-                feedback.show('정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.', 'warning');
+            if (!selectedBookId) {
+                feedback.show('학습 도서를 선택해 주세요.', 'warning');
                 return;
             }
             const data = {
+                BookId: Number(selectedBookId),
                 StudiedDay: document.getElementById('edit-studylog-studied-day').value,
                 LessonContent: document.getElementById('edit-studylog-lesson-content').value.trim(),
                 Description: document.getElementById('edit-studylog-description').value.trim(),
-                IsSpecial: document.getElementById('edit-studylog-is-special').checked ? 1 : 0,
-                ClassId: classId,
-                ActualTeacherUsername: actualTeacherUsername,
-                PayrollCategoryId: classId ? null : payrollCategoryId
+                IsSpecial: document.getElementById('edit-studylog-is-special').checked ? 1 : 0
             };
+            if (!isTeacher) {
+                const classId = parseInt(editClassSelect.value || '0') || null;
+                const actualTeacherUsername = editTeacherSelect.value || '';
+                const payrollCategoryId = parseInt(editCategorySelect.value || '0') || null;
+                if (!classId && payrollCategoryId && !actualTeacherUsername) {
+                    feedback.show('정산 카테고리를 지정하려면 실제 진행 선생님을 선택해 주세요.', 'warning');
+                    return;
+                }
+                data.ClassId = classId;
+                data.ActualTeacherUsername = actualTeacherUsername;
+                data.PayrollCategoryId = classId ? null : payrollCategoryId;
+            }
             try {
                 await apiFetch(`/api/user/studylogs/${log.row_id || log.Id}`, { method: 'PUT', body: JSON.stringify({ data }) });
                 feedback.show('학습 기록을 수정했습니다.', 'success');
@@ -2983,26 +3197,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Admin StudyLog Delete Safety Confirmation Handler
     function openAdminStudyLogDeleteSafetyModal(l, logId) {
         modalStudyLogDeleteConfirm.classList.remove('hidden');
-
+        let isDeleting = false;
+        btnSubmitStudyLogDeleteConfirm.disabled = false;
         btnSubmitStudyLogDeleteConfirm.onclick = async () => {
+            if (isDeleting) return;
+            isDeleting = true;
+            btnSubmitStudyLogDeleteConfirm.disabled = true;
             const feedback = createActionFeedback();
             const pkVal = l.row_id || l.Id;
-
             try {
-                await apiFetch(`/api/user/studylogs/${pkVal}`, {
-                    method: 'DELETE'
-                });
-
+                await apiFetch(`/api/user/studylogs/${pkVal}`, { method: 'DELETE' });
                 modalStudyLogDeleteConfirm.classList.add('hidden');
                 modalStudyLogDetail.classList.add('hidden');
-
-                feedback.show(`학습 기록 (ID: #${pkVal})이 성공적으로 삭제되었습니다.`, 'success');
-
+                feedback.show(`학습 기록 (ID: #${pkVal})을 삭제했습니다.`, 'success');
                 await loadStudyLogSearchResults();
                 await loadRecentStudyLogs();
                 if (currentTable === 'StudyLogs') await loadTableData();
             } catch (err) {
                 feedback.show(`삭제 실패: ${err.message}`, 'error');
+                isDeleting = false;
+                btnSubmitStudyLogDeleteConfirm.disabled = false;
             }
         };
     }
@@ -8199,7 +8413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = header.closest('table');
         const columnIndex = Array.from(header.parentElement.children).indexOf(header);
         if (!table || columnIndex < 0 || header.querySelector('input, button, select, a')) return false;
-        if (table.querySelector('#studylog-cards-grid')) return columnIndex < 8;
+        if (table.querySelector('#studylog-cards-grid')) return columnIndex > 0 && columnIndex < 9;
         return !Array.from(table.tBodies).some(body =>
             Array.from(body.rows).some(row => row.cells[columnIndex]?.querySelector('input, button, select, a'))
         );
@@ -8260,7 +8474,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (table.querySelector('#studylog-cards-grid')) {
-            studylogSortBy = ['row_id', 'StudiedDay', 'StudentName', 'TeacherName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'][columnIndex];
+            const studylogSortColumns = [null, 'row_id', 'StudiedDay', 'StudentName', 'TeacherName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'];
+            if (!studylogSortColumns[columnIndex]) return;
+            studylogSortBy = studylogSortColumns[columnIndex];
             studylogSortDirection = direction;
             studylogSearchPage = 1;
             loadStudyLogSearchResults();
