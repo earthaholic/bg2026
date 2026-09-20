@@ -4645,3 +4645,48 @@ button.class-student-badge { cursor: pointer; }
 .studylog-transfer-student-results { max-height: 180px; overflow-y: auto; margin-top: 0.5rem; }
 .studylog-transfer-student-results .btn { display: block; width: 100%; text-align: left; margin-bottom: 0.4rem; white-space: normal; }
 .studylog-transfer-target { padding: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--primary); border-radius: var(--radius-md); font-weight: 700; }
+
+/* 수업료 결제 이력: 색상과 문구를 함께 사용하는 잔여 차시 안내 */
+#view-tuition-payment-search .tuition-warning-guide {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+#view-tuition-payment-search .tuition-lesson-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
+#view-tuition-payment-search .tuition-progress-note {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+#view-tuition-payment-search .tuition-remaining-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+#view-tuition-payment-search .tuition-remaining-badge.is-normal {
+    color: var(--text-muted);
+    border-color: var(--border-color);
+}
+#view-tuition-payment-search .tuition-remaining-badge.is-low {
+    color: #92400e;
+    background: #fef3c7;
+    border-color: #f59e0b;
+}
+#view-tuition-payment-search .tuition-remaining-badge.is-exhausted {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #ef4444;
+}

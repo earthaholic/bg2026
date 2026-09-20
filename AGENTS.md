@@ -132,3 +132,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 학생 검색 & 상세 조회의 검색 목록에서도 `학생 이름` 바로 옆에 동일한 표시등을 제공한다. `/api/user/students/search`는 기존 필터·페이지·선생님 조회 범위를 유지한 채 현재 페이지 학생의 `RecordCoverage`를 추가한다. `studentRecordCoverageDisplay()`를 수업 화면과 공유하고 이름 클릭은 기존 학생 상세 열기를 유지한다. 다른 페이지의 학생 배지나 학생 상세 모달까지 확대하지 않는다.
 - 학생 검색의 실제 진행 선생님/수업 내용 상태 필터는 각각 `teacher_record_state`/`content_record_state`(`empty`, `none`, `low`, `partial`, `complete`)를 전송하며, 두 조건은 AND로 결합한다. 필터는 전체 건수·페이지 계산 전에 적용한다. `student_record_coverage_filter()`와 표시등 집계는 동일한 입력 건수 SQL·공백 기준을 공유한다. 상태 변경 시 첫 페이지로 이동하고 초기화 시 두 상태를 함께 해제하며, 늦은 이전 검색 응답은 무시한다.
 - 회귀 검증: `tests/test_student_record_coverage.py`, `tests/test_student_record_coverage_ui.js`, `tests/test_student_record_filters_ui.js`.
+
+
+## 수업료 결제 이력 잔여 차시 경고
+- 결제 이력 조회는 `GET /api/user/tuition-payments?include_progress=true`로 학생별 현재 결제의 `TuitionProgress`와 행별 `ProgressState`(`current`/`previous`/`upcoming`/`unknown`)를 받는다. 기본 조회는 집계를 생략한다.
+- 현재 결제는 오늘 이하의 최신 시작일, 동일 시작일이면 최신 rowid 기준이다. 이름·반 필터로 현재 결제가 제외되어도 과거 건을 현재로 간주하지 않는다. 기존 `_get_tuition_progress()` 계산을 재사용하며 결제+서비스 합계에서 일반 수업을 차감한다. 특강·휴일·휴강 제외와 같은 날짜·내용의 복수 도서 중복 제거 기준은 유지한다.
+- `결제/서비스` 셀에서 1~4회는 주황색 `결제 확인 필요`, 0회 이하는 빨간색 `차시 소진`과 초과 사용 횟수를 표시한다. 5회 이상은 일반 표시, 과거·미래 결제는 `이전 결제`·`시작 예정`으로 구분한다. 조회마다 학생별 한 번만 집계하며 늦은 이전 검색 응답은 무시한다.
+- 회귀 검증: `tests/test_tuition_payment_progress.py`, `tests/test_tuition_payment_progress_ui.js`.

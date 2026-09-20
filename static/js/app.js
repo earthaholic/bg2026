@@ -7902,19 +7902,41 @@ document.addEventListener('DOMContentLoaded', () => {
         try { const result = await apiFetch('/api/user/tuition-payments', { method: 'POST', body: JSON.stringify(payload) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadTuitionPayments(); await showTuitionProgress(); } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
     });
 
+    // 최신 적용 결제에만 잔여 차시를 표시해 과거 결제의 중복 경고를 방지한다.
+    function tuitionPaymentProgressDisplay(payment) {
+        const progress = payment.TuitionProgress;
+        if (payment.ProgressState !== 'current' || !progress ||
+            !Number.isFinite(progress.remaining_lessons)) {
+            const label = payment.ProgressState === 'previous' ? '이전 결제' :
+                payment.ProgressState === 'upcoming' ? '시작 예정' : '잔여 차시 확인 불가';
+            return `<span class="tuition-progress-note">${label}</span>`;
+        }
+        const remaining = progress.remaining_lessons;
+        const state = remaining <= 0 ? 'exhausted' : remaining < 5 ? 'low' : 'normal';
+        const label = remaining < 0 ? `차시 소진 · ${Math.abs(remaining)}회 초과` :
+            remaining === 0 ? '차시 소진 · 잔여 0회' :
+                `잔여 ${remaining}회${state === 'low' ? ' · 결제 확인 필요' : ''}`;
+        const icon = state === 'normal' ? 'fa-circle-check' : 'fa-triangle-exclamation';
+        return `<span class="tuition-remaining-badge is-${state}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</span><span class="tuition-progress-note">현재 결제 총 ${progress.total_lessons}회 · ${progress.used_lessons}회 사용</span>`;
+    }
+
+    let tuitionPaymentSearchVersion = 0;
     async function loadTuitionPaymentSearch() {
         const feedback = createActionFeedback();
         const body = document.getElementById('tuition-search-body');
         if (!body) return;
         const q = document.getElementById('tuition-search-q').value.trim();
         const classType = document.getElementById('tuition-search-class').value;
+        const version = ++tuitionPaymentSearchVersion;
         body.innerHTML = '<tr><td colspan="7" class="text-center">결제 이력을 불러오는 중입니다.</td></tr>';
         try {
-            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}`);
+            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true`);
+            if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
         } catch (err) {
+            if (version !== tuitionPaymentSearchVersion) return;
             feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
 

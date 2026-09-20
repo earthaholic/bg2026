@@ -341,9 +341,9 @@ def _count_general_lesson_sessions(
         seen_sessions.add(key)
     return len(seen_sessions)
 
-def _get_tuition_progress(student_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
+def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, connection: Any = None) -> Dict[str, Any]:
     """조회일에 적용되는 최신 결제 건을 기준으로 수강 차시와 잔여 차시를 계산한다."""
-    conn = get_db_connection()
+    conn = connection if connection is not None else get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
@@ -372,7 +372,8 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None) -> Dict[
                 "is_exhausted": used >= total, "payments": payments,
                 "payment_start": current_payment["StartDate"]}
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 # --- Web UI Route ---
 
@@ -1497,7 +1498,7 @@ def save_tuition_fee_setting(payload: TuitionFeeSettingRequest, current_user: Di
         conn.close()
 
 @app.get("/api/user/tuition-payments")
-def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff)):
+def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff), include_progress: bool = False):
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1509,10 +1510,38 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
         if class_type and class_type.strip():
             conditions.append('p."ClassType" = ?'); params.append(class_type.strip())
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ''
-        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName"
+        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s.rowid AS "StudentRowId"
                            FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                            {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
-        return {"payments": [dict(r) for r in cursor.fetchall()]}
+        payments = [dict(r) for r in cursor.fetchall()]
+        if include_progress:
+            reference_day = datetime.now().strftime("%Y-%m-%d")
+            progress_by_student = {}
+            for payment in payments:
+                student_row_id = payment["StudentRowId"]
+                payment["ProgressState"] = "unknown"
+                payment["TuitionProgress"] = None
+                if student_row_id is None:
+                    continue
+                if student_row_id not in progress_by_student:
+                    progress_by_student[student_row_id] = _get_tuition_progress(
+                        student_row_id, reference_day, connection=conn
+                    )
+                progress = progress_by_student[student_row_id]
+                if payment["StartDate"] > reference_day:
+                    payment["ProgressState"] = "upcoming"
+                elif progress["has_payment"]:
+                    current_id = progress["payments"][0]["row_id"]
+                    if payment["row_id"] == current_id:
+                        payment["ProgressState"] = "current"
+                        payment["TuitionProgress"] = {
+                            key: progress[key] for key in (
+                                "total_lessons", "used_lessons", "remaining_lessons"
+                            )
+                        }
+                    else:
+                        payment["ProgressState"] = "previous"
+        return {"payments": payments}
     finally:
         conn.close()
 
