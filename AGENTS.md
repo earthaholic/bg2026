@@ -148,3 +148,12 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 팀별 학생 표의 `수업 구분` 열은 정산 기록의 `IsSpecial`에 따라 `일반`·`특강`·`일반·특강` 배지를 표시한다. 혼합 학생도 한 행으로 유지하며 차시·금액 계산은 변경하지 않는다.
 - 기록이 없는 소속 학생만 `team_students.IsSpecial`(현재 `ClassStudents` 설정)을 사용하며 `현재 반 기준`을 표시한다. 마감 조회의 `IsSpecial`은 확정된 `TeacherPayrollLines.Reason`에서 복원해 이후 기록 변경과 분리한다.
 - 회귀 검증: `tests/test_payroll_lesson_type.py`, `tests/test_payroll_lesson_type_ui.js`.
+
+
+## 학생 표시등에서 학습 기록 보완
+- 수업 목록·상세와 학생 검색의 원형 표시등은 학생 이름과 독립된 버튼이다. 이름의 기존 상세 조회 동작은 유지하고, 표시등은 입력 건수와 항목별 `미입력 N건 보완하기` 대화상자를 연다. 수업 상세의 이름은 안내용 배지를 유지한다.
+- `학습 기록 보완`은 독립 화면(`studylog-completion`)이며 유틸리티 탭에서도 진입한다. 일반 선생님에게 기존 staff 전용 유틸리티를 개방하지 않는다. 학생·항목·페이지는 URL에 유지하며 기본 범위는 표시등과 동일한 전체 기간·전체 수업이다.
+- `studylog_completion.py`의 GET `/api/user/studylog-completion`은 정확한 학생 rowid와 `field=teacher|content`로 미입력 기록·전체 입력 현황·행별 수정 권한을 반환한다. POST `/api/user/studylog-completion/{row_id}`는 `{field, value, token}`만 수용한다. 30분 유효 사용자·기록·항목·수업 스냅샷 토큰으로 동시 변경을 차단한다.
+- 빈 항목만 한 행씩 확인 후 보완하며 날짜·도서·수업·정산 연결은 변경하지 않는다. 일반 선생님은 기존 조회 범위에서 본인 기록의 수업 내용만 보완한다. 이 화면은 staff도 정산 행 및 기존/대상 선생님·수업 담당자의 월 마감을 보수적으로 보호한다. 변경과 감사 로그는 같은 트랜잭션이다.
+- 미저장 입력의 화면·항목·페이지 이동/브라우저 종료를 보호하고, 행 저장 시 다른 행의 입력을 유지한다. 돌아가기 버튼은 원래 검색 조건·페이지·스크롤과 수업 상세를 복원하고 표시등을 재조회한다.
+- 회귀 검증: `tests/test_studylog_completion.py`, `tests/test_studylog_completion_ui.js`, `tests/test_student_record_coverage_ui.js`.

@@ -755,6 +755,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function restoreViewFromUrl() {
         if (!currentUser) return;
         const params = new URLSearchParams(location.search);
+        // 같은 보완 화면 안의 학생·항목 변경도 뒤로가기에서 미저장 입력을 보호한다.
+        if (params.get('view') === 'studylog-completion' && document.getElementById('view-studylog-completion').classList.contains('active') && completionState.url && location.href !== completionState.url && !confirmCompletionLeave()) {
+            history.pushState(null, '', completionState.url);
+            return;
+        }
         // 기존 변경 이력 공유 주소도 계속 지원한다.
         const legacyAudit = ['username', 'date_from', 'date_to', 'table_name', 'action', 'record_id'].some(key => params.has(key));
         switchView(params.get('view') || (legacyAudit ? 'audit-log' : 'studylog-search'), { replace: true });
@@ -764,6 +769,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(targetView, { replace = false } = {}) {
         if (!currentUser) return;
+        if (targetView !== 'studylog-completion' && document.getElementById('view-studylog-completion').classList.contains('active') && !confirmCompletionLeave()) {
+            if (completionState.url && location.href !== completionState.url) history.pushState(null, '', completionState.url);
+            return false;
+        }
         if (![...document.querySelectorAll('.workspace-view')].some(view => view.id === `view-${targetView}`)) {
             targetView = 'studylog-search';
         }
@@ -776,6 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = new URL(location.href);
         const previousView = url.searchParams.get('view');
+        if (targetView === 'studylog-completion' && previousView !== targetView) completionState.origin = captureCompletionOrigin();
         if (previousView !== targetView) {
             if (previousView || targetView !== 'audit-log') url.search = '';
             url.searchParams.set('view', targetView);
@@ -810,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (targetView === 'book-search') {
             loadBookSearchResults();
         } else if (targetView === 'student-search') {
-            loadStudentSearchResults();
+            return loadStudentSearchResults();
         } else if (targetView === 'studylog-reg') {
             loadRecentStudyLogs();
             loadStudyLogAssignmentOptions();
@@ -823,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadAuditLogs();
             loadAuditUserOptions();
         } else if (targetView === 'class-list') {
-            loadClassSearchResults();
+            return loadClassSearchResults();
         } else if (targetView === 'class-reg') {
             loadClassRegForm();
         } else if (targetView === 'class-rate-settings') {
@@ -846,6 +856,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBookMaterialRequests(true);
         } else if (targetView === 'book-material-rates') {
             loadBookMaterialRates();
+        } else if (targetView === 'studylog-completion') {
+            initCompletionView();
         } else if (targetView === 'utilities') {
             initUtilitiesView();
         }
@@ -860,6 +872,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLogout() {
+        completionState.version++;
+        completionState.searchVersion++;
+        completionState.drafts.clear();
+        completionState.rows = [];
+        completionState.teachers = [];
+        completionState.pending = null;
+        completionState.origin = null;
+        completionState.url = '';
+        completionState.studentId = null;
+        completionEl('body').replaceChildren();
+        completionEl('student-results').replaceChildren();
+        completionEl('confirm-body').replaceChildren();
+        completionEl('confirm-dialog').close();
+        document.getElementById('record-coverage-body').replaceChildren();
+        document.getElementById('record-coverage-dialog').close();
+        coverageTrigger = null;
         detailCache.clear();
         lastActivityView = "";
         activityVersion++;
@@ -5837,22 +5865,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return { description, lamp };
     }
 
-    function renderStudentSearchName(student) {
+    function recordCompletionButton(student) {
         const { description, lamp } = studentRecordCoverageDisplay(student);
+        const coverage = student.RecordCoverage || { total: 0, teacher_filled: 0, content_filled: 0 };
+        return `<button type="button" class="record-completion-button" data-student-id="${Number(student.row_id || student.Id)}" data-student-name="${escapeHtml(student.Name || '이름 없음')}" data-coverage="${escapeHtml(JSON.stringify(coverage))}" aria-label="${escapeHtml((student.Name || '이름 없음') + ' 입력 현황 및 미입력 보완. ' + description)}" aria-haspopup="dialog" data-record-tooltip="${escapeHtml(description + '\n클릭하여 미입력 기록 보완')}">${lamp}</button>`;
+    }
+
+    function renderStudentSearchName(student) {
         const name = student.Name || '이름 없음';
-        return `<button type="button" class="student-search-name cell-clickable btn-open-student-detail" data-student-id="${Number(student.row_id || student.Id)}" aria-label="${escapeHtml(`${name} 학생 상세 정보. ${description}`)}" data-record-tooltip="${escapeHtml(description)}">${escapeHtml(name)}${lamp}</button>`;
+        return `<span class="record-student-group"><button type="button" class="student-search-name cell-clickable btn-open-student-detail" data-student-id="${Number(student.row_id || student.Id)}" aria-label="${escapeHtml(name + ' 학생 상세 정보')}">${escapeHtml(name)}</button>${recordCompletionButton(student)}</span>`;
     }
 
     function renderClassStudentBadge(student, interactive = true) {
-        const { description, lamp } = studentRecordCoverageDisplay(student);
         const name = student.Name || '이름 없음';
         const special = Number(student.IsSpecial) === 1;
-        const tag = interactive ? 'button' : 'span';
-        const behavior = interactive ? `type="button" data-student-id="${Number(student.row_id)}"` : 'tabindex="0" role="group"';
-        const label = `${name}${special ? ' 특강' : ''}${interactive ? ' 학생 상세 정보' : ''}. ${description}`;
-        return `<${tag} ${behavior} class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge" aria-label="${escapeHtml(label)}" data-record-tooltip="${escapeHtml(description)}">
-            ${escapeHtml(name)}${lamp}
-        </${tag}>`;
+        const nameHtml = interactive
+            ? `<button type="button" data-student-id="${Number(student.row_id)}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge" aria-label="${escapeHtml(name + (special ? ' 특강' : '') + ' 학생 상세 정보')}">${escapeHtml(name)}</button>`
+            : `<span class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge">${escapeHtml(name)}</span>`;
+        return `<span class="record-student-group">${nameHtml}${recordCompletionButton(student)}</span>`;
     }
 
     let recordCoverageTooltip = null;
@@ -6023,7 +6053,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="class-detail-students">
                     <div class="detail-section-title"><i class="fa-solid fa-users"></i> 수강 학생 명단</div>
-                    <p class="record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준이며, 이름에 마우스를 올리면 입력 비율을 확인할 수 있습니다.</p>
+                    <p class="record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준이며, 표시등을 누르면 미입력 기록을 보완할 수 있습니다.</p>
                     <div class="table-responsive">
                         <table class="modern-table">
                             <thead><tr><th>학생 이름</th><th>성별</th><th>학년</th></tr></thead>
@@ -9158,4 +9188,244 @@ document.addEventListener('DOMContentLoaded', () => {
         activityEl('detail-body').innerHTML = Object.entries(fields).map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value || '—'))}</dd>`).join('');
         activityEl('detail').showModal();
     });
+    // 학생별 빈 항목 보완: 다른 기록의 미저장 입력은 행 저장 후에도 유지한다.
+    const completionState = { studentId: null, field: 'content', page: 1, pages: 1, rows: [], teachers: [], drafts: new Map(), version: 0, searchVersion: 0, busy: false, origin: null, url: '', pending: null };
+    const completionEl = suffix => document.getElementById(`completion-${suffix}`);
+    let coverageTrigger = null;
+
+    function confirmCompletionLeave() {
+        if (completionState.busy) {
+            completionEl('status').textContent = '저장 중입니다. 완료 후 이동해 주세요.';
+            return false;
+        }
+        if (completionState.drafts.size && !window.confirm('저장하지 않은 입력이 있습니다. 입력을 버리고 이동할까요?')) return false;
+        completionState.drafts.clear();
+        return true;
+    }
+
+    function captureCompletionOrigin() {
+        const view = document.querySelector('.workspace-view.active');
+        return {
+            view: view ? view.id.replace('view-', '') : 'student-search',
+            url: location.href,
+            classId: !modalClassDetail.classList.contains('hidden') ? currentDetailClass?.Id : null,
+            scrolls: [...(view ? [view, ...view.querySelectorAll('*')] : []), modalClassDetail, modalClassDetailBody].filter(el => el.scrollTop || el.scrollLeft).map(el => ({ el, top: el.scrollTop, left: el.scrollLeft })),
+            triggerStudentId: coverageTrigger?.dataset.studentId,
+        };
+    }
+
+    function completionUrl() {
+        const url = new URL(location.href);
+        url.search = '';
+        url.searchParams.set('view', 'studylog-completion');
+        if (completionState.studentId) url.searchParams.set('student_id', completionState.studentId);
+        url.searchParams.set('field', completionState.field);
+        url.searchParams.set('page', completionState.page);
+        history.replaceState(null, '', url);
+        completionState.url = url.href;
+    }
+
+    function openCompletion(studentId, field = 'content') {
+        if (!confirmCompletionLeave()) return;
+        if (!completionEl('body').closest('.workspace-view').classList.contains('active')) completionState.origin = captureCompletionOrigin();
+        completionState.studentId = Number(studentId) || null;
+        completionState.field = isStaff() && field === 'teacher' ? 'teacher' : 'content';
+        completionState.page = 1;
+        const url = new URL(location.href);
+        url.search = '';
+        url.searchParams.set('view', 'studylog-completion');
+        if (completionState.studentId) url.searchParams.set('student_id', completionState.studentId);
+        url.searchParams.set('field', completionState.field);
+        history.pushState(null, '', url);
+        switchView('studylog-completion');
+    }
+
+    function initCompletionView() {
+        const params = new URLSearchParams(location.search);
+        completionState.studentId = Number(params.get('student_id')) || null;
+        completionState.field = isStaff() && params.get('field') === 'teacher' ? 'teacher' : 'content';
+        completionState.page = Math.max(1, Number(params.get('page')) || 1);
+        completionEl('field').value = completionState.field;
+        completionEl('field').querySelector('[value="teacher"]').disabled = !isStaff();
+        completionEl('student-results').replaceChildren();
+        completionEl('back').textContent = completionState.origin?.view === 'class-list' ? '수업 목록으로 돌아가기' : completionState.origin?.view === 'utilities' ? '유틸리티로 돌아가기' : !completionState.origin || completionState.origin.view === 'student-search' ? '학생 검색으로 돌아가기' : '이전 화면으로 돌아가기';
+        completionUrl();
+        loadCompletionRows(true);
+    }
+
+    document.addEventListener('click', event => {
+        const button = event.target.closest('.record-completion-button');
+        if (!button) return;
+        event.stopPropagation();
+        coverageTrigger = button;
+        hideRecordCoverageTooltip();
+        const coverage = JSON.parse(button.dataset.coverage);
+        const total = Number(coverage.total) || 0;
+        document.getElementById('record-coverage-title').textContent = `${button.dataset.studentName} · 입력 현황`;
+        document.getElementById('record-coverage-body').innerHTML = ['teacher', 'content'].map(field => {
+            const filled = Number(coverage[`${field}_filled`]) || 0;
+            const missing = total - filled;
+            const canOpen = field !== 'teacher' || isStaff();
+            return `<div class="coverage-action"><div><strong>${field === 'teacher' ? '실제 진행 선생님' : '수업 내용'}</strong><p>${filled} / ${total}건 입력</p></div><button type="button" class="btn ${missing && canOpen ? 'btn-primary' : 'btn-outline'}" data-completion-field="${field}" ${!missing || !canOpen ? 'disabled' : ''}>${!total ? '기록 없음' : !missing ? '입력 완료' : `미입력 ${missing}건 보완하기`}</button></div>`;
+        }).join('') + (!isStaff() ? '<p class="text-muted">실제 진행 선생님 지정은 관리 선생님에게 요청해 주세요. 수업 내용은 본인이 수정 가능한 기록만 보완합니다.</p>' : '') + (!total ? '<p>보완할 기존 학습 기록이 없습니다. 새 기록은 학습 이력 등록에서 추가해 주세요.</p>' : '');
+        document.getElementById('record-coverage-dialog').showModal();
+    });
+    document.getElementById('record-coverage-body').addEventListener('click', event => {
+        const button = event.target.closest('[data-completion-field]');
+        if (button) openCompletion(coverageTrigger.dataset.studentId, button.dataset.completionField);
+    });
+    document.getElementById('record-coverage-close').addEventListener('click', () => document.getElementById('record-coverage-dialog').close());
+    document.getElementById('record-coverage-dialog').addEventListener('close', () => { hideRecordCoverageTooltip(); });
+    document.getElementById('utility-open-completion').addEventListener('click', () => openCompletion(null));
+
+    function renderCompletionRows(data) {
+        completionState.rows = data.rows;
+        completionState.teachers = data.teachers || [];
+        completionState.pages = data.total_pages;
+        completionEl('student-name').textContent = `${data.student.Name} · #${data.student.row_id}`;
+        const c = data.coverage;
+        completionEl('summary').textContent = `전체 ${c.total}건 · 선생님 미입력 ${c.total - c.teacher_filled}건 · 수업 내용 미입력 ${c.total - c.content_filled}건`;
+        completionEl('count').textContent = `조회 가능한 미입력 ${data.total_count}건`;
+        completionEl('page').textContent = `${data.page} / ${data.total_pages} 페이지`;
+        completionEl('prev').disabled = data.page <= 1;
+        completionEl('next').disabled = data.page >= data.total_pages;
+        completionEl('body').innerHTML = data.rows.map(row => {
+            const draft = completionState.drafts.get(row.row_id) || '';
+            const label = `${row.StudiedDay || '날짜 없음'} 기록 ${row.row_id}`;
+            const teacherName = row.ActualTeacherUsername.trim() ? (data.teachers || []).find(t => t.username === row.ActualTeacherUsername)?.name || userName(row.ActualTeacherUsername) : '미입력';
+            const input = completionState.field === 'teacher'
+                ? `<select class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 실제 진행 선생님" ${!row.CanEdit ? 'disabled' : ''}><option value="">선생님 선택</option>${(data.teachers || []).map(t => `<option value="${escapeHtml(t.username)}" ${draft === t.username ? 'selected' : ''}>${escapeHtml(t.name || t.username)}</option>`).join('')}</select>`
+                : `<textarea class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 수업 내용" rows="2" maxlength="10000" placeholder="수업 내용을 입력하세요" ${!row.CanEdit ? 'disabled' : ''}>${escapeHtml(draft)}</textarea>`;
+            return `<tr data-completion-row="${row.row_id}" class="${draft ? 'completion-dirty' : ''}"><td>${escapeHtml(row.StudiedDay || '-')}<small>#${row.row_id}</small></td><td>${escapeHtml(row.ClassName || '수업 미연결')}<small>${escapeHtml(row.BookTitle || '도서 정보 없음')}</small></td><td>${completionState.field === 'teacher' ? input : escapeHtml(teacherName)}</td><td>${completionState.field === 'content' ? input : `<span class="completion-content">${escapeHtml(row.LessonContent || '미입력')}</span>`}</td><td><button type="button" class="btn btn-primary completion-save" data-row-id="${row.row_id}" ${!row.CanEdit || !draft.trim() ? 'disabled' : ''}>확인·저장</button><small class="completion-row-state">${escapeHtml(row.CanEdit ? draft ? '저장 전' : '빈칸만 보완' : row.MutationBlockedReason || '수정할 수 없습니다.')}</small></td></tr>`;
+        }).join('') || `<tr><td colspan="5" class="empty-state">${!c.total ? '보완할 기존 기록이 없습니다.' : '조회 가능한 미입력 기록이 없습니다.'}</td></tr>`;
+    }
+
+    async function loadCompletionRows(focus = false) {
+        const version = ++completionState.version;
+        completionUrl();
+        completionEl('status').textContent = '';
+        if (!completionState.studentId) {
+            completionState.rows = [];
+            completionEl('student-name').textContent = '학생을 선택해 주세요';
+            completionEl('summary').textContent = '학생 이름 옆 표시등에서도 바로 들어올 수 있습니다.';
+            completionEl('count').textContent = '';
+            completionEl('body').innerHTML = '<tr><td colspan="5" class="empty-state">학생을 검색하거나 표시등에서 보완할 항목을 선택해 주세요.</td></tr>';
+            completionEl('prev').disabled = completionEl('next').disabled = true;
+            completionEl('page').textContent = '1 / 1 페이지';
+            return;
+        }
+        completionEl('prev').disabled = completionEl('next').disabled = true;
+        completionEl('body').innerHTML = '<tr><td colspan="5" class="empty-state">미입력 기록을 불러오는 중입니다.</td></tr>';
+        try {
+            const params = new URLSearchParams({ student_id: completionState.studentId, field: completionState.field, page: completionState.page, limit: 30 });
+            const data = await apiFetch(`/api/user/studylog-completion?${params}`);
+            if (version !== completionState.version || !document.getElementById('view-studylog-completion').classList.contains('active')) return;
+            if (data.page > data.total_pages) {
+                completionState.page = data.total_pages;
+                return loadCompletionRows(focus);
+            }
+            renderCompletionRows(data);
+            if (focus) completionEl('body').querySelector('.completion-input:not(:disabled)')?.focus();
+        } catch (err) {
+            if (version !== completionState.version) return;
+            completionEl('body').innerHTML = '<tr><td colspan="5" class="empty-state">목록을 불러오지 못했습니다. 새로고침으로 다시 시도해 주세요.</td></tr>';
+            completionEl('status').textContent = err.message;
+        }
+    }
+
+    completionEl('student-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const q = completionEl('student-q').value.trim();
+        if (!q) { completionEl('student-results').textContent = '검색할 학생 이름을 입력해 주세요.'; return; }
+        const version = ++completionState.searchVersion;
+        completionEl('student-results').textContent = '학생을 찾는 중입니다.';
+        try {
+            const params = new URLSearchParams({ q, page: 1, limit: 20, include_ended: 'true' });
+            const data = await apiFetch(`/api/user/students/search?${params}`);
+            if (version !== completionState.searchVersion) return;
+            completionEl('student-results').innerHTML = data.students.map(s => `<button type="button" class="btn btn-outline" data-completion-student="${Number(s.row_id)}">${escapeHtml(s.Name)} · #${Number(s.row_id)} · ${escapeHtml(formatGrade(s.Grade))}${s.IsClassEnded ? ' · 수업 종료' : ''}</button>`).join('') + (data.total_count > 20 ? '<p>처음 20명만 표시합니다. 이름을 더 자세히 입력해 주세요.</p>' : '') || '검색된 학생이 없습니다.';
+        } catch (err) { if (version === completionState.searchVersion) completionEl('student-results').textContent = err.message; }
+    });
+    completionEl('student-results').addEventListener('click', event => {
+        const button = event.target.closest('[data-completion-student]');
+        if (button) openCompletion(button.dataset.completionStudent, completionState.field);
+    });
+    completionEl('field').addEventListener('change', () => {
+        const field = completionEl('field').value;
+        if (!confirmCompletionLeave()) { completionEl('field').value = completionState.field; return; }
+        completionState.field = field;
+        completionState.page = 1;
+        loadCompletionRows(true);
+    });
+    completionEl('refresh').addEventListener('click', () => { if (confirmCompletionLeave()) loadCompletionRows(true); });
+    for (const [key, delta] of [['prev', -1], ['next', 1]]) completionEl(key).addEventListener('click', () => {
+        if (!confirmCompletionLeave()) return;
+        completionState.page += delta;
+        loadCompletionRows(true);
+    });
+    completionEl('body').addEventListener('input', event => {
+        const input = event.target.closest('.completion-input');
+        if (!input) return;
+        const rowId = Number(input.dataset.rowId);
+        if (input.value.trim()) completionState.drafts.set(rowId, input.value); else completionState.drafts.delete(rowId);
+        const tr = input.closest('tr');
+        tr.classList.toggle('completion-dirty', !!input.value.trim());
+        tr.querySelector('.completion-save').disabled = !input.value.trim();
+        tr.querySelector('.completion-row-state').textContent = input.value.trim() ? '저장 전' : '빈칸만 보완';
+    });
+    completionEl('body').addEventListener('click', event => {
+        const button = event.target.closest('.completion-save');
+        if (!button || completionState.busy) return;
+        const row = completionState.rows.find(r => r.row_id === Number(button.dataset.rowId));
+        const value = completionState.drafts.get(row.row_id)?.trim();
+        if (!value) return;
+        completionState.pending = { row, value, field: completionState.field };
+        const text = completionState.field === 'teacher' ? completionState.teachers.find(t => t.username === value)?.name || value : value;
+        completionEl('confirm-body').innerHTML = `<p><strong>${escapeHtml(completionEl('student-name').textContent)}</strong><br>${escapeHtml(row.StudiedDay || '')} · 기록 #${row.row_id}<br>${escapeHtml(row.ClassName || '수업 미연결')} · ${escapeHtml(row.BookTitle || '도서 정보 없음')}</p><p>${completionState.field === 'teacher' ? '실제 진행 선생님' : '수업 내용'}: 미입력 →</p><div class="completion-preview">${escapeHtml(text)}</div>`;
+        completionEl('confirm-dialog').showModal();
+    });
+    completionEl('confirm-cancel').addEventListener('click', () => completionEl('confirm-dialog').close());
+    completionEl('confirm-dialog').addEventListener('cancel', event => { if (completionState.busy) event.preventDefault(); });
+    completionEl('confirm-save').addEventListener('click', async () => {
+        if (completionState.busy || !completionState.pending) return;
+        const { row, value, field } = completionState.pending;
+        completionState.busy = true;
+        completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = true;
+        completionEl('confirm-save').textContent = '저장 중…';
+        try {
+            await apiFetch(`/api/user/studylog-completion/${row.row_id}`, { method: 'POST', body: JSON.stringify({ field, value, token: row.token }) });
+            completionState.drafts.delete(row.row_id);
+            completionEl('confirm-dialog').close();
+            await loadCompletionRows(true);
+            completionEl('status').textContent = `기록 #${row.row_id}의 ${field === 'teacher' ? '실제 진행 선생님' : '수업 내용'}을 저장했습니다. 남은 미입력 기록을 확인해 주세요.`;
+        } catch (err) {
+            completionEl('confirm-dialog').close();
+            completionEl('status').textContent = `${err.message} 입력한 내용은 유지했습니다. 최신 상태 확인은 새로고침을 이용해 주세요.`;
+        } finally {
+            completionState.busy = false;
+            completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = false;
+            completionEl('confirm-save').textContent = '확인 후 저장';
+            completionState.pending = null;
+        }
+    });
+    completionEl('back').addEventListener('click', async () => {
+        if (!confirmCompletionLeave()) return;
+        const origin = completionState.origin;
+        completionState.version++;
+        const result = await switchView(origin?.view || 'student-search');
+        if (result === false) return;
+        if (origin) {
+            history.replaceState(null, '', origin.url);
+            if (origin.classId) await openClassDetailModal(origin.classId);
+            origin.scrolls.forEach(({ el, top, left }) => { if (el.isConnected) { el.scrollTop = top; el.scrollLeft = left; } });
+            const container = origin.classId ? modalClassDetailBody : document.querySelector('.workspace-view.active');
+            const trigger = [...container.querySelectorAll('.record-completion-button')].find(el => el.dataset.studentId === origin.triggerStudentId);
+            trigger?.focus({ preventScroll: true });
+            hideRecordCoverageTooltip();
+        }
+    });
+    window.addEventListener('beforeunload', event => {
+        if (completionState.drafts.size || completionState.busy) { event.preventDefault(); event.returnValue = ''; }
+    });
+
 });

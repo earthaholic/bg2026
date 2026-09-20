@@ -229,6 +229,7 @@
                         <i class="fa-solid fa-book-bookmark nav-icon"></i>
                         <span>학습 기록 검색 & 상세 조회</span>
                     </div>
+                    <div class="menu-nav-item" data-view="studylog-completion"><i class="fa-solid fa-pen-to-square nav-icon"></i><span>학습 기록 보완</span></div>
                     <div class="menu-nav-item" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
@@ -1122,6 +1123,30 @@
                     </div>
                 </section>
 
+
+                <section id="view-studylog-completion" class="workspace-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="completion-heading"><div><h2>학습 기록 보완</h2><p class="text-muted">학생의 기존 기록에서 빈 항목만 채웁니다. 날짜·도서·수업 연결은 변경하지 않습니다.</p></div><button type="button" id="completion-back" class="btn btn-outline">이전 화면으로 돌아가기</button></div>
+                            <form id="completion-student-form" class="completion-student-search"><label for="completion-student-q">학생 찾기</label><input id="completion-student-q" class="form-control" placeholder="학생 이름으로 검색" autocomplete="off"><button class="btn btn-outline" type="submit">학생 검색</button></form>
+                            <div id="completion-student-results" class="completion-student-results" aria-live="polite"></div>
+                            <div class="completion-filters"><strong id="completion-student-name">학생을 선택해 주세요</strong><label for="completion-field">보완할 항목</label><select id="completion-field" class="form-control"><option value="content">수업 내용 미입력</option><option value="teacher">실제 진행 선생님 미입력</option></select><button id="completion-refresh" type="button" class="btn btn-outline">새로고침</button></div>
+                            <p class="text-muted completion-scope">전체 기간 · 학생의 모든 수업 및 수업 미연결 기록 기준입니다. 일반 선생님은 조회 권한이 있는 기록 중 본인 기록의 수업 내용만 보완할 수 있습니다.</p>
+                        </div>
+                        <div class="results-bar"><div id="completion-summary">학생 이름 옆 표시등에서도 바로 들어올 수 있습니다.</div><span id="completion-count"></span></div>
+                        <div id="completion-status" role="status" aria-live="polite"></div>
+                        <div class="card table-card"><div class="table-responsive"><table class="modern-table completion-table"><thead><tr><th data-sortable="false">날짜 / 기록 번호</th><th data-sortable="false">수업 / 도서</th><th data-sortable="false">실제 진행 선생님</th><th data-sortable="false">수업 내용</th><th data-sortable="false">저장</th></tr></thead><tbody id="completion-body"><tr><td colspan="5" class="empty-state">학생을 검색하거나 표시등에서 보완할 항목을 선택해 주세요.</td></tr></tbody></table></div></div>
+                        <div class="search-pagination-bar"><button id="completion-prev" type="button" class="btn btn-outline" disabled>이전</button><span id="completion-page">1 / 1 페이지</span><button id="completion-next" type="button" class="btn btn-outline" disabled>다음</button></div>
+                    </div>
+                </section>
+                <dialog id="record-coverage-dialog" class="completion-dialog" aria-labelledby="record-coverage-title">
+                    <div class="completion-heading"><h2 id="record-coverage-title">입력 현황</h2><button type="button" id="record-coverage-close" class="btn btn-outline" aria-label="입력 현황 닫기">닫기</button></div>
+                    <p class="text-muted">전체 기간 · 학생의 모든 학습 기록 기준</p><div id="record-coverage-body"></div>
+                </dialog>
+                <dialog id="completion-confirm-dialog" class="completion-dialog" aria-labelledby="completion-confirm-title">
+                    <h2 id="completion-confirm-title">보완 내용 확인</h2><p>선택한 기록의 빈 항목만 저장합니다.</p><div id="completion-confirm-body"></div><div class="completion-dialog-actions"><button id="completion-confirm-cancel" type="button" class="btn btn-outline">계속 입력</button><button id="completion-confirm-save" type="button" class="btn btn-primary">확인 후 저장</button></div>
+                </dialog>
+
                 <section id="view-utilities" class="workspace-view">
                     <div class="utility-layout">
                         <div class="card utility-header-card">
@@ -1130,11 +1155,13 @@
                         </div>
                         <div class="utility-tabs" role="tablist" aria-label="유틸리티 기능">
                             <button type="button" id="utility-tab-teacher" class="utility-tab active" role="tab" aria-selected="true" aria-controls="utility-panel-teacher" tabindex="0" data-utility-tab="teacher"><i class="fa-solid fa-chalkboard-user" aria-hidden="true"></i> 선생님 지정</button>
+                            <button type="button" id="utility-tab-completion" class="utility-tab" role="tab" aria-selected="false" aria-controls="utility-panel-completion" tabindex="-1" data-utility-tab="completion">학습 기록 보완</button>
                             <button type="button" id="utility-tab-csv-import" class="utility-tab" role="tab" aria-selected="false" aria-controls="utility-panel-csv-import" tabindex="-1" data-utility-tab="csv-import"><i class="fa-solid fa-file-csv" aria-hidden="true"></i> CSV 가져오기</button>
                             <button type="button" id="utility-tab-csv-links" class="utility-tab" role="tab" aria-selected="false" aria-controls="utility-panel-csv-links" tabindex="-1" data-utility-tab="csv-links"><i class="fa-solid fa-link" aria-hidden="true"></i> CSV 수업 연결</button>
                             <button type="button" id="utility-tab-backfill" class="utility-tab" role="tab" aria-selected="false" aria-controls="utility-panel-backfill" tabindex="-1" data-utility-tab="backfill"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> 누락 수업 연결</button>
                             <button type="button" id="utility-tab-duplicates" class="utility-tab" role="tab" aria-selected="false" aria-controls="utility-panel-duplicates" tabindex="-1" data-utility-tab="duplicates"><i class="fa-solid fa-book" aria-hidden="true"></i> 중복 도서 병합</button>
                         </div>
+                        <div id="utility-panel-completion" class="utility-tab-panel" role="tabpanel" aria-labelledby="utility-tab-completion" tabindex="0" hidden><article class="card utility-card"><div class="utility-card-copy"><h3>학습 기록 보완</h3><p>파일 업로드 없이 학생별로 실제 진행 선생님·수업 내용의 빈칸을 채웁니다. 수업 목록과 학생 검색의 원형 표시등에서도 바로 이동할 수 있습니다.</p></div><button type="button" id="utility-open-completion" class="btn btn-primary">학습 기록 보완 열기</button></article></div>
                         <div id="utility-panel-teacher" class="utility-tab-panel" role="tabpanel" aria-labelledby="utility-tab-teacher" tabindex="0">
                             <article class="card utility-card utility-teacher-card">
                                 <div class="utility-card-copy"><h3>기존 학습 기록 선생님 지정</h3><p>선생님별 차시표를 XLSX 또는 CSV로 내려받아 올려 주세요. <code>이름, 1차시~5차시</code> 또는 <code>이름, 일자</code> 형식을 지원합니다. XLSX는 모든 시트를 읽으며, 탭 이름과 달라도 셀의 날짜를 기준으로 대조합니다.</p><p>파일·서버 학생명의 괄호 내용을 제외하고 대조합니다. 같은 이름의 서버 학생이나 같은 날짜의 여러 도서는 원본 서버 학생명·ID와 도서별 기록을 확인하여 선택할 수 있습니다. 새 학습 기록은 생성하지 않습니다. 수업·정산 카테고리는 기존 값을 유지하므로, 이미 정산에 연결된 기록은 교사 지정에 따라 정산 결과가 달라질 수 있습니다.</p></div>
@@ -1656,7 +1683,7 @@
                         <!-- Class Results Summary Bar -->
                         <div class="results-bar">
                             <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
-                            <span class="text-muted record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준 · 이름에 마우스를 올리면 입력 비율을 확인할 수 있습니다.</span>
+                            <span class="text-muted record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준 · 표시등을 누르면 미입력 기록을 보완할 수 있습니다.</span>
                         </div>
 
                         <!-- Class List Table Card -->

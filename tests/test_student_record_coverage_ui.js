@@ -35,16 +35,28 @@ test('한 표시등을 좌우로 나누고 두 항목을 독립적으로 표시�
     assert.match(html, /학생 전체 학습 기록 · 전체 기간/);
 });
 
-test('목록의 기존 학생 상세 버튼과 상세의 안내 전용 배지를 유지한다', () => {
+test('목록의 이름 상세 버튼과 상세의 이름 배지를 유지하고 표시등은 별도 버튼으로 제공한다', () => {
     const data = { ...student(2, 1, 2), IsSpecial: 1 };
     const list = context.renderClassStudentBadge(data);
     const detail = context.renderClassStudentBadge(data, false);
     assert.match(list, /<button type="button" data-student-id="7"/);
     assert.match(list, /class="tag-badge warning class-student-badge"/);
-    assert.match(detail, /<span tabindex="0" role="group"/);
-    assert.doesNotMatch(detail, /<button|data-student-id/);
-    assert.match(list, /aria-label=/);
-    assert.match(detail, /data-record-tooltip=/);
+    assert.match(detail, /<span class="tag-badge warning class-student-badge">가람<\/span>/);
+    assert.equal((list.match(/<button\b/g) || []).length, 2);
+    assert.equal((detail.match(/<button\b/g) || []).length, 1);
+    assert.match(detail, /class="record-completion-button"/);
+    assert.match(list, /<\/button><button[^>]*class="record-completion-button"/);
+    assert.match(detail, /<\/span><button[^>]*class="record-completion-button"/);
+    for (const html of [list, detail]) {
+        assert.match(html, /aria-haspopup="dialog"/);
+        assert.match(html, /data-record-tooltip=/);
+        let depth = 0;
+        for (const tag of html.match(/<\/?button\b[^>]*>/g)) {
+            depth += tag.startsWith('</') ? -1 : 1;
+            assert.ok(depth >= 0 && depth <= 1, '버튼을 중첩하지 않는다');
+        }
+        assert.equal(depth, 0);
+    }
 });
 
 test('기록 없음은 회색이며 미완료 비율을 100%로 반올림하지 않는다', () => {
@@ -77,7 +89,8 @@ test('학생 검색의 이름 옆에 공통 표시등을 표시하고 상세 열
     const html = context.renderStudentSearchName(student(10, 10, 3));
     assert.match(html, /<button type="button" class="student-search-name cell-clickable btn-open-student-detail"/);
     assert.match(html, /data-student-id="7"/);
-    assert.match(html, /가람<span class="student-record-lamp"/);
+    assert.match(html, /가람<\/button><button[^>]*class="record-completion-button"/);
+    assert.equal((html.match(/<button\b/g) || []).length, 2);
     assert.equal((html.match(/class="student-record-lamp"/g) || []).length, 1);
     assert.equal((html.match(/class="record-lamp-half /g) || []).length, 2);
     assert.match(html, /record-lamp-complete/);

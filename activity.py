@@ -32,7 +32,7 @@ AREAS = {
 }
 # 화면 이름만 허용하며 자유 입력 텍스트는 수집하지 않는다.
 VIEWS = {
-    "book-search", "student-search", "studylog-search", "book-reg", "student-reg",
+    "book-search", "student-search", "studylog-search", "studylog-completion", "book-reg", "student-reg",
     "studylog-reg", "class-list", "class-reg", "class-rate-settings", "class-studylog-reg",
     "monthly-report", "teacher-payroll", "tuition-payment", "tuition-payment-search",
     "tuition-fee-settings", "book-material-request", "book-material-review", "book-material-rates",
@@ -104,6 +104,8 @@ def describe_request(request):
     if route == '/api/user/activity-events':
         return 'VIEW', 'screen', route
     area = parts[2] if len(parts) > 2 and parts[1] in ('user', 'admin') else parts[1]
+    if area == 'studylog-completion':
+        return ('UPDATE' if request.method == 'POST' else 'LIST'), 'studylogs', route
     if area == 'monthly-reports':
         area = 'monthly-report'
     area = area if area in AREAS else 'other'

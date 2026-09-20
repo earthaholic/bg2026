@@ -62,6 +62,7 @@ from teacher_assignment import parse_assignment_file, assignment_context, assign
 from teacher_assignment import MAX_ASSIGNMENT_ROWS
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from csv_class_links import router as csv_class_links_router
+from studylog_completion import router as studylog_completion_router
 from jose import jwt
 
 app = FastAPI(
@@ -72,6 +73,7 @@ app = FastAPI(
 app.middleware("http")(activity_middleware)
 app.include_router(activity_router)
 app.include_router(csv_class_links_router)
+app.include_router(studylog_completion_router)
 
 # Mount static & template files
 base_dir = os.path.dirname(os.path.abspath(__file__))
