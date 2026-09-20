@@ -876,6 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
         completionState.searchVersion++;
         completionState.drafts.clear();
         completionState.rows = [];
+        resetCompletionSelection();
         completionState.teachers = [];
         completionState.pending = null;
         completionState.origin = null;
@@ -9189,7 +9190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activityEl('detail').showModal();
     });
     // 학생별 빈 항목 보완: 다른 기록의 미저장 입력은 행 저장 후에도 유지한다.
-    const completionState = { studentId: null, field: 'content', page: 1, pages: 1, rows: [], teachers: [], drafts: new Map(), version: 0, searchVersion: 0, busy: false, origin: null, url: '', pending: null };
+    const completionState = { studentId: null, field: 'content', page: 1, pages: 1, rows: [], teachers: [], drafts: new Map(), version: 0, searchVersion: 0, busy: false, origin: null, url: '', pending: null, selected: new Set(), bulkNeedsRefresh: false };
     const completionEl = suffix => document.getElementById(`completion-${suffix}`);
     let coverageTrigger = null;
 
@@ -9278,10 +9279,90 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('record-coverage-dialog').addEventListener('close', () => { hideRecordCoverageTooltip(); });
     document.getElementById('utility-open-completion').addEventListener('click', () => openCompletion(null));
 
+
+    function completionBulkMode() {
+        return isStaff() && completionState.field === 'teacher';
+    }
+
+    function completionSelectableRows() {
+        if (!completionBulkMode() || completionState.bulkNeedsRefresh) return [];
+        return completionState.rows.filter(row => row.CanEdit && row.token && !row.ActualTeacherUsername.trim());
+    }
+
+    function resetCompletionSelection() {
+        completionState.selected.clear();
+        completionState.bulkNeedsRefresh = false;
+        completionEl('bulk-teacher').value = '';
+        updateCompletionSelection();
+    }
+
+    function updateCompletionSelection() {
+        const active = completionBulkMode();
+        const eligible = completionSelectableRows();
+        const ids = new Set(eligible.map(row => row.row_id));
+        for (const id of completionState.selected) if (!ids.has(id)) completionState.selected.delete(id);
+        const count = completionState.selected.size;
+        completionEl('bulk-toolbar').hidden = !active;
+        completionEl('select-heading').hidden = !active;
+        completionEl('selected-count').textContent = `현재 페이지에서 ${count}건 선택`;
+        const all = completionEl('select-all');
+        all.checked = eligible.length > 0 && count === eligible.length;
+        all.indeterminate = count > 0 && count < eligible.length;
+        all.disabled = completionState.busy || !eligible.length;
+        completionEl('bulk-teacher').disabled = completionState.busy || !eligible.length;
+        const validTeacher = completionState.teachers.some(t => t.username === completionEl('bulk-teacher').value);
+        completionEl('bulk-preview').disabled = !active || completionState.busy || !count || !validTeacher;
+        completionEl('bulk-clear').disabled = completionState.busy || !count;
+        completionEl('body').querySelectorAll('.completion-row-select').forEach(box => {
+            const id = Number(box.dataset.rowId);
+            box.checked = completionState.selected.has(id);
+            box.disabled = completionState.busy || !ids.has(id);
+            box.closest('tr').classList.toggle('completion-selected', box.checked);
+        });
+    }
+
+    function openCompletionBulkPreview() {
+        if (!completionBulkMode() || completionState.busy || completionState.bulkNeedsRefresh) return;
+        const teacher = completionState.teachers.find(t => t.username === completionEl('bulk-teacher').value);
+        const rows = completionSelectableRows().filter(row => completionState.selected.has(row.row_id));
+        if (!teacher || !rows.length || rows.length > 50) return;
+        // 확인창은 열 때의 대상과 교사만 저장하며 이후 선택 변경에 영향받지 않는다.
+        completionState.pending = { kind: 'bulk-teacher', teacher: teacher.username, teacherName: teacher.name || teacher.username, rows: rows.map(row => ({ ...row })) };
+        const hasDrafts = rows.some(row => completionState.drafts.has(row.row_id));
+        completionEl('confirm-title').textContent = '실제 진행 선생님 일괄 지정 확인';
+        completionEl('confirm-save').textContent = `${rows.length}건 확인 후 저장`;
+        completionEl('confirm-body').innerHTML = `<p><strong>${escapeHtml(completionEl('student-name').textContent)}</strong></p><p>선택한 <strong>${rows.length}건</strong>의 실제 진행 선생님을 <strong>${escapeHtml(teacher.name || teacher.username)} (${escapeHtml(teacher.username)})</strong>으로 지정합니다.</p><p>${hasDrafts ? '선택한 행에서 개별 입력 중인 선생님 대신 위 선생님을 적용합니다. ' : ''}선택하지 않은 기록과 기존 입력값은 변경하지 않습니다. 한 건이라도 적용할 수 없으면 전체 저장을 취소합니다.</p><div class="completion-bulk-preview-list"><table class="modern-table"><thead><tr><th data-sortable="false">기록 번호</th><th data-sortable="false">날짜</th><th data-sortable="false">수업 / 도서</th></tr></thead><tbody>${rows.map(row => `<tr><td>#${row.row_id}</td><td>${escapeHtml(row.StudiedDay || '-')}</td><td>${escapeHtml(row.ClassName || '수업 미연결')}<br>${escapeHtml(row.BookTitle || '도서 정보 없음')}</td></tr>`).join('')}</tbody></table></div>`;
+        completionEl('confirm-dialog').showModal();
+    }
+
+    completionEl('select-all').addEventListener('change', event => {
+        if (completionState.busy) return;
+        const checked = event.target.checked;
+        completionState.selected.clear();
+        if (checked) completionSelectableRows().forEach(row => completionState.selected.add(row.row_id));
+        updateCompletionSelection();
+    });
+    completionEl('body').addEventListener('change', event => {
+        const box = event.target.closest('.completion-row-select');
+        if (!box || completionState.busy) return;
+        const id = Number(box.dataset.rowId);
+        if (box.checked && completionSelectableRows().some(row => row.row_id === id)) completionState.selected.add(id);
+        else completionState.selected.delete(id);
+        updateCompletionSelection();
+    });
+    completionEl('bulk-teacher').addEventListener('change', updateCompletionSelection);
+    completionEl('bulk-clear').addEventListener('click', () => {
+        if (completionState.busy) return;
+        completionState.selected.clear();
+        updateCompletionSelection();
+    });
+    completionEl('bulk-preview').addEventListener('click', openCompletionBulkPreview);
+
     function renderCompletionRows(data) {
         completionState.rows = data.rows;
         completionState.teachers = data.teachers || [];
         completionState.pages = data.total_pages;
+        completionEl('bulk-teacher').innerHTML = '<option value="">선생님 선택</option>' + completionState.teachers.map(t => `<option value="${escapeHtml(t.username)}">${escapeHtml(t.name || t.username)} (${escapeHtml(t.username)})</option>`).join('');
         completionEl('student-name').textContent = `${data.student.Name} · #${data.student.row_id}`;
         const c = data.coverage;
         completionEl('summary').textContent = `전체 ${c.total}건 · 선생님 미입력 ${c.total - c.teacher_filled}건 · 수업 내용 미입력 ${c.total - c.content_filled}건`;
@@ -9296,12 +9377,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const input = completionState.field === 'teacher'
                 ? `<select class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 실제 진행 선생님" ${!row.CanEdit ? 'disabled' : ''}><option value="">선생님 선택</option>${(data.teachers || []).map(t => `<option value="${escapeHtml(t.username)}" ${draft === t.username ? 'selected' : ''}>${escapeHtml(t.name || t.username)}</option>`).join('')}</select>`
                 : `<textarea class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 수업 내용" rows="2" maxlength="10000" placeholder="수업 내용을 입력하세요" ${!row.CanEdit ? 'disabled' : ''}>${escapeHtml(draft)}</textarea>`;
-            return `<tr data-completion-row="${row.row_id}" class="${draft ? 'completion-dirty' : ''}"><td>${escapeHtml(row.StudiedDay || '-')}<small>#${row.row_id}</small></td><td>${escapeHtml(row.ClassName || '수업 미연결')}<small>${escapeHtml(row.BookTitle || '도서 정보 없음')}</small></td><td>${completionState.field === 'teacher' ? input : escapeHtml(teacherName)}</td><td>${completionState.field === 'content' ? input : `<span class="completion-content">${escapeHtml(row.LessonContent || '미입력')}</span>`}</td><td><button type="button" class="btn btn-primary completion-save" data-row-id="${row.row_id}" ${!row.CanEdit || !draft.trim() ? 'disabled' : ''}>확인·저장</button><small class="completion-row-state">${escapeHtml(row.CanEdit ? draft ? '저장 전' : '빈칸만 보완' : row.MutationBlockedReason || '수정할 수 없습니다.')}</small></td></tr>`;
-        }).join('') || `<tr><td colspan="5" class="empty-state">${!c.total ? '보완할 기존 기록이 없습니다.' : '조회 가능한 미입력 기록이 없습니다.'}</td></tr>`;
+            return `<tr data-completion-row="${row.row_id}" class="${draft ? 'completion-dirty' : ''}"><td class="completion-select-cell" ${completionBulkMode() ? '' : 'hidden'}><input type="checkbox" class="completion-row-select" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 선생님 일괄 지정 선택" ${!row.CanEdit || !row.token ? 'disabled' : ''}></td><td>${escapeHtml(row.StudiedDay || '-')}<small>#${row.row_id}</small></td><td class="completion-book-cell">${escapeHtml(row.ClassName || '수업 미연결')}<small>${escapeHtml(row.BookTitle || '도서 정보 없음')}</small></td><td>${completionState.field === 'teacher' ? input : escapeHtml(teacherName)}</td><td class="completion-content-cell">${completionState.field === 'content' ? input : `<span class="completion-content">${escapeHtml(row.LessonContent || '미입력')}</span>`}</td><td><button type="button" class="btn btn-primary completion-save" data-row-id="${row.row_id}" ${!row.CanEdit || !draft.trim() ? 'disabled' : ''}>확인·저장</button><small class="completion-row-state">${escapeHtml(row.CanEdit ? draft ? '저장 전' : '빈칸만 보완' : row.MutationBlockedReason || '수정할 수 없습니다.')}</small></td></tr>`;
+        }).join('') || `<tr><td colspan="${completionBulkMode() ? 6 : 5}" class="empty-state">${!c.total ? '보완할 기존 기록이 없습니다.' : '조회 가능한 미입력 기록이 없습니다.'}</td></tr>`;
+        updateCompletionSelection();
     }
 
     async function loadCompletionRows(focus = false) {
         const version = ++completionState.version;
+        completionState.rows = [];
+        resetCompletionSelection();
         completionUrl();
         completionEl('status').textContent = '';
         if (!completionState.studentId) {
@@ -9380,14 +9464,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const value = completionState.drafts.get(row.row_id)?.trim();
         if (!value) return;
         completionState.pending = { row, value, field: completionState.field };
+        completionEl('confirm-title').textContent = '보완 내용 확인';
+        completionEl('confirm-save').textContent = '확인 후 저장';
         const text = completionState.field === 'teacher' ? completionState.teachers.find(t => t.username === value)?.name || value : value;
         completionEl('confirm-body').innerHTML = `<p><strong>${escapeHtml(completionEl('student-name').textContent)}</strong><br>${escapeHtml(row.StudiedDay || '')} · 기록 #${row.row_id}<br>${escapeHtml(row.ClassName || '수업 미연결')} · ${escapeHtml(row.BookTitle || '도서 정보 없음')}</p><p>${completionState.field === 'teacher' ? '실제 진행 선생님' : '수업 내용'}: 미입력 →</p><div class="completion-preview">${escapeHtml(text)}</div>`;
         completionEl('confirm-dialog').showModal();
     });
-    completionEl('confirm-cancel').addEventListener('click', () => completionEl('confirm-dialog').close());
+    async function saveCompletionBulk() {
+        const pending = completionState.pending;
+        if (!completionBulkMode() || completionState.busy || !pending || pending.kind !== 'bulk-teacher' || !pending.rows.length || pending.rows.length > 50) return;
+        completionState.busy = true;
+        completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = true;
+        completionEl('confirm-save').textContent = '일괄 저장 중…';
+        updateCompletionSelection();
+        try {
+            const result = await apiFetch('/api/user/studylog-completion/bulk-teacher', { method: 'POST', body: JSON.stringify({ teacher_username: pending.teacher, records: pending.rows.map(row => ({ row_id: row.row_id, token: row.token })) }) });
+            pending.rows.forEach(row => completionState.drafts.delete(row.row_id));
+            completionEl('confirm-dialog').close();
+            await loadCompletionRows(true);
+            completionEl('status').textContent = `${result.updated_count}건의 실제 진행 선생님을 ${pending.teacherName} 선생님으로 지정했습니다. 남은 미입력 기록을 확인해 주세요.`;
+        } catch (err) {
+            completionEl('confirm-dialog').close();
+            completionState.selected.clear();
+            completionState.bulkNeedsRefresh = true;
+            completionEl('status').textContent = `${err.message} 개별 입력은 유지했습니다. 중복 적용을 피하려면 새로고침으로 저장 결과와 최신 상태를 확인한 뒤 다시 선택해 주세요.`;
+        } finally {
+            completionState.busy = false;
+            completionState.pending = null;
+            completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = false;
+            completionEl('confirm-save').textContent = '확인 후 저장';
+            updateCompletionSelection();
+        }
+    }
+
+    completionEl('confirm-cancel').addEventListener('click', () => { if (!completionState.busy) completionEl('confirm-dialog').close(); });
+    completionEl('confirm-dialog').addEventListener('close', () => { completionState.pending = null; });
     completionEl('confirm-dialog').addEventListener('cancel', event => { if (completionState.busy) event.preventDefault(); });
     completionEl('confirm-save').addEventListener('click', async () => {
         if (completionState.busy || !completionState.pending) return;
+        if (completionState.pending.kind === 'bulk-teacher') return saveCompletionBulk();
         const { row, value, field } = completionState.pending;
         completionState.busy = true;
         completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = true;
@@ -9406,6 +9521,7 @@ document.addEventListener('DOMContentLoaded', () => {
             completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = false;
             completionEl('confirm-save').textContent = '확인 후 저장';
             completionState.pending = null;
+            updateCompletionSelection();
         }
     });
     completionEl('back').addEventListener('click', async () => {

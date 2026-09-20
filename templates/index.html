@@ -1134,8 +1134,12 @@
                             <p class="text-muted completion-scope">전체 기간 · 학생의 모든 수업 및 수업 미연결 기록 기준입니다. 일반 선생님은 조회 권한이 있는 기록 중 본인 기록의 수업 내용만 보완할 수 있습니다.</p>
                         </div>
                         <div class="results-bar"><div id="completion-summary">학생 이름 옆 표시등에서도 바로 들어올 수 있습니다.</div><span id="completion-count"></span></div>
+                        <div id="completion-bulk-toolbar" class="completion-bulk-toolbar" hidden>
+                            <div class="completion-bulk-controls"><strong id="completion-selected-count" role="status" aria-live="polite">현재 페이지에서 0건 선택</strong><label for="completion-bulk-teacher">일괄 지정할 선생님</label><select id="completion-bulk-teacher" class="form-control"><option value="">선생님 선택</option></select><button id="completion-bulk-preview" type="button" class="btn btn-primary" disabled>선택한 기록에 지정</button><button id="completion-bulk-clear" type="button" class="btn btn-outline" disabled>선택 해제</button></div>
+                            <p>현재 페이지의 보완 가능한 기록만 선택합니다. 학생·항목·페이지 변경 또는 새로고침 시 선택이 해제됩니다. 한 건이라도 적용할 수 없으면 전체 저장이 취소됩니다.</p>
+                        </div>
                         <div id="completion-status" role="status" aria-live="polite"></div>
-                        <div class="card table-card"><div class="table-responsive"><table class="modern-table completion-table"><thead><tr><th data-sortable="false">날짜 / 기록 번호</th><th data-sortable="false">수업 / 도서</th><th data-sortable="false">실제 진행 선생님</th><th data-sortable="false">수업 내용</th><th data-sortable="false">저장</th></tr></thead><tbody id="completion-body"><tr><td colspan="5" class="empty-state">학생을 검색하거나 표시등에서 보완할 항목을 선택해 주세요.</td></tr></tbody></table></div></div>
+                        <div class="card table-card"><div class="table-responsive"><table class="modern-table completion-table"><thead><tr><th id="completion-select-heading" data-sortable="false" hidden><input type="checkbox" id="completion-select-all" aria-label="현재 페이지의 지정 가능한 기록 전체 선택"></th><th data-sortable="false">날짜 / 기록 번호</th><th data-sortable="false">수업 / 도서</th><th data-sortable="false">실제 진행 선생님</th><th data-sortable="false">수업 내용</th><th data-sortable="false">저장</th></tr></thead><tbody id="completion-body"><tr><td colspan="5" class="empty-state">학생을 검색하거나 표시등에서 보완할 항목을 선택해 주세요.</td></tr></tbody></table></div></div>
                         <div class="search-pagination-bar"><button id="completion-prev" type="button" class="btn btn-outline" disabled>이전</button><span id="completion-page">1 / 1 페이지</span><button id="completion-next" type="button" class="btn btn-outline" disabled>다음</button></div>
                     </div>
                 </section>

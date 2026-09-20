@@ -13,19 +13,42 @@ const escapeHtml = value => String(value).replaceAll('&', '&amp;').replaceAll('<
 
 function harness({ staff = true } = {}) {
     const elements = new Map();
-    const classes = new Set(['active']);
     const element = id => {
-        if (!elements.has(id)) elements.set(id, {
-            id, value: '', textContent: '', innerHTML: '', disabled: false, dataset: {}, handlers: {},
-            classList: { contains: name => classes.has(name), toggle() {} },
-            addEventListener(type, callback) { this.handlers[type] = callback; },
-            querySelector(selector) { return element(`${id}:${selector}`); },
-            querySelectorAll() { return []; },
-            closest() { return element('view-studylog-completion'); },
-            replaceChildren() { this.innerHTML = ''; },
-            showModal() { this.open = true; }, close() { this.open = false; },
-            focus() { this.focused = true; },
-        });
+        if (!elements.has(id)) {
+            const classes = new Set(id === 'view-studylog-completion' ? ['active'] : []);
+            const listeners = {};
+            elements.set(id, {
+                id, value: '', textContent: '', innerHTML: '', disabled: false, checked: false,
+                indeterminate: false, hidden: false, dataset: {}, handlers: {},
+                classList: {
+                    contains: name => classes.has(name),
+                    toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
+                },
+                addEventListener(type, callback) {
+                    (listeners[type] ||= []).push(callback);
+                    this.handlers[type] = event => {
+                        let result;
+                        for (const listener of listeners[type]) result = listener(event);
+                        return result;
+                    };
+                },
+                querySelector(selector) { return element(`${id}:${selector}`); },
+                querySelectorAll(selector) {
+                    if (id !== 'completion-body' || selector !== '.completion-row-select') return [];
+                    return [...this.innerHTML.matchAll(/<input\b[^>]*class="completion-row-select"[^>]*data-row-id="(\d+)"[^>]*>/g)].map(match => {
+                        const box = element(`completion-row-select-${match[1]}`);
+                        box.dataset.rowId = match[1];
+                        box.closest = selector => selector === 'tr' ? element(`completion-row-${match[1]}`) : box;
+                        return box;
+                    });
+                },
+                closest() { return element('view-studylog-completion'); },
+                replaceChildren() { this.innerHTML = ''; },
+                showModal() { this.open = true; },
+                close() { this.open = false; this.handlers.close?.(); },
+                focus() { this.focused = true; },
+            });
+        }
         return elements.get(id);
     };
     const location = { href: 'http://127.0.0.1:8000/?view=studylog-completion', search: '?view=studylog-completion' };
@@ -261,4 +284,258 @@ test('같은 보완 화면의 다른 학생으로 뒤로가기해도 초안을 �
     h.context.restoreViewFromUrl();
     assert.equal(switched, true);
     assert.equal(h.state.drafts.size, 0);
+});
+
+
+function bulkHarness(rows = [row({ ActualTeacherUsername: '' }), row({ row_id: 11, ActualTeacherUsername: '' })], options = {}) {
+    const h = harness(options);
+    h.state.field = 'teacher';
+    h.state.studentId = 7;
+    h.context.renderCompletionRows(response(rows));
+    return h;
+}
+function selectAll(h, checked = true) {
+    const all = h.element('completion-select-all');
+    all.checked = checked;
+    h.element('completion-select-all').handlers.change({ target: all });
+}
+function chooseBulkTeacher(h, username = 'teacher') {
+    h.element('completion-bulk-teacher').value = username;
+    h.element('completion-bulk-teacher').handlers.change();
+}
+function selectRow(h, id, checked = true) {
+    const box = h.element('completion-body').querySelectorAll('.completion-row-select').find(box => Number(box.dataset.rowId) === id);
+    assert.ok(box, `기록 ${id}의 선택 상자`);
+    box.checked = checked;
+    h.element('completion-body').handlers.change({ target: { closest: selector => selector === '.completion-row-select' ? box : null } });
+    return box;
+}
+
+test('일괄 선택 도구는 직원의 선생님 미입력 화면에서만 표시한다', () => {
+    const h = bulkHarness();
+    assert.equal(h.element('completion-bulk-toolbar').hidden, false);
+    assert.equal(h.element('completion-select-heading').hidden, false);
+    assert.match(h.element('completion-body').innerHTML, /class="completion-select-cell" >/);
+    h.state.field = 'content';
+    h.context.renderCompletionRows(response([row()]));
+    assert.equal(h.element('completion-bulk-toolbar').hidden, true);
+    assert.equal(h.element('completion-select-heading').hidden, true);
+    assert.match(h.element('completion-body').innerHTML, /class="completion-select-cell" hidden/);
+    const teacher = bulkHarness(undefined, { staff: false });
+    assert.equal(teacher.element('completion-bulk-toolbar').hidden, true);
+    assert.equal(teacher.element('completion-select-heading').hidden, true);
+    selectAll(teacher);
+    assert.equal(teacher.state.selected.size, 0);
+    assert.match(template, /id="completion-select-all"[^>]*aria-label="현재 페이지의 지정 가능한 기록 전체 선택"/);
+});
+
+test('전체 선택은 권한·토큰·미입력 조건을 만족하는 현재 페이지 기록만 포함한다', () => {
+    const h = bulkHarness([
+        row({ row_id: 10, ActualTeacherUsername: '' }),
+        row({ row_id: 11, ActualTeacherUsername: ' \t' }),
+        row({ row_id: 12, ActualTeacherUsername: '', CanEdit: false }),
+        row({ row_id: 13, ActualTeacherUsername: '', token: '' }),
+        row({ row_id: 14, ActualTeacherUsername: '기존교사' }),
+    ]);
+    selectAll(h);
+    assert.deepEqual([...h.state.selected], [10, 11]);
+    assert.equal(h.element('completion-select-all').checked, true);
+    assert.equal(h.element('completion-select-all').indeterminate, false);
+    assert.equal(h.element('completion-selected-count').textContent, '현재 페이지에서 2건 선택');
+    for (const id of [12, 13, 14]) assert.equal(h.element(`completion-row-select-${id}`).disabled, true);
+    selectRow(h, 12);
+    assert.equal(h.state.selected.has(12), false);
+    selectAll(h, false);
+    assert.equal(h.state.selected.size, 0);
+    assert.equal(h.element('completion-select-all').checked, false);
+});
+
+test('개별 선택은 전체 선택의 부분 상태와 선택 행 강조를 갱신한다', () => {
+    const h = bulkHarness();
+    selectRow(h, 10);
+    assert.equal(h.element('completion-select-all').checked, false);
+    assert.equal(h.element('completion-select-all').indeterminate, true);
+    assert.equal(h.element('completion-row-10').classList.contains('completion-selected'), true);
+    selectRow(h, 11);
+    assert.equal(h.element('completion-select-all').checked, true);
+    assert.equal(h.element('completion-select-all').indeterminate, false);
+    selectRow(h, 10, false);
+    assert.equal(h.element('completion-row-10').classList.contains('completion-selected'), false);
+    assert.equal(h.element('completion-select-all').indeterminate, true);
+    h.element('completion-bulk-clear').handlers.click();
+    assert.equal(h.state.selected.size, 0);
+    assert.equal(h.element('completion-bulk-clear').disabled, true);
+});
+
+test('유효한 선생님과 한 건 이상의 선택이 있어야 일괄 확인창을 열 수 있다', () => {
+    const h = bulkHarness();
+    chooseBulkTeacher(h);
+    assert.equal(h.element('completion-bulk-preview').disabled, true);
+    selectAll(h);
+    chooseBulkTeacher(h, '');
+    assert.equal(h.element('completion-bulk-preview').disabled, true);
+    h.element('completion-bulk-preview').handlers.click();
+    assert.equal(h.state.pending, null);
+    chooseBulkTeacher(h, '존재하지않는계정');
+    assert.equal(h.element('completion-bulk-preview').disabled, true);
+    chooseBulkTeacher(h);
+    assert.equal(h.element('completion-bulk-preview').disabled, false);
+    h.element('completion-bulk-preview').handlers.click();
+    assert.equal(h.element('completion-confirm-dialog').open, true);
+    assert.equal(h.calls.length, 0);
+    assert.equal(h.element('completion-confirm-save').textContent, '2건 확인 후 저장');
+});
+
+test('일괄 확인창은 선택 당시 대상과 교사를 복사하고 표시값을 이스케이프한다', () => {
+    const h = bulkHarness([row({ ActualTeacherUsername: '', BookTitle: '<책>', ClassName: '<수업>' })]);
+    h.state.teachers = [{ username: '<교사계정>', name: '<교사이름>' }];
+    h.element('completion-student-name').textContent = '<학생> · #7';
+    h.state.drafts.set(10, '개별교사');
+    selectAll(h);
+    chooseBulkTeacher(h, '<교사계정>');
+    h.context.openCompletionBulkPreview();
+    const preview = h.element('completion-confirm-body').innerHTML;
+    assert.doesNotMatch(preview, /<책>|<수업>|<학생>|<교사이름>|<교사계정>/);
+    for (const value of ['책', '수업', '학생', '교사이름', '교사계정']) assert.ok(preview.includes(`&lt;${value}&gt;`));
+    assert.match(preview, /개별 입력 중인 선생님 대신/);
+    assert.match(preview, /전체 저장을 취소/);
+    assert.match(preview, /#10/);
+    h.state.rows[0].BookTitle = '나중에 바뀐 제목';
+    h.state.rows[0].token = '바뀐 토큰';
+    h.state.selected.clear();
+    h.element('completion-bulk-teacher').value = '다른선생님';
+    assert.equal(h.state.pending.teacher, '<교사계정>');
+    assert.equal(h.state.pending.rows[0].BookTitle, '<책>');
+    assert.equal(h.state.pending.rows[0].token, '서명된-조회값');
+});
+
+test('일괄 저장은 확인한 기록 번호·토큰과 교사만 전송하고 선택한 초안만 지운다', async () => {
+    const h = bulkHarness();
+    h.state.drafts.set(10, '개별교사1');
+    h.state.drafts.set(11, '개별교사2');
+    h.state.drafts.set(12, '선택하지않은초안');
+    selectAll(h);
+    chooseBulkTeacher(h);
+    h.context.openCompletionBulkPreview();
+    h.context.apiFetch = async (url, options) => {
+        h.calls.push({ url, options });
+        return options?.method === 'POST' ? { status: 'success', updated_count: 2 } : response();
+    };
+    await h.element('completion-confirm-save').handlers.click();
+    const save = h.calls.find(call => call.options?.method === 'POST');
+    assert.equal(save.url, '/api/user/studylog-completion/bulk-teacher');
+    assert.deepEqual(JSON.parse(save.options.body), {
+        teacher_username: 'teacher', records: [{ row_id: 10, token: '서명된-조회값' }, { row_id: 11, token: '서명된-조회값' }],
+    });
+    assert.equal(h.state.drafts.has(10), false);
+    assert.equal(h.state.drafts.has(11), false);
+    assert.equal(h.state.drafts.get(12), '선택하지않은초안');
+    assert.ok(h.calls.some(call => !call.options?.method && call.url.startsWith('/api/user/studylog-completion?')));
+    assert.equal(h.state.selected.size, 0);
+    assert.equal(h.state.busy, false);
+    assert.equal(h.state.pending, null);
+    assert.match(h.element('completion-status').textContent, /2건의 실제 진행 선생님/);
+});
+
+test('일괄 저장 실패는 선택만 비우고 새로고침 전 재전송을 막으며 개별 초안은 보존한다', async () => {
+    const h = bulkHarness();
+    h.state.drafts.set(10, '유지할개별교사');
+    selectAll(h);
+    chooseBulkTeacher(h);
+    h.context.openCompletionBulkPreview();
+    h.context.apiFetch = async () => { throw new Error('선택한 기록의 정산이 마감되었습니다.'); };
+    await h.element('completion-confirm-save').handlers.click();
+    assert.equal(h.state.selected.size, 0);
+    assert.equal(h.state.bulkNeedsRefresh, true);
+    assert.equal(h.state.drafts.get(10), '유지할개별교사');
+    assert.equal(h.element('completion-select-all').disabled, true);
+    assert.equal(h.element('completion-bulk-preview').disabled, true);
+    assert.match(h.element('completion-status').textContent, /새로고침/);
+    selectAll(h);
+    h.context.openCompletionBulkPreview();
+    assert.equal(h.state.pending, null);
+    assert.equal(h.state.selected.size, 0);
+    h.context.apiFetch = async () => response([row({ ActualTeacherUsername: '' })]);
+    await h.context.loadCompletionRows();
+    assert.equal(h.state.bulkNeedsRefresh, false);
+    assert.equal(h.element('completion-select-all').disabled, false);
+    assert.equal(h.state.drafts.get(10), '유지할개별교사');
+});
+
+test('일괄 저장 중에는 중복 제출·취소·선택 변경을 막는다', async () => {
+    const h = bulkHarness();
+    selectAll(h);
+    chooseBulkTeacher(h);
+    h.context.openCompletionBulkPreview();
+    const request = deferred();
+    let saves = 0;
+    h.context.apiFetch = () => { saves++; return request.promise; };
+    h.context.loadCompletionRows = async () => {};
+    const first = h.element('completion-confirm-save').handlers.click();
+    await h.element('completion-confirm-save').handlers.click();
+    selectAll(h, false);
+    h.element('completion-bulk-clear').handlers.click();
+    selectRow(h, 10, false);
+    assert.deepEqual([...h.state.selected], [10, 11]);
+    assert.equal(h.element('completion-select-all').disabled, true);
+    assert.equal(h.element('completion-bulk-teacher').disabled, true);
+    assert.equal(h.element('completion-confirm-save').disabled, true);
+    h.element('completion-confirm-cancel').handlers.click();
+    assert.equal(h.element('completion-confirm-dialog').open, true);
+    const event = { prevented: false, preventDefault() { this.prevented = true; } };
+    h.element('completion-confirm-dialog').handlers.cancel(event);
+    assert.equal(event.prevented, true);
+    assert.equal(saves, 1);
+    request.resolve({ status: 'success', updated_count: 2 });
+    await first;
+    assert.equal(h.state.busy, false);
+});
+
+test('항목·페이지·학생 재조회는 이전 선택과 일괄 선생님을 즉시 초기화한다', async () => {
+    const h = bulkHarness();
+    for (const change of [() => { h.state.field = 'content'; }, () => { h.state.page = 2; }, () => { h.state.studentId = 8; }]) {
+        h.state.field = 'teacher';
+        h.state.rows = [row({ ActualTeacherUsername: '' })];
+        h.state.selected.add(10);
+        h.element('completion-bulk-teacher').value = 'teacher';
+        h.state.bulkNeedsRefresh = true;
+        change();
+        const deferredResult = deferred();
+        h.context.apiFetch = () => deferredResult.promise;
+        const loading = h.context.loadCompletionRows();
+        assert.equal(h.state.selected.size, 0);
+        assert.equal(h.element('completion-bulk-teacher').value, '');
+        assert.equal(h.state.bulkNeedsRefresh, false);
+        assert.equal(h.element('completion-select-all').disabled, true);
+        deferredResult.resolve(response());
+        await loading;
+    }
+});
+
+test('확인창을 연 뒤 권한이나 항목이 바뀌면 일괄 저장을 보내지 않는다', async () => {
+    for (const revoke of [h => { h.context.isStaff = () => false; }, h => { h.state.field = 'content'; }]) {
+        const h = bulkHarness();
+        selectAll(h);
+        chooseBulkTeacher(h);
+        h.context.openCompletionBulkPreview();
+        revoke(h);
+        await h.element('completion-confirm-save').handlers.click();
+        assert.equal(h.calls.length, 0);
+        assert.equal(h.state.busy, false);
+    }
+});
+
+test('확인창 취소는 저장하지 않고 선택을 유지하며 다음 확인은 최신 대상을 사용한다', () => {
+    const h = bulkHarness();
+    selectAll(h);
+    chooseBulkTeacher(h);
+    h.context.openCompletionBulkPreview();
+    h.element('completion-confirm-cancel').handlers.click();
+    assert.equal(h.state.pending, null);
+    assert.equal(h.state.selected.size, 2);
+    assert.equal(h.calls.length, 0);
+    selectRow(h, 11, false);
+    h.context.openCompletionBulkPreview();
+    assert.deepEqual([...h.state.pending.rows].map(row => row.row_id), [10]);
+    assert.equal(h.element('completion-confirm-save').textContent, '1건 확인 후 저장');
 });

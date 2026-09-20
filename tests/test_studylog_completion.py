@@ -263,6 +263,185 @@ class StudylogCompletionTests(unittest.TestCase):
         self.assertFalse(row['CanEdit'])
         self.assertIn('일자', row['MutationBlockedReason'])
 
+    def prepare_bulk(self, actor=None):
+        self.sql("UPDATE StudyLogs SET ActualTeacherUsername='' WHERE rowid=2")
+        rows = {row['row_id']: row for row in self.preview(field='teacher', actor=actor)['rows']}
+        return [{'row_id': row_id, 'token': rows[row_id]['token']} for row_id in [1, 2]]
+
+    def bulk_save(self, records, teacher='complete_b', actor=None, **extra):
+        return self.client.post(BASE + '/bulk-teacher', headers=self.headers(actor),
+                                json={'teacher_username': teacher, 'records': records, **extra})
+
+    def assert_bulk_unchanged(self, before):
+        self.assertEqual([self.record(1), self.record(2)], before)
+        self.assertFalse(self.audits())
+
+    def test_bulk_success_keeps_unrelated_fields_and_writes_individual_audits(self):
+        self.sql("UPDATE StudyLogs SET PayrollCategoryId=77,GradeSnapshot='초2',SubstituteStatus='유지' WHERE rowid IN (1,2)")
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['updated_count'], 2)
+        mutable = {'ActualTeacherUsername', 'UpdatedBy', 'UpdatedAt'}
+        for row_id, old in zip([1, 2], before):
+            new = self.record(row_id)
+            self.assertEqual(new['ActualTeacherUsername'], 'complete_b')
+            self.assertEqual(new['UpdatedBy'], settings.ADMIN_USERNAME)
+            self.assertEqual({k: v for k, v in old.items() if k not in mutable},
+                             {k: v for k, v in new.items() if k not in mutable})
+        audits = self.audits()
+        self.assertEqual(len(audits), 2)
+        self.assertEqual({str(row['record_id']) for row in audits}, {'1', '2'})
+        self.assertTrue(all(row['action'] == 'UPDATE' for row in audits))
+        self.assertTrue(all(set(json.loads(row['changed_fields'])) == mutable for row in audits))
+        self.assertEqual(self.preview(field='teacher')['total_count'], 0)
+        self.assertEqual(self.bulk_save(records).status_code, 409)
+        self.assertEqual(len(self.audits()), 2)
+
+    def test_bulk_staff_only_and_valid_teacher_roles(self):
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        self.assertEqual(self.bulk_save(records, actor='complete_a').status_code, 403)
+        for teacher in ['', '  ', database._STUDENT_RECORD_WHITESPACE, 'unknown', settings.ADMIN_USERNAME]:
+            self.assertEqual(self.bulk_save(records, teacher=teacher).status_code, 400)
+        self.assert_bulk_unchanged(before)
+        records = self.prepare_bulk(actor='complete_manager')
+        response = self.bulk_save(records, actor='complete_manager', teacher='complete_subadmin')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.record(2)['ActualTeacherUsername'], 'complete_subadmin')
+
+    def test_bulk_count_id_types_duplicate_and_extra_fields(self):
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        for invalid in [[], records * 26]:
+            self.assertEqual(self.bulk_save(invalid).status_code, 422)
+        self.assertEqual(self.bulk_save([records[0], records[0]]).status_code, 400)
+        for row_id in [True, False, 1.0, 1.1, '1', 0, -1, None]:
+            invalid = [records[0], {'row_id': row_id, 'token': records[1]['token']}]
+            self.assertEqual(self.bulk_save(invalid).status_code, 422)
+        self.assertEqual(self.bulk_save(records, teacher=123).status_code, 422)
+        self.assertEqual(self.bulk_save(records, StudentId=2).status_code, 422)
+        self.assertEqual(self.bulk_save([dict(records[0], ClassId=2)]).status_code, 422)
+        self.assertEqual(self.bulk_save([{'row_id': 1, 'token': 123}]).status_code, 422)
+        self.assertEqual(self.bulk_save([{'row_id': 1}]).status_code, 422)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_bad_token_actor_field_row_and_expiry_cancel_all(self):
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        token = records[1]['token']
+        claims = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        variants = ['', token + 'tampered', records[0]['token'], self.row(2)['token']]
+        for patch_claim in [{'actor': 'complete_manager'}, {'field': 'content'}, {'row_id': 999},
+                            {'purpose': 'other'}, {'exp': datetime.utcnow() - timedelta(seconds=10)}]:
+            variants.append(jwt.encode(dict(claims, **patch_claim), settings.SECRET_KEY, algorithm=settings.ALGORITHM))
+        for invalid_token in variants:
+            invalid = [records[0], {'row_id': 2, 'token': invalid_token}]
+            response = self.bulk_save(invalid)
+            self.assertEqual(response.status_code, 400, response.text)
+            self.assertIn('전체 적용을 취소', response.json()['detail'])
+            self.assert_bulk_unchanged(before)
+        self.assertEqual(self.bulk_save(records, actor='complete_manager').status_code, 400)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_stale_record_cancels_all(self):
+        records = self.prepare_bulk()
+        self.sql("UPDATE StudyLogs SET Description='다른 사용자가 수정' WHERE rowid=2")
+        before = [self.record(1), self.record(2)]
+        response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn('#2', response.json()['detail'])
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_stale_class_cancels_all(self):
+        self.sql('UPDATE StudyLogs SET ClassId=2 WHERE rowid=2')
+        records = self.prepare_bulk()
+        self.sql("UPDATE Classes SET TeacherUsername='complete_manager' WHERE Id=2")
+        before = [self.record(1), self.record(2)]
+        self.assertEqual(self.bulk_save(records).status_code, 409)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_deleted_record_cancels_all(self):
+        records = self.prepare_bulk()
+        before = self.record(1)
+        self.sql('DELETE FROM StudyLogs WHERE rowid=2')
+        response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(self.record(1), before)
+        self.assertFalse(self.audits())
+
+    def test_bulk_second_filled_field_cancels_all(self):
+        records = self.prepare_bulk()
+        self.sql("UPDATE StudyLogs SET ActualTeacherUsername='complete_manager' WHERE rowid=2")
+        before = [self.record(1), self.record(2)]
+        self.assertEqual(self.bulk_save(records).status_code, 409)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_payroll_line_cancels_all(self):
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        self.sql("INSERT INTO TeacherPayrollLines(PayrollMonth,StudyLogId,TeacherUsername,UnitAmount,Amount) VALUES ('2026-09',2,'complete_a',100,100)")
+        response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn('#2', response.json()['detail'])
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_target_month_closure_cancels_all(self):
+        self.sql("UPDATE StudyLogs SET StudiedDay='2026-10-01' WHERE rowid=2")
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        self.sql("INSERT INTO TeacherPayrollClosures(PayrollMonth,TeacherUsername,ClosedBy) VALUES ('2026-10','complete_b','검증')")
+        response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn('#2', response.json()['detail'])
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_class_month_closure_cancels_all(self):
+        self.sql("UPDATE StudyLogs SET ClassId=2,StudiedDay='2026-10-01' WHERE rowid=2")
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        self.sql("INSERT INTO TeacherPayrollClosures(PayrollMonth,TeacherUsername,ClosedBy) VALUES ('2026-10','complete_b','검증')")
+        self.assertEqual(self.bulk_save(records, teacher='complete_subadmin').status_code, 409)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_second_audit_failure_rolls_back_both_updates_and_first_audit(self):
+        records = self.prepare_bulk()
+        before = [self.record(1), self.record(2)]
+        original = studylog_completion.write_audit_log
+        calls = []
+        def fail_second(*args, **kwargs):
+            calls.append(args[1])
+            if len(calls) == 2:
+                raise RuntimeError('검증용 감사 실패')
+            return original(*args, **kwargs)
+        with patch.object(studylog_completion, 'write_audit_log', side_effect=fail_second):
+            response = self.bulk_save(records)
+        self.assertEqual(response.status_code, 500, response.text)
+        self.assertEqual(calls, [1, 2])
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_alias_collision_is_revalidated(self):
+        records = self.prepare_bulk()
+        self.sql("INSERT INTO Students(rowid,Id,Name,Grade) VALUES (201,901,'충돌학생','초1')")
+        before = [self.record(1), self.record(2)]
+        self.assertEqual(self.bulk_save(records).status_code, 409)
+        self.assert_bulk_unchanged(before)
+
+    def test_bulk_accepts_fifty_distinct_rows_and_unicode_blank_fields(self):
+        self.prepare_bulk()
+        for index in range(48):
+            self.sql('''INSERT INTO StudyLogs(Id,StudentId,BookId,StudiedDay,ActualTeacherUsername,LessonContent)
+                VALUES (?,201,101,'2026-09-18',?,'유지')''', (600 + index, database._STUDENT_RECORD_WHITESPACE))
+        result = self.preview(field='teacher', limit=50)
+        records = [{'row_id': row['row_id'], 'token': row['token']} for row in result['rows']]
+        self.assertEqual(len(records), 50)
+        response = self.bulk_save(records, teacher='  complete_b  ')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['updated_count'], 50)
+        self.assertEqual(len(self.audits()), 50)
+        self.assertEqual(self.preview(field='teacher')['total_count'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,10 +1,10 @@
 """학생의 기존 학습 기록에서 비어 있는 항목만 안전하게 보완한다."""
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from jose import jwt
-from pydantic import BaseModel, StrictStr
+from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 from auth import get_current_user
 from config import settings
@@ -22,6 +22,22 @@ class CompletionRequest(BaseModel):
     field: Literal['teacher', 'content']
     value: StrictStr
     token: StrictStr
+
+    class Config:
+        extra = 'forbid'
+
+
+class CompletionRecord(BaseModel):
+    row_id: StrictInt = Field(..., gt=0)
+    token: StrictStr
+
+    class Config:
+        extra = 'forbid'
+
+
+class BulkTeacherRequest(BaseModel):
+    teacher_username: StrictStr
+    records: List[CompletionRecord] = Field(..., min_length=1, max_length=50)
 
     class Config:
         extra = 'forbid'
@@ -154,6 +170,89 @@ def get_completion_records(student_id: int = Query(..., gt=0),
         conn.close()
 
 
+def _decode_completion_token(token, row_id, field, user):
+    try:
+        claim = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if (claim.get('purpose') != 'studylog-completion' or claim.get('actor') != user['username']
+                or claim.get('row_id') != row_id or claim.get('field') != field):
+            raise ValueError()
+        return claim
+    except Exception:
+        raise HTTPException(status_code=400, detail='조회가 만료되었거나 유효하지 않습니다. 목록을 다시 불러와 주세요.')
+
+
+def _validate_completion_record(conn, row_id, field, value, claim, user):
+    row = conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail='학습 기록을 찾을 수 없습니다.')
+    record = dict(row)
+    student = _student_for_record(conn, record)
+    visible, params = _visibility(conn, student, user)
+    if not conn.execute(f'SELECT 1 FROM "StudyLogs" sl WHERE sl.rowid=? AND {visible}', [row_id] + params).fetchone():
+        raise HTTPException(status_code=403, detail='이 학습 기록을 조회·보완할 권한이 없습니다.')
+    if claim.get('fingerprint') != _stamp(conn, record, student):
+        raise HTTPException(status_code=409, detail='조회 이후 기록 또는 수업 정보가 변경되었습니다. 목록을 다시 불러와 주세요.')
+    column = FIELDS[field]
+    if str(record.get(column) or '').strip(_STUDENT_RECORD_WHITESPACE):
+        raise HTTPException(status_code=409, detail='이미 입력된 항목은 덮어쓸 수 없습니다. 목록을 다시 불러와 주세요.')
+    if field == 'teacher' and not conn.execute('''SELECT 1 FROM _app_users
+            WHERE username=? AND role IN ('teacher','manager','subadmin')''', (value,)).fetchone():
+        raise HTTPException(status_code=400, detail='실제 진행 선생님 계정을 확인해 주세요.')
+    blocked = _blocked(conn, record, row_id, user, value if field == 'teacher' else '')
+    if blocked:
+        raise HTTPException(status_code=blocked[0], detail=blocked[1])
+    return record
+
+
+def _write_completion(conn, row_id, field, value, record, user, request):
+    column = FIELDS[field]
+    conn.execute(f'UPDATE "StudyLogs" SET "{column}"=?, "UpdatedBy"=?, "UpdatedAt"=? WHERE rowid=?',
+                 (value, user['username'], datetime.now().strftime('%Y-%m-%d %H:%M:%S'), row_id))
+    updated = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone())
+    changed = [key for key in updated if updated[key] != record.get(key)]
+    write_audit_log('StudyLogs', row_id, 'UPDATE', record, updated, changed,
+                    user['username'], user['role'],
+                    request.client.host if request.client else '', connection=conn)
+
+
+@router.post('/bulk-teacher')
+def save_bulk_teacher(payload: BulkTeacherRequest, request: Request,
+                      current_user=Depends(get_current_user)):
+    """선택한 빈 항목을 한 트랜잭션으로 지정한다. 부분 성공은 허용하지 않는다."""
+    _authorize_field(current_user, 'teacher')
+    value = payload.teacher_username.strip(_STUDENT_RECORD_WHITESPACE)
+    if not value or len(value) > 10000:
+        raise HTTPException(status_code=400, detail='실제 진행 선생님을 선택해 주세요.')
+    ids = [item.row_id for item in payload.records]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=400, detail='같은 학습 기록을 중복하여 선택할 수 없습니다.')
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        validated = []
+        for item in payload.records:
+            try:
+                claim = _decode_completion_token(item.token, item.row_id, 'teacher', current_user)
+                record = _validate_completion_record(conn, item.row_id, 'teacher', value, claim, current_user)
+                validated.append((item.row_id, record))
+            except HTTPException as exc:
+                raise HTTPException(status_code=exc.status_code,
+                                    detail=f'기록 #{item.row_id}: {exc.detail} 전체 적용을 취소했습니다.')
+        for row_id, record in validated:
+            _write_completion(conn, row_id, 'teacher', value, record, current_user, request)
+        conn.commit()
+        return {'status': 'success', 'updated_count': len(validated),
+                'message': f'{len(validated)}건의 실제 진행 선생님을 지정했습니다.'}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail='저장하지 못했습니다. 전체 변경 사항은 취소되었으니 다시 시도해 주세요.')
+    finally:
+        conn.close()
+
+
 @router.post('/{row_id}')
 def save_completion(row_id: int, payload: CompletionRequest, request: Request,
                     current_user=Depends(get_current_user)):
@@ -161,42 +260,12 @@ def save_completion(row_id: int, payload: CompletionRequest, request: Request,
     value = payload.value.strip(_STUDENT_RECORD_WHITESPACE)
     if not value or len(value) > 10000:
         raise HTTPException(status_code=400, detail='보완할 내용을 1~10,000자로 입력해 주세요.')
-    try:
-        claim = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if (claim.get('purpose') != 'studylog-completion' or claim.get('actor') != current_user['username']
-                or claim.get('row_id') != row_id or claim.get('field') != payload.field):
-            raise ValueError()
-    except Exception:
-        raise HTTPException(status_code=400, detail='조회가 만료되었거나 유효하지 않습니다. 목록을 다시 불러와 주세요.')
+    claim = _decode_completion_token(payload.token, row_id, payload.field, current_user)
     conn = get_db_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
-        row = conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail='학습 기록을 찾을 수 없습니다.')
-        record = dict(row)
-        student = _student_for_record(conn, record)
-        visible, params = _visibility(conn, student, current_user)
-        if not conn.execute(f'SELECT 1 FROM "StudyLogs" sl WHERE sl.rowid=? AND {visible}', [row_id] + params).fetchone():
-            raise HTTPException(status_code=403, detail='이 학습 기록을 조회·보완할 권한이 없습니다.')
-        if claim.get('fingerprint') != _stamp(conn, record, student):
-            raise HTTPException(status_code=409, detail='조회 이후 기록 또는 수업 정보가 변경되었습니다. 목록을 다시 불러와 주세요.')
-        column = FIELDS[payload.field]
-        if str(record.get(column) or '').strip(_STUDENT_RECORD_WHITESPACE):
-            raise HTTPException(status_code=409, detail='이미 입력된 항목은 덮어쓸 수 없습니다. 목록을 다시 불러와 주세요.')
-        if payload.field == 'teacher' and not conn.execute('''SELECT 1 FROM _app_users
-                WHERE username=? AND role IN ('teacher','manager','subadmin')''', (value,)).fetchone():
-            raise HTTPException(status_code=400, detail='실제 진행 선생님 계정을 확인해 주세요.')
-        blocked = _blocked(conn, record, row_id, current_user, value if payload.field == 'teacher' else '')
-        if blocked:
-            raise HTTPException(status_code=blocked[0], detail=blocked[1])
-        conn.execute(f'UPDATE "StudyLogs" SET "{column}"=?, "UpdatedBy"=?, "UpdatedAt"=? WHERE rowid=?',
-                     (value, current_user['username'], datetime.now().strftime('%Y-%m-%d %H:%M:%S'), row_id))
-        updated = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone())
-        changed = [key for key in updated if updated[key] != record.get(key)]
-        write_audit_log('StudyLogs', row_id, 'UPDATE', record, updated, changed,
-                        current_user['username'], current_user['role'],
-                        request.client.host if request.client else '', connection=conn)
+        record = _validate_completion_record(conn, row_id, payload.field, value, claim, current_user)
+        _write_completion(conn, row_id, payload.field, value, record, current_user, request)
         conn.commit()
         return {'status': 'success', 'message': '미입력 항목을 보완했습니다.'}
     except HTTPException:

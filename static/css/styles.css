@@ -4856,8 +4856,8 @@ button.class-student-badge { cursor: pointer; }
 #view-studylog-completion #completion-status { padding: 0.7rem 1rem; border-radius: var(--radius-sm); background: var(--bg-selection); color: var(--text-selection-accent); }
 #view-studylog-completion .completion-table { min-width: 860px; }
 #view-studylog-completion .completion-table td { vertical-align: top; }
-#view-studylog-completion .completion-table td:nth-child(2) { max-width: 240px; white-space: normal; }
-#view-studylog-completion .completion-table td:nth-child(4) { width: 34%; min-width: 260px; }
+#view-studylog-completion .completion-table .completion-book-cell { max-width: 240px; white-space: normal; }
+#view-studylog-completion .completion-table .completion-content-cell { width: 34%; min-width: 260px; }
 #view-studylog-completion .completion-table td:last-child { max-width: 210px; white-space: normal; }
 #view-studylog-completion .completion-table small { display: block; color: var(--text-muted); margin-top: 0.5rem; line-height: 1.5; }
 #view-studylog-completion .completion-table select { min-width: 150px; }
@@ -4877,3 +4877,22 @@ button.class-student-badge { cursor: pointer; }
     .coverage-action { align-items: flex-start; flex-direction: column; }
 }
 #view-studylog-completion .completion-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 실제 진행 선생님은 현재 페이지의 미입력 기록만 선택하여 일괄 지정한다. */
+#view-studylog-completion .completion-bulk-toolbar { padding: 1rem 1.25rem; border: 1px solid var(--border-focus); border-radius: var(--radius-md); background: var(--bg-selection); }
+#view-studylog-completion .completion-bulk-toolbar[hidden], #view-studylog-completion .completion-select-cell[hidden], #view-studylog-completion #completion-select-heading[hidden] { display: none; }
+#view-studylog-completion .completion-bulk-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; }
+#view-studylog-completion .completion-bulk-controls strong { margin-right: auto; }
+#view-studylog-completion .completion-bulk-controls select { width: auto; min-width: 180px; max-width: 100%; }
+#view-studylog-completion .completion-bulk-toolbar p { margin-top: 0.7rem; color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; }
+#view-studylog-completion .completion-select-cell, #view-studylog-completion #completion-select-heading { width: 44px; text-align: center; }
+#view-studylog-completion .completion-row-select, #view-studylog-completion #completion-select-all { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+#view-studylog-completion .completion-row-select:disabled { cursor: not-allowed; opacity: 0.4; }
+#view-studylog-completion .completion-selected { background: var(--bg-selection); box-shadow: inset 3px 0 var(--primary); }
+#completion-confirm-dialog .completion-bulk-preview-list { max-height: 40vh; overflow: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+#completion-confirm-dialog .completion-bulk-preview-list table { font-size: 0.85rem; }
+#completion-confirm-dialog .completion-bulk-preview-list td { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+    #view-studylog-completion .completion-bulk-controls { align-items: stretch; flex-direction: column; }
+    #view-studylog-completion .completion-bulk-controls select { width: 100%; }
+}
