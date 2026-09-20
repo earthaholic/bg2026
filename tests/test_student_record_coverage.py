@@ -174,6 +174,48 @@ class StudentRecordCoverageTests(unittest.TestCase):
                     self.assertEqual([row['row_id'] for row in result['students']], ids)
                     self.assertEqual(result['total_count'], len(ids))
 
+    def test_record_filters_keep_sqlite_338_compatible_aggregate_syntax(self):
+        # SQLite 3.39부터 허용된 GROUP BY 없는 HAVING이 다시 들어오지 않게 한다.
+        # GROUP BY를 단순 추가하면 기록 없는 학생의 집계 행이 사라지므로 금지한다.
+        for teacher in (None, 'empty', 'none', 'low', 'partial', 'complete'):
+            for content in (None, 'empty', 'none', 'low', 'partial', 'complete'):
+                with self.subTest(teacher=teacher, content=content):
+                    condition, params = database.student_record_coverage_filter(teacher, content)
+                    self.assertNotIn('HAVING', condition.upper())
+                    self.assertNotIn('GROUP BY', condition.upper())
+                    if teacher or content:
+                        self.assertIn('AS record_coverage', condition)
+                        self.assertEqual(len(params), 2)
+                    else:
+                        self.assertEqual((condition, params), ('', []))
+
+    def test_record_filters_work_through_search_api(self):
+        import main
+        from fastapi.testclient import TestClient
+        self.seed_filter_states()
+        original_overrides = dict(main.app.dependency_overrides)
+        main.app.dependency_overrides[main.get_current_user] = lambda: {'username': 'admin', 'role': 'admin'}
+        try:
+            client = TestClient(main.app)
+            with patch.object(main, 'get_db_connection', side_effect=self.connect), \
+                    patch.object(main, 'advance_student_grades'), patch('activity.write_activity'):
+                for states, expected_ids in [
+                    ({'teacher_record_state': 'low'}, [12]),
+                    ({'content_record_state': 'low'}, [13]),
+                    ({'teacher_record_state': 'low', 'content_record_state': 'partial'}, [12]),
+                    ({'teacher_record_state': 'empty', 'content_record_state': 'empty'}, [10]),
+                    ({'teacher_record_state': 'empty', 'content_record_state': 'complete'}, []),
+                ]:
+                    with self.subTest(states=states):
+                        response = client.get('/api/user/students/search', params={'q': '상태', **states})
+                        self.assertEqual(response.status_code, 200)
+                        result = response.json()
+                        self.assertEqual(result['total_count'], len(expected_ids))
+                        self.assertEqual([row['row_id'] for row in result['students']], expected_ids)
+        finally:
+            main.app.dependency_overrides.clear()
+            main.app.dependency_overrides.update(original_overrides)
+
     def test_record_filter_precedes_pagination_and_combines_existing_filters(self):
         self.seed_filter_states()
         first = self.search_response(q='상태', teacher_record_state='complete', limit=1)

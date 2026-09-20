@@ -1096,11 +1096,15 @@ def student_record_coverage_filter(teacher_state: Optional[str], content_state: 
         conditions.append(f'({states[state]})')
     if not conditions:
         return '', []
+    # 운영 SQLite 3.38에서는 GROUP BY 없는 HAVING을 지원하지 않는다.
+    # 집계를 파생 테이블로 감싸면 기록이 없는 학생의 total=0도 유지할 수 있다.
     return f'''EXISTS (
-        SELECT {_STUDENT_RECORD_COUNTS_SQL}
-        FROM "StudyLogs" sl
-        WHERE sl."StudentId" = "Students".rowid OR sl."StudentId" = "Students"."Id"
-        HAVING {' AND '.join(conditions)}
+        SELECT 1 FROM (
+            SELECT {_STUDENT_RECORD_COUNTS_SQL}
+            FROM "StudyLogs" sl
+            WHERE sl."StudentId" = "Students".rowid OR sl."StudentId" = "Students"."Id"
+        ) AS record_coverage
+        WHERE {' AND '.join(conditions)}
     )''', [_STUDENT_RECORD_WHITESPACE, _STUDENT_RECORD_WHITESPACE]
 
 
