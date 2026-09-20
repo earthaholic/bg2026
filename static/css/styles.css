@@ -1087,7 +1087,16 @@ body {
 .utility-header-card { padding: 1.25rem; }
 .utility-header-card h2 { margin: 0; font-size: 1.25rem; }
 .utility-header-card p { margin: .45rem 0 0; color: var(--text-muted); }
-.utility-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+#view-utilities .utility-tabs { display: flex; flex-wrap: wrap; gap: .5rem; padding: .5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+#view-utilities .utility-tab { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; flex: 1 1 auto; padding: .8rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-muted); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+#view-utilities .utility-tab:hover { background: rgba(59, 130, 246, .08); color: var(--primary); }
+#view-utilities .utility-tab.active { background: rgba(59, 130, 246, .12); border-color: var(--primary); color: var(--primary); }
+#view-utilities .utility-tab:focus-visible, #view-utilities .utility-tab-panel:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+#view-utilities .utility-tab-panel { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+#view-utilities .utility-tab-panel[hidden] { display: none; }
+#view-utilities .utility-tab-panel > .table-card { flex: none; }
+#view-utilities .utility-csv-class-links-controls { flex-wrap: wrap; }
+#view-utilities .utility-csv-class-links-controls .form-control { flex: 1; max-width: 640px; min-width: 0; }
 .utility-card { display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem; padding: 1.25rem; }
 .utility-card h3 { margin: 0; font-size: 1.05rem; }
 .utility-card p { margin: .45rem 0 0; color: var(--text-muted); line-height: 1.55; }
@@ -1118,7 +1127,10 @@ body {
 .utility-reference-item { background: rgba(59, 130, 246, .08); color: var(--text-main); }
 .utility-no-reference { color: var(--text-muted); font-size: .82rem; }
 @media (max-width: 640px) {
-    .utility-grid { grid-template-columns: 1fr; }
+    #view-utilities .utility-tabs { flex-wrap: nowrap; overflow-x: auto; }
+    #view-utilities .utility-tab { flex: 0 0 auto; white-space: nowrap; }
+    #view-utilities .utility-preview-header { flex-direction: column; align-items: stretch; gap: .75rem; }
+    #view-utilities .utility-teacher-controls > .btn { width: 100%; }
     .utility-controls { align-items: stretch; flex-direction: column; }
     .utility-controls .form-control, .utility-controls .btn { width: 100%; max-width: none; }
 }

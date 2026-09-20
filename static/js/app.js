@@ -8377,6 +8377,37 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadTeacherPayroll();
         } catch (err) { feedback.show(err.message, 'error'); }
     });
+    // 탭은 표시만 전환하여 파일·입력값·미리보기 상태를 유지한다.
+    function switchUtilityTab(key, focus = false) {
+        const tabs = [...document.querySelectorAll('#view-utilities [data-utility-tab]')];
+        const selected = tabs.find(tab => tab.dataset.utilityTab === key);
+        if (!selected) return;
+        tabs.forEach(tab => {
+            const active = tab === selected;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+        });
+        if (focus) selected.focus();
+    }
+
+    document.querySelectorAll('#view-utilities [data-utility-tab]').forEach(tab => {
+        tab.addEventListener('click', () => switchUtilityTab(tab.dataset.utilityTab));
+        tab.addEventListener('keydown', event => {
+            const tabs = [...document.querySelectorAll('#view-utilities [data-utility-tab]')];
+            const index = tabs.indexOf(tab);
+            let next;
+            if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            switchUtilityTab(tabs[next].dataset.utilityTab, true);
+        });
+    });
+
     async function initUtilitiesView() {
         const month = document.getElementById('utility-backfill-month');
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
