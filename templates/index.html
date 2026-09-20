@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260920-tuition-remaining">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260920-tuition-compact">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1849,7 +1849,40 @@
                 </section>
 
                 <section id="view-tuition-payment-search" class="workspace-view">
-                    <div class="book-search-layout"><div class="card search-filter-card"><div class="filter-options-grid"><div class="filter-group"><label for="tuition-search-q">학생명 검색</label><input id="tuition-search-q" class="form-control" placeholder="학생 이름 입력"></div><div class="filter-group"><label for="tuition-search-class">반 정보</label><select id="tuition-search-class" class="form-control"><option value="">전체 반</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select></div><div class="filter-group"><label>&nbsp;</label><button id="btn-tuition-search" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 검색</button></div></div></div><p class="tuition-warning-guide"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> 학생별 현재 결제의 결제·서비스 합산 잔여 차시입니다. 5회 미만은 결제 확인 필요, 0회 이하는 차시 소진으로 표시합니다. 특강·휴강은 차감하지 않습니다.</p><div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>상세</th></tr></thead><tbody id="tuition-search-body"></tbody></table></div></div></div>
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card">
+                            <div class="tuition-filter-fields">
+                                <div class="filter-group">
+                                    <label for="tuition-search-q">학생명 검색</label>
+                                    <input id="tuition-search-q" class="form-control" placeholder="학생 이름 입력">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="tuition-search-class">반 정보</label>
+                                    <select id="tuition-search-class" class="form-control"><option value="">전체 반</option><option>초등부 독서반</option><option>초등부 기초글쓰기반</option><option>초등부 토론반</option><option>중등부 독서반</option><option>중등부 기초글쓰기반</option><option>중등부 토론반</option><option>심화반</option></select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="tuition-search-progress">차시 상태</label>
+                                    <select id="tuition-search-progress" class="form-control"><option value="">전체 상태</option><option value="normal">5회 이상</option><option value="low">결제 확인 필요 (1~4회)</option><option value="exhausted">차시 소진 (0회 이하)</option><option value="previous">이전 결제</option><option value="upcoming">시작 예정</option><option value="unknown">잔여 차시 확인 불가</option></select>
+                                </div>
+                                <button id="btn-tuition-search" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 검색</button>
+                            </div>
+                            <div class="tuition-filter-footer">
+                                <label class="tuition-ended-toggle"><input type="checkbox" id="tuition-search-include-ended" value="1"><span>수업 종료 학생 포함</span></label>
+                                <details class="tuition-filter-help">
+                                    <summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i> 차시 계산 기준</summary>
+                                    <p class="tuition-warning-guide">현재 결제의 결제·서비스 차시를 합산합니다. 잔여 1~4회는 결제 확인 필요, 0회 이하는 차시 소진으로 표시합니다. 특강·휴강은 차감하지 않습니다.</p>
+                                </details>
+                            </div>
+                        </div>
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table">
+                                    <thead><tr><th>차시 시작일</th><th>납부일</th><th>학생</th><th>반</th><th>결제/서비스</th><th>수업료</th><th>상세</th></tr></thead>
+                                    <tbody id="tuition-search-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <section id="view-tuition-fee-settings" class="workspace-view">
@@ -2534,6 +2567,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260920-tuition-remaining"></script>
+    <script src="/static/js/app.js?v=20260920-tuition-compact"></script>
 </body>
 </html>

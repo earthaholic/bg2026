@@ -26,7 +26,9 @@ class TuitionPaymentProgressTests(unittest.TestCase):
         self.addCleanup(clock_patch.stop)
         # 원본 Id와 rowid를 분리하여 어느 식별자로 저장했든 대응하는지 확인한다.
         self.conn.executescript('''
-            CREATE TABLE Students (Id INTEGER UNIQUE, Name TEXT);
+            CREATE TABLE Students (
+                Id INTEGER UNIQUE, Name TEXT, IsClassEnded INTEGER DEFAULT 0
+            );
             CREATE TABLE Books (Id INTEGER UNIQUE, Title TEXT);
             CREATE TABLE TuitionPayments (
                 Id INTEGER UNIQUE, StudentId INTEGER, ClassType TEXT,
@@ -299,6 +301,279 @@ class TuitionPaymentProgressTests(unittest.TestCase):
         with patch.object(main, '_get_tuition_progress') as calculate:
             self.assertEqual(self.payments(q='없는 학생'), [])
         calculate.assert_not_called()
+
+    def test_progress_filter_current_remaining_boundaries(self):
+        # 유료·서비스 합계에서 실제 수강을 차감한 잔여값으로 상태를 나눈다.
+        expected = {'normal': [], 'low': [], 'exhausted': []}
+        remaining_by_id = {}
+        for student_id, remaining in enumerate((6, 5, 4, 1, 0, -1), 10):
+            self.conn.execute('INSERT INTO Students(rowid, Id, Name) VALUES (?, ?, ?)',
+                              (student_id, student_id + 1000, '필터 경계 학생 {}'.format(student_id)))
+            self.conn.commit()
+            payment_id = self.add_payment(student_id=student_id, paid=5, service=2)
+            for number in range(7 - remaining):
+                self.add_log(student_id=student_id, content='경계 수업 {}'.format(number))
+            state = 'normal' if remaining >= 5 else 'low' if remaining >= 1 else 'exhausted'
+            expected[state].append(payment_id)
+            remaining_by_id[payment_id] = remaining
+        # 진행률 표시를 꺼도 상태 검색에는 계산 결과가 필요하며 응답에도 포함한다.
+        for include_progress in (True, False):
+            for state, payment_ids in expected.items():
+                with self.subTest(state=state, include_progress=include_progress):
+                    rows = self.payments(progress_state=state, include_progress=include_progress)
+                    self.assertEqual([p['row_id'] for p in rows], list(reversed(payment_ids)))
+                    for payment in rows:
+                        remaining = remaining_by_id[payment['row_id']]
+                        self.assert_progress(payment, 7, 7 - remaining, remaining)
+
+    def test_progress_filter_previous_upcoming_and_unknown_are_disjoint(self):
+        old = self.add_payment(start='2026-08-01', paid=0)
+        current = self.add_payment(paid=4)
+        future = self.add_payment(start='2026-09-21', paid=0)
+        missing = self.add_payment(student_id=999, paid=0)
+        missing_future = self.add_payment(student_id=998, start='2026-10-01')
+        expected = {'previous': [old], 'upcoming': [future],
+                    'unknown': [missing_future, missing]}
+        for include_progress in (True, False):
+            for state, payment_ids in expected.items():
+                with self.subTest(state=state, include_progress=include_progress):
+                    rows = self.payments(progress_state=state, include_progress=include_progress)
+                    self.assertEqual([p['row_id'] for p in rows], payment_ids)
+                    for payment in rows:
+                        self.assert_state(payment, state)
+                        if state == 'unknown':
+                            self.assertIsNone(payment['StudentName'])
+                            self.assertIsNone(payment['StudentRowId'])
+            # 과거·미래 결제의 잔여값과 학생 누락을 현재 소진 상태로 오인하지 않는다.
+            self.assertEqual(self.payments(progress_state='normal', include_progress=include_progress), [])
+            self.assertEqual(self.payments(progress_state='exhausted', include_progress=include_progress), [])
+            rows = self.payments(progress_state='low', include_progress=include_progress)
+            self.assertEqual([p['row_id'] for p in rows], [current])
+            self.assert_progress(rows[0], 4, 0, 4)
+
+    def test_progress_filter_combines_name_class_and_student_with_and(self):
+        target = self.add_payment(student_id=1, paid=4)
+        self.add_payment(student_id=2, paid=4)
+        self.add_payment(student_id=3, paid=4, class_type='중등부 토론반')
+        filters = dict(progress_state='low', q='  가 학생  ',
+                       class_type='  초등부 독서반  ', student_id=1)
+        rows = self.payments(**filters)
+        self.assertEqual([p['row_id'] for p in rows], [target])
+        self.assert_progress(rows[0], 4, 0, 4)
+        for replacement in ({'q': '나 학생'}, {'class_type': '중등부 토론반'},
+                            {'student_id': 2}, {'progress_state': 'normal'}):
+            with self.subTest(replacement=replacement):
+                self.assertEqual(self.payments(**dict(filters, **replacement)), [])
+        self.assertEqual(len(self.payments(progress_state='low', q='학생')), 3)
+        self.assertEqual(len(self.payments(progress_state='low', class_type=self.CLASS_TYPE)), 2)
+        self.assertEqual([p['row_id'] for p in self.payments(progress_state='low', student_id=1)],
+                         [target])
+
+    def test_progress_filter_class_does_not_promote_hidden_current_payment(self):
+        old = self.add_payment(start='2026-08-01', paid=20)
+        current = self.add_payment(start='2026-09-01', paid=4, class_type='중등부 토론반')
+        rows = self.payments(progress_state='previous', class_type=self.CLASS_TYPE)
+        self.assertEqual([p['row_id'] for p in rows], [old])
+        self.assert_state(rows[0], 'previous')
+        for state in ('normal', 'low', 'exhausted'):
+            with self.subTest(state=state):
+                self.assertEqual(self.payments(progress_state=state, class_type=self.CLASS_TYPE), [])
+        self.assertEqual([p['row_id'] for p in self.payments(progress_state='low')], [current])
+
+    def test_progress_filter_student_alias_does_not_promote_old_payment(self):
+        old = self.add_payment(student_id=1, start='2026-08-01', paid=20)
+        current = self.add_payment(student_id=101, paid=4)
+        rows = self.payments(progress_state='previous', student_id=1)
+        self.assertEqual([p['row_id'] for p in rows], [old])
+        self.assert_state(rows[0], 'previous')
+        for state in ('normal', 'low', 'exhausted'):
+            with self.subTest(state=state):
+                self.assertEqual(self.payments(progress_state=state, student_id=1), [])
+        rows = self.payments(progress_state='low', student_id=101)
+        self.assertEqual([p['row_id'] for p in rows], [current])
+        self.assert_progress(rows[0], 4, 0, 4)
+
+    def test_progress_filter_none_and_empty_keep_all_payments(self):
+        self.add_payment(start='2026-08-01')
+        self.add_payment(paid=5)
+        self.add_payment(student_id=2, paid=1)
+        self.add_payment(student_id=3, paid=0)
+        self.add_payment(start='2026-09-21')
+        self.add_payment(student_id=999)
+        for include_progress in (True, False):
+            expected = self.payments(include_progress=include_progress)
+            self.assertEqual(len(expected), 6)
+            for state in (None, ''):
+                with self.subTest(state=state, include_progress=include_progress):
+                    with patch.object(main, '_get_tuition_progress',
+                                      wraps=main._get_tuition_progress) as calculate:
+                        rows = self.payments(progress_state=state, include_progress=include_progress)
+                    self.assertEqual(rows, expected)
+                    if not include_progress:
+                        calculate.assert_not_called()
+                        for payment in rows:
+                            self.assertNotIn('TuitionProgress', payment)
+                            self.assertNotIn('ProgressState', payment)
+
+    def test_ended_default_and_false_exclude_only_ended_students(self):
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 2')
+        self.conn.execute('UPDATE Students SET IsClassEnded = NULL WHERE rowid = 3')
+        self.conn.commit()
+        active = self.add_payment(student_id=1)
+        ended = self.add_payment(student_id=202)
+        null_status = self.add_payment(student_id=3)
+        missing = self.add_payment(student_id=999)
+        for include_progress in (True, False):
+            for options in ({}, {'include_ended': False}, {'include_ended': True}):
+                with self.subTest(include_progress=include_progress, options=options):
+                    rows = self.payments(include_progress=include_progress, **options)
+                    expected = ([missing, null_status, ended, active]
+                                if options.get('include_ended') else [missing, null_status, active])
+                    self.assertEqual([p['row_id'] for p in rows], expected)
+                    if include_progress:
+                        self.assert_state(rows[0], 'unknown')
+                        self.assertIsNone(rows[0]['StudentName'])
+                        self.assertIsNone(rows[0]['StudentRowId'])
+                        for payment in rows[1:]:
+                            self.assert_progress(payment, 10, 0, 10)
+                    else:
+                        for payment in rows:
+                            self.assertNotIn('TuitionProgress', payment)
+                            self.assertNotIn('ProgressState', payment)
+
+    def test_ended_filter_handles_both_student_keys_and_all_payment_dates(self):
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 1')
+        self.conn.commit()
+        previous = self.add_payment(student_id=1, start='2026-08-01')
+        current = self.add_payment(student_id=101, start=self.TODAY, paid=4)
+        upcoming = self.add_payment(student_id=1, start='2026-10-01')
+        self.add_log(student_id=101, day=self.TODAY)
+        for options in ({}, {'include_ended': False}):
+            with self.subTest(options=options):
+                self.assertEqual(self.payments(**options), [])
+                for student_id in (1, 101):
+                    self.assertEqual(self.payments(student_id=student_id, **options), [])
+        rows = self.payments(include_ended=True)
+        self.assertEqual([p['row_id'] for p in rows], [upcoming, current, previous])
+        self.assertEqual({p['StudentRowId'] for p in rows}, {1})
+        self.assertEqual({p['StudentName'] for p in rows}, {'가 학생'})
+        self.assert_state(rows[0], 'upcoming')
+        self.assert_progress(rows[1], 4, 1, 3)
+        self.assert_state(rows[2], 'previous')
+        for state, expected in (('previous', previous), ('low', current), ('upcoming', upcoming)):
+            with self.subTest(state=state):
+                self.assertEqual(self.payments(progress_state=state), [])
+                self.assertEqual([p['row_id'] for p in self.payments(
+                    include_ended=True, progress_state=state)], [expected])
+
+    def test_include_ended_combines_name_class_and_progress_filters_with_and(self):
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 1')
+        self.conn.commit()
+        ended = self.add_payment(student_id=101, paid=4)
+        active = self.add_payment(student_id=2, paid=4)
+        other_class = self.add_payment(student_id=3, paid=4, class_type='중등부 토론반')
+        filters = dict(q='  학생  ', class_type='  초등부 독서반  ', progress_state='low')
+        for include_progress in (True, False):
+            for include_ended in (False, True):
+                with self.subTest(include_progress=include_progress, include_ended=include_ended):
+                    options = dict(include_progress=include_progress, include_ended=include_ended)
+                    rows = self.payments(**filters, **options)
+                    self.assertEqual([p['row_id'] for p in rows],
+                                     [active, ended] if include_ended else [active])
+                    for payment in rows:
+                        self.assert_progress(payment, 4, 0, 4)
+                    for changes, expected in (
+                            ({'q': '가 학생'}, [ended] if include_ended else []),
+                            ({'q': '나 학생'}, [active]),
+                            ({'q': '없는 학생'}, []),
+                            ({'class_type': '중등부 토론반'}, [other_class]),
+                            ({'q': '가 학생', 'class_type': '중등부 토론반'}, []),
+                            ({'progress_state': 'normal'}, []),
+                            ({'progress_state': 'exhausted'}, [])):
+                        with self.subTest(changes=changes):
+                            result = self.payments(**dict(filters, **changes), **options)
+                            self.assertEqual([p['row_id'] for p in result], expected)
+
+    def test_ended_students_are_removed_before_progress_and_session_calculation(self):
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 2')
+        self.conn.commit()
+        self.add_payment(student_id=1)
+        self.add_payment(student_id=2, start='2026-08-01')
+        self.add_payment(student_id=202)
+        self.add_payment(student_id=2, start='2026-10-01')
+        self.add_log(student_id=1)
+        self.add_log(student_id=202)
+        for options in ({}, {'include_ended': False}, {'include_ended': True}):
+            for progress_options in ({}, {'include_progress': False, 'progress_state': 'normal'}):
+                with self.subTest(options=options, progress_options=progress_options):
+                    with patch.object(main, '_get_tuition_progress',
+                                      wraps=main._get_tuition_progress) as calculate, \
+                            patch.object(main, '_count_general_lesson_sessions',
+                                         wraps=main._count_general_lesson_sessions) as count_sessions:
+                        self.payments(**options, **progress_options)
+                    expected = {1, 2} if options.get('include_ended') else {1}
+                    self.assertEqual(calculate.call_count, len(expected))
+                    self.assertEqual({call.args[0] for call in calculate.call_args_list}, expected)
+                    self.assertEqual(count_sessions.call_count, len(expected))
+                    self.assertEqual({call.args[1] for call in count_sessions.call_args_list}, expected)
+        # 조회 가능한 학생이 전혀 없으면 차시 계산 함수도 호출하지 않는다.
+        with patch.object(main, '_get_tuition_progress') as calculate, \
+                patch.object(main, '_count_general_lesson_sessions') as count_sessions:
+            self.assertEqual(self.payments(student_id=202), [])
+        calculate.assert_not_called()
+        count_sessions.assert_not_called()
+
+    def test_ended_filter_keeps_missing_students_unknown_for_all_options(self):
+        current = self.add_payment(student_id=999)
+        upcoming = self.add_payment(student_id=998, start='2026-10-01')
+        for options in ({}, {'include_ended': False}, {'include_ended': True}):
+            with self.subTest(options=options):
+                with patch.object(main, '_get_tuition_progress') as calculate:
+                    rows = self.payments(progress_state='unknown', include_progress=False, **options)
+                calculate.assert_not_called()
+                self.assertEqual([p['row_id'] for p in rows], [upcoming, current])
+                for payment in rows:
+                    self.assert_state(payment, 'unknown')
+                    self.assertIsNone(payment['StudentRowId'])
+
+    def test_ended_filter_does_not_modify_students_payments_or_studylogs(self):
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 2')
+        self.conn.execute('UPDATE Students SET IsClassEnded = NULL WHERE rowid = 3')
+        self.conn.commit()
+        for student_id in (1, 202, 3, 999):
+            self.add_payment(student_id=student_id, start='2026-08-01')
+            self.add_payment(student_id=student_id)
+            self.add_payment(student_id=student_id, start='2026-10-01')
+            self.add_log(student_id=student_id)
+        before = list(self.conn.iterdump())
+        for options in ({}, {'include_ended': False}, {'include_ended': True}):
+            for include_progress in (True, False):
+                for state in (None, 'normal', 'low', 'exhausted', 'previous', 'upcoming', 'unknown'):
+                    with self.subTest(options=options, include_progress=include_progress, state=state):
+                        self.payments(include_progress=include_progress, progress_state=state, **options)
+                        self.assertEqual(list(self.conn.iterdump()), before)
+
+    def test_progress_filter_invalid_values_raise_korean_http_400(self):
+        self.add_payment()
+        for state in ('current', 'all', 'NORMAL', 'normal,low', '알 수 없는 상태'):
+            for include_progress in (True, False):
+                # 이름 검색 결과가 없어도 잘못된 상태값은 오류로 처리한다.
+                for q in (None, '없는 학생'):
+                    with self.subTest(state=state, include_progress=include_progress, q=q):
+                        with self.assertRaises(main.HTTPException) as raised:
+                            self.payments(progress_state=state, include_progress=include_progress, q=q)
+                        self.assertEqual(raised.exception.status_code, 400)
+                        self.assertIsInstance(raised.exception.detail, str)
+                        self.assertRegex(raised.exception.detail, '[가-힣]')
+
+    def test_progress_filter_empty_search_returns_empty_for_all_supported_states(self):
+        self.add_payment()
+        for state in ('normal', 'low', 'exhausted', 'previous', 'upcoming', 'unknown'):
+            with self.subTest(state=state):
+                with patch.object(main, '_get_tuition_progress') as calculate:
+                    self.assertEqual(self.payments(progress_state=state, q='없는 학생',
+                                                   include_progress=False), [])
+                calculate.assert_not_called()
 
 
 if __name__ == '__main__':

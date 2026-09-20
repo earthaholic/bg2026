@@ -7848,7 +7848,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.getElementById('tuition-payments-body');
         if (!body) return;
         try {
-            const data = await apiFetch('/api/user/tuition-payments');
+            // 결제 관리의 전체 이력은 유지하고, 종료 학생 기본 제외는 조회 화면에 적용한다.
+            const data = await apiFetch('/api/user/tuition-payments?include_ended=true');
             const rows = data.payments || [];
             tuitionPaymentsCache = rows;
             body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
@@ -7927,10 +7928,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!body) return;
         const q = document.getElementById('tuition-search-q').value.trim();
         const classType = document.getElementById('tuition-search-class').value;
+        const progressState = document.getElementById('tuition-search-progress').value;
+        const includeEnded = document.getElementById('tuition-search-include-ended').checked;
         const version = ++tuitionPaymentSearchVersion;
         body.innerHTML = '<tr><td colspan="7" class="text-center">결제 이력을 불러오는 중입니다.</td></tr>';
         try {
-            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true`);
+            const progressQuery = progressState ? `&progress_state=${encodeURIComponent(progressState)}` : '';
+            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true&include_ended=${includeEnded}${progressQuery}`);
             if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
             body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
@@ -8038,6 +8042,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-tuition-search')?.addEventListener('click', loadTuitionPaymentSearch);
+    document.getElementById('tuition-search-progress')?.addEventListener('change', loadTuitionPaymentSearch);
+    document.getElementById('tuition-search-include-ended')?.addEventListener('change', loadTuitionPaymentSearch);
     document.getElementById('tuition-search-q')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); loadTuitionPaymentSearch(); } });
     document.getElementById('btn-save-all-tuition-settings')?.addEventListener('click', async () => {
         const msg = document.getElementById('tuition-settings-msg');

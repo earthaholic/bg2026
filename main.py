@@ -1497,8 +1497,19 @@ def save_tuition_fee_setting(payload: TuitionFeeSettingRequest, current_user: Di
     finally:
         conn.close()
 
+def _tuition_payment_stage(payment: Dict[str, Any]) -> str:
+    """현재 결제의 잔여 차시 경고 단계와 과거·예정 결제를 구분한다."""
+    state = payment["ProgressState"]
+    if state != "current":
+        return state
+    remaining = payment["TuitionProgress"]["remaining_lessons"]
+    return "exhausted" if remaining <= 0 else "low" if remaining < 5 else "normal"
+
+
 @app.get("/api/user/tuition-payments")
-def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff), include_progress: bool = False):
+def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff), include_progress: bool = False, progress_state: Optional[str] = None, include_ended: bool = False):
+    if progress_state and progress_state not in {"normal", "low", "exhausted", "previous", "upcoming", "unknown"}:
+        raise HTTPException(status_code=400, detail="올바른 차시 상태를 선택해 주세요.")
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1509,12 +1520,14 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
             conditions.append('s."Name" LIKE ?'); params.append(f'%{q.strip()}%')
         if class_type and class_type.strip():
             conditions.append('p."ClassType" = ?'); params.append(class_type.strip())
+        if not include_ended:
+            conditions.append('COALESCE(s."IsClassEnded", 0) = 0')
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ''
         cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s.rowid AS "StudentRowId"
                            FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                            {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
         payments = [dict(r) for r in cursor.fetchall()]
-        if include_progress:
+        if include_progress or progress_state:
             reference_day = datetime.now().strftime("%Y-%m-%d")
             progress_by_student = {}
             for payment in payments:
@@ -1541,6 +1554,9 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
                         }
                     else:
                         payment["ProgressState"] = "previous"
+        if progress_state:
+            payments = [payment for payment in payments
+                        if _tuition_payment_stage(payment) == progress_state]
         return {"payments": payments}
     finally:
         conn.close()

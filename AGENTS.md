@@ -139,3 +139,6 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 현재 결제는 오늘 이하의 최신 시작일, 동일 시작일이면 최신 rowid 기준이다. 이름·반 필터로 현재 결제가 제외되어도 과거 건을 현재로 간주하지 않는다. 기존 `_get_tuition_progress()` 계산을 재사용하며 결제+서비스 합계에서 일반 수업을 차감한다. 특강·휴일·휴강 제외와 같은 날짜·내용의 복수 도서 중복 제거 기준은 유지한다.
 - `결제/서비스` 셀에서 1~4회는 주황색 `결제 확인 필요`, 0회 이하는 빨간색 `차시 소진`과 초과 사용 횟수를 표시한다. 5회 이상은 일반 표시, 과거·미래 결제는 `이전 결제`·`시작 예정`으로 구분한다. 조회마다 학생별 한 번만 집계하며 늦은 이전 검색 응답은 무시한다.
 - 회귀 검증: `tests/test_tuition_payment_progress.py`, `tests/test_tuition_payment_progress_ui.js`.
+- 차시 상태 필터는 `progress_state=normal|low|exhausted|previous|upcoming|unknown`을 전달한다. 각각 현재 결제 5회 이상·1~4회·0회 이하·이전 결제·시작 예정·확인 불가에 해당하며 빈 값은 전체다. 이름·반·학생 조건과 AND로 결합하고 현재 결제 판정 후 필터링한다. 상태를 지정하면 `include_progress=false`여도 집계하며 잘못된 상태는 400으로 거부한다. 화면에서는 선택 즉시 재조회하고 전체 상태 선택 시 이 필터만 해제한다.
+- 결제 이력 조회의 `수업 종료 학생 포함` 체크박스는 기본 해제다. API `include_ended=false`(기본)는 `COALESCE(Students.IsClassEnded, 0)=0` 조건으로 종료 학생의 모든 결제를 차시 집계 전에 제외한다. `true`는 진행·종료 학생을 함께 조회한다. 이름·반·차시 상태와 AND로 적용하고 체크 변경 시 즉시 재조회한다. 별도 결제 관리 화면은 `include_ended=true`로 기존 전체 이력을 유지한다.
+- 결제 조회 필터 UI는 `tuition-filter-fields`의 학생명·반·차시 상태·검색 버튼과 `tuition-filter-footer`의 종료 학생 포함·접이식 계산 안내로 구성한다. 넓은 화면에서는 4열, 1100px 이하에서는 2열, 600px 이하에서는 1열이며 스타일은 `#view-tuition-payment-search`로 제한한다. 공용 `filter-options-grid`의 상단 테두리·패딩을 이 화면에 재도입하지 않는다.
