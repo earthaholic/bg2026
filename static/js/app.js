@@ -8199,6 +8199,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (button) button.disabled = !count || !document.getElementById('payroll-transfer-teacher')?.value;
     }
 
+    function payrollLessonTypeBadge(student) {
+        const lines = student.lines || [];
+        const specialCount = lines.filter(line => Number(line.IsSpecial) === 1).length;
+        const regularCount = lines.length - specialCount;
+        const type = lines.length
+            ? (specialCount && regularCount ? 'mixed' : specialCount ? 'special' : 'regular')
+            : (Number(student.IsSpecial) === 1 ? 'special' : 'regular');
+        const label = { regular: '일반', special: '특강', mixed: '일반·특강' }[type];
+        const detail = lines.length
+            ? `해당 월 정산 기록 기준 · 일반 ${regularCount}건 · 특강 ${specialCount}건`
+            : '정산 기록 없음 · 현재 반 설정 기준';
+        return `<span class="payroll-lesson-type is-${type}" tabindex="0" title="${detail}" aria-label="${label} · ${detail}">${label}</span>${lines.length ? '' : '<small class="payroll-lesson-type-note">현재 반 기준</small>'}`;
+    }
+
     function renderPayrollTeamCards(lines, canTransfer = false, teamStudents = []) {
         const container = document.getElementById('payroll-team-cards');
         const teams = new Map();
@@ -8227,7 +8241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             teamStudents.filter(student => student.ClassId === teamLines[0].ClassId).forEach(student => {
                 const key = `student:${student.StudentRowId}`;
                 if (!students.has(key)) students.set(key, {
-                    name: student.StudentName || '-', grade: formatPayrollGrade(student.CurrentGrade), lines: []
+                    name: student.StudentName || '-', grade: formatPayrollGrade(student.CurrentGrade), IsSpecial: student.IsSpecial, lines: []
                 });
             });
             const teamTotal = teamLines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
@@ -8239,9 +8253,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const rows = [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(student => {
                 const attendedDates = new Set(student.lines.map(line => line.StudiedDay));
                 const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
-                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td>${dates.map(date => `<td class="${date && attendedDates.has(date) ? 'is-attended' : ''}">${date && attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
+                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${dates.map(date => `<td class="${date && attendedDates.has(date) ? 'is-attended' : ''}">${date && attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
             }).join('');
-            return `<article class="card payroll-team-card"><header><div><span class="payroll-team-eyebrow">수업 팀</span><h3>${escapeHtml(teamName)}</h3></div><div class="payroll-team-total"><span>팀 정산액</span><strong>${teamTotal.toLocaleString()}원</strong></div></header><div class="table-responsive"><table class="modern-table payroll-session-table"><thead><tr><th>학년</th><th>이름</th>${headerCells}<th>총 차시</th><th>정산액</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
+            return `<article class="card payroll-team-card"><header><div><span class="payroll-team-eyebrow">수업 팀</span><h3>${escapeHtml(teamName)}</h3></div><div class="payroll-team-total"><span>팀 정산액</span><strong>${teamTotal.toLocaleString()}원</strong></div></header><div class="table-responsive"><table class="modern-table payroll-session-table"><thead><tr><th>학년</th><th>이름</th><th>수업 구분</th>${headerCells}<th>총 차시</th><th>정산액</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
         }).join('');
     }
 

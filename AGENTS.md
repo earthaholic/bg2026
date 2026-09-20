@@ -142,3 +142,9 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 차시 상태 필터는 `progress_state=normal|low|exhausted|previous|upcoming|unknown`을 전달한다. 각각 현재 결제 5회 이상·1~4회·0회 이하·이전 결제·시작 예정·확인 불가에 해당하며 빈 값은 전체다. 이름·반·학생 조건과 AND로 결합하고 현재 결제 판정 후 필터링한다. 상태를 지정하면 `include_progress=false`여도 집계하며 잘못된 상태는 400으로 거부한다. 화면에서는 선택 즉시 재조회하고 전체 상태 선택 시 이 필터만 해제한다.
 - 결제 이력 조회의 `수업 종료 학생 포함` 체크박스는 기본 해제다. API `include_ended=false`(기본)는 `COALESCE(Students.IsClassEnded, 0)=0` 조건으로 종료 학생의 모든 결제를 차시 집계 전에 제외한다. `true`는 진행·종료 학생을 함께 조회한다. 이름·반·차시 상태와 AND로 적용하고 체크 변경 시 즉시 재조회한다. 별도 결제 관리 화면은 `include_ended=true`로 기존 전체 이력을 유지한다.
 - 결제 조회 필터 UI는 `tuition-filter-fields`의 학생명·반·차시 상태·검색 버튼과 `tuition-filter-footer`의 종료 학생 포함·접이식 계산 안내로 구성한다. 넓은 화면에서는 4열, 1100px 이하에서는 2열, 600px 이하에서는 1열이며 스타일은 `#view-tuition-payment-search`로 제한한다. 공용 `filter-options-grid`의 상단 테두리·패딩을 이 화면에 재도입하지 않는다.
+
+
+## 월급 정산 수업 구분
+- 팀별 학생 표의 `수업 구분` 열은 정산 기록의 `IsSpecial`에 따라 `일반`·`특강`·`일반·특강` 배지를 표시한다. 혼합 학생도 한 행으로 유지하며 차시·금액 계산은 변경하지 않는다.
+- 기록이 없는 소속 학생만 `team_students.IsSpecial`(현재 `ClassStudents` 설정)을 사용하며 `현재 반 기준`을 표시한다. 마감 조회의 `IsSpecial`은 확정된 `TeacherPayrollLines.Reason`에서 복원해 이후 기록 변경과 분리한다.
+- 회귀 검증: `tests/test_payroll_lesson_type.py`, `tests/test_payroll_lesson_type_ui.js`.

@@ -3176,7 +3176,8 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
             placeholders = ','.join('?' for _ in class_ids)
             team_students = [dict(r) for r in conn.execute(f'''
                 SELECT DISTINCT cs."ClassId", s.rowid AS "StudentRowId",
-                       s."Name" AS "StudentName", s."Grade" AS "CurrentGrade"
+                       s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
+                       COALESCE(cs."IsSpecial", 0) AS "IsSpecial"
                 FROM "ClassStudents" cs
                 JOIN "Students" s ON cs."StudentId"=s.rowid OR cs."StudentId"=s."Id"
                 WHERE cs."ClassId" IN ({placeholders})
@@ -3954,7 +3955,8 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
         closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
             sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
-                            sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName"
+                            sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
+                            CASE WHEN pl."Reason" LIKE '특강%' THEN 1 ELSE 0 END AS "IsSpecial"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
                      LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"

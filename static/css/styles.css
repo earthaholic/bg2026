@@ -4251,6 +4251,41 @@ body {
 .payroll-session-table th small { margin-top: .15rem; color: var(--text-muted); font-weight: 400; }
 .payroll-session-table td { text-align: center; }
 .payroll-session-table .payroll-student-name { text-align: left; font-weight: 600; }
+#view-teacher-payroll .payroll-lesson-type {
+    display: inline-block;
+    padding: .2rem .55rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+#view-teacher-payroll .payroll-lesson-type.is-regular {
+    color: var(--text-muted);
+    background: var(--bg-surface);
+    border-color: var(--border-color);
+}
+#view-teacher-payroll .payroll-lesson-type.is-special {
+    color: #b45309;
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+#view-teacher-payroll .payroll-lesson-type.is-mixed {
+    color: #6d28d9;
+    background: #ede9fe;
+    border-color: #c4b5fd;
+}
+#view-teacher-payroll .payroll-lesson-type:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+#view-teacher-payroll .payroll-lesson-type-note {
+    display: block;
+    margin-top: .2rem;
+    color: var(--text-muted);
+    font-size: .7rem;
+    white-space: nowrap;
+}
 .payroll-session-table .is-attended { color: #10b981; background: rgba(16, 185, 129, .08); }
 .payroll-amount { color: var(--primary); font-weight: 700; text-align: right !important; white-space: nowrap; }
 .payroll-empty-state { padding: 3rem 1rem; color: var(--text-muted); text-align: center; }
