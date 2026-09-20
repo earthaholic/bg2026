@@ -1003,6 +1003,8 @@ def search_classes(
                 'row_id': student['row_id'], 'Name': student['Name'],
                 'IsSpecial': student['IsSpecial']
             })
+    all_students = [student for students in students_by_class.values() for student in students]
+    _attach_student_record_coverage(conn, all_students)
     for row in rows:
         row['Students'] = students_by_class[row['Id']]
     conn.close()
@@ -1069,7 +1071,35 @@ def validate_class_student_assignments(class_id: Optional[int], student_items: L
     finally:
         conn.close()
 
-def get_class_students(class_id: int) -> List[Dict[str, Any]]:
+def _attach_student_record_coverage(conn, students: List[Dict[str, Any]]) -> None:
+    """수업·기간과 무관한 학생의 전체 학습 기록 입력 건수를 일괄 집계한다."""
+    student_ids = list({student['row_id'] for student in students})
+    coverage = {}
+    # 공백만 있는 문자열은 입력으로 세지 않는다 (줄바꿈·탭·전각 공백 포함).
+    whitespace = ' \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'
+    for offset in range(0, len(student_ids), 400):
+        batch = student_ids[offset:offset + 400]
+        placeholders = ','.join('?' for _ in batch)
+        results = conn.execute(f'''
+            SELECT s.rowid AS student_row_id, COUNT(sl.rowid) AS total,
+                   SUM(CASE WHEN TRIM(COALESCE(sl."ActualTeacherUsername", ''), ?) != '' THEN 1 ELSE 0 END) AS teacher_filled,
+                   SUM(CASE WHEN TRIM(COALESCE(sl."LessonContent", ''), ?) != '' THEN 1 ELSE 0 END) AS content_filled
+            FROM "Students" s
+            LEFT JOIN "StudyLogs" sl ON sl."StudentId" = s.rowid OR sl."StudentId" = s."Id"
+            WHERE s.rowid IN ({placeholders})
+            GROUP BY s.rowid
+        ''', [whitespace, whitespace] + batch)
+        for result in results:
+            coverage[result['student_row_id']] = {
+                'total': result['total'],
+                'teacher_filled': result['teacher_filled'],
+                'content_filled': result['content_filled'],
+            }
+    for student in students:
+        student['RecordCoverage'] = coverage[student['row_id']]
+
+
+def get_class_students(class_id: int, include_record_coverage: bool = False) -> List[Dict[str, Any]]:
     """수업에 배정된 학생 목록을 이름 순으로 반환한다. (IsSpecial: 해당 학생의 이 수업 특강 여부)"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1080,9 +1110,11 @@ def get_class_students(class_id: int) -> List[Dict[str, Any]]:
         WHERE cs."ClassId" = ?
         ORDER BY s."Name" ASC
     ''', (class_id,))
-    rows = cursor.fetchall()
+    rows = [dict(r) for r in cursor.fetchall()]
+    if include_record_coverage:
+        _attach_student_record_coverage(conn, rows)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 def get_class_student_ids(class_id: int) -> List[int]:
     """수업에 배정된 학생의 rowid 목록을 반환한다 (권한 검증용)."""

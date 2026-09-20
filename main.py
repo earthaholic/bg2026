@@ -2360,7 +2360,7 @@ def user_get_class_detail(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     class_row = _get_accessible_class(class_id, current_user)
-    students = get_class_students(class_id)
+    students = get_class_students(class_id, include_record_coverage=True)
     return {"class_": class_row, "students": students, "planned_books": _get_class_planned_books(class_id)}
 
 class ClassPlannedBooksRequest(BaseModel):

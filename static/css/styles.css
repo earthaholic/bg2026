@@ -4420,7 +4420,7 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     text-align: left;
 }
 
-#view-class-list .class-student-badge.warning {
+.class-student-badge.warning {
     background: rgba(245, 158, 11, 0.2);
     color: var(--warning);
     border: 1px solid rgba(245, 158, 11, 0.35);
@@ -4430,16 +4430,63 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     display: none;
 }
 
-#view-class-list .class-student-badge {
-    cursor: pointer;
+.class-student-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-family: inherit;
+    white-space: nowrap;
+}
+
+button.class-student-badge { cursor: pointer; }
+#modal-class-detail .class-student-badge { cursor: help; }
+
+/* 한 원의 왼쪽은 진행 선생님, 오른쪽은 수업 내용의 입력 비율이다. */
+.student-record-lamp {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    overflow: hidden;
+    border-radius: 50%;
+    border: 1px solid rgba(15, 23, 42, 0.5);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+.record-lamp-half { width: 50%; height: 100%; }
+.record-lamp-half + .record-lamp-half { border-left: 1px solid rgba(15, 23, 42, 0.4); }
+.record-lamp-empty { background: #94a3b8; }
+.record-lamp-none { background: #ef4444; }
+.record-lamp-low { background: #f97316; }
+.record-lamp-partial { background: #facc15; }
+.record-lamp-complete { background: #22c55e; }
+.record-coverage-legend {
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    margin: 0;
+}
+#modal-class-detail .record-coverage-legend { margin-bottom: 0.6rem; }
+.record-coverage-tooltip {
+    position: fixed;
+    z-index: 20000;
+    max-width: min(380px, calc(100vw - 16px));
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.5rem;
+    background: #1e293b;
+    color: #fff;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.25);
+    pointer-events: none;
 }
 
 #view-class-list .class-student-badge:hover {
     filter: brightness(0.95);
 }
 
-#view-class-list .class-student-badge:focus-visible {
+.class-student-badge:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }

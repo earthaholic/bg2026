@@ -5790,6 +5790,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function recordCoverageLevel(filled, total) {
+        if (!total) return 'empty';
+        if (!filled) return 'none';
+        if (filled === total) return 'complete';
+        return filled * 2 < total ? 'low' : 'partial';
+    }
+
+    function renderClassStudentBadge(student, interactive = true) {
+        const coverage = student.RecordCoverage || { total: 0, teacher_filled: 0, content_filled: 0 };
+        const total = coverage.total;
+        const describe = (label, filled) => {
+            // 소수점 반올림으로 미완료 기록이 100%처럼 보이지 않도록 한다.
+            const percent = total ? Math.floor(filled * 1000 / total) / 10 : 0;
+            const percentLabel = filled > 0 && percent === 0 ? '0.1% 미만' : `${percent}%`;
+            return `${label}: ${filled}/${total}건${total ? ` (${percentLabel})` : ' (학습 기록 없음)'}`;
+        };
+        const description = [
+            '학생 전체 학습 기록 · 전체 기간',
+            describe('왼쪽 · 실제 진행 선생님', coverage.teacher_filled),
+            describe('오른쪽 · 수업 내용', coverage.content_filled),
+            '회색: 기록 없음 · 빨강: 0% · 주황: 0% 초과~50% 미만 · 노랑: 50% 이상~100% 미만 · 초록: 100%',
+        ].join('\n');
+        const name = student.Name || '이름 없음';
+        const special = Number(student.IsSpecial) === 1;
+        const tag = interactive ? 'button' : 'span';
+        const behavior = interactive ? `type="button" data-student-id="${Number(student.row_id)}"` : 'tabindex="0" role="group"';
+        const label = `${name}${special ? ' 특강' : ''}${interactive ? ' 학생 상세 정보' : ''}. ${description}`;
+        return `<${tag} ${behavior} class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge" aria-label="${escapeHtml(label)}" data-record-tooltip="${escapeHtml(description)}">
+            ${escapeHtml(name)}<span class="student-record-lamp" aria-hidden="true"><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.teacher_filled, total)}"></span><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.content_filled, total)}"></span></span>
+        </${tag}>`;
+    }
+
+    let recordCoverageTooltip = null;
+    function hideRecordCoverageTooltip() {
+        if (recordCoverageTooltip) recordCoverageTooltip.remove();
+        recordCoverageTooltip = null;
+    }
+
+    function bindRecordCoverageTooltips(container) {
+        hideRecordCoverageTooltip();
+        container.querySelectorAll('[data-record-tooltip]').forEach(badge => {
+            const show = () => {
+                hideRecordCoverageTooltip();
+                const tooltip = document.createElement('div');
+                tooltip.className = 'record-coverage-tooltip';
+                tooltip.setAttribute('role', 'tooltip');
+                tooltip.textContent = badge.dataset.recordTooltip;
+                document.body.appendChild(tooltip);
+                recordCoverageTooltip = tooltip;
+                const rect = badge.getBoundingClientRect();
+                const width = tooltip.offsetWidth;
+                const height = tooltip.offsetHeight;
+                tooltip.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+                tooltip.style.top = `${Math.max(8, rect.bottom + height + 16 <= window.innerHeight ? rect.bottom + 8 : rect.top - height - 8)}px`;
+            };
+            badge.addEventListener('mouseenter', show);
+            badge.addEventListener('focus', show);
+            badge.addEventListener('mouseleave', hideRecordCoverageTooltip);
+            badge.addEventListener('blur', hideRecordCoverageTooltip);
+        });
+    }
+    document.addEventListener('scroll', hideRecordCoverageTooltip, true);
+    document.addEventListener('click', hideRecordCoverageTooltip, true);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') hideRecordCoverageTooltip();
+    });
+    window.addEventListener('resize', hideRecordCoverageTooltip);
+
     function renderClassCards(classes) {
         if (!classCardsGrid) return;
         if (classes.length === 0) {
@@ -5811,9 +5879,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>#${cId}</strong></td>
                     <td>
                         <button type="button" class="class-name-button cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</button>
-                        <div class="class-student-badges">${(c.Students || []).map(student => `
-                            <button type="button" class="tag-badge ${Number(student.IsSpecial) === 1 ? 'warning' : 'primary'} class-student-badge" data-student-id="${Number(student.row_id)}" aria-label="${escapeHtml(student.Name || '이름 없음')}${Number(student.IsSpecial) === 1 ? ' 특강' : ''} 학생 상세 정보">${escapeHtml(student.Name || '이름 없음')}</button>
-                        `).join('')}</div>
+                        <div class="class-student-badges">${(c.Students || []).map(student => renderClassStudentBadge(student)).join('')}</div>
                     </td>
                     <td data-sort-value="${Object.keys(DAY_LABELS).indexOf(c.DayOfWeek) + 1}"><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
                     <td>${time}</td>
@@ -5838,6 +5904,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
         classCardsGrid.innerHTML = html;
+        bindRecordCoverageTooltips(classCardsGrid);
 
         classCardsGrid.querySelectorAll('.btn-open-class-detail').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -5899,11 +5966,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 studentRows = '<tr><td colspan="3" class="empty-state"><p>배정된 학생이 없습니다.</p></td></tr>';
             } else {
                 students.forEach(s => {
-                    const name = escapeHtml(s.Name || '이름 없음');
                     const sex = formatSex(s.Sex);
                     const referrerText = s.Referrer ? `<span class="text-muted" style="font-size: 0.75rem; margin-left: 0.4rem;"><i class="fa-solid fa-user-plus"></i> 추천: ${formatReferrer(s.Referrer)}</span>` : '';
                     const specialBadge = s.IsSpecial ? '<span class="badge" style="margin-left: 0.4rem; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.35);"><i class="fa-solid fa-star"></i> 특강</span>' : '';
-                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name}${referrerText}${specialBadge}</td><td>${sex}</td><td>${formatGrade(s.Grade)}</td></tr>`;
+                    studentRows += `<tr><td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${renderClassStudentBadge(s, false)}${referrerText}${specialBadge}</td><td>${sex}</td><td>${formatGrade(s.Grade)}</td></tr>`;
                 });
             }
 
@@ -5924,6 +5990,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="class-detail-students">
                     <div class="detail-section-title"><i class="fa-solid fa-users"></i> 수강 학생 명단</div>
+                    <p class="record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준이며, 이름에 마우스를 올리면 입력 비율을 확인할 수 있습니다.</p>
                     <div class="table-responsive">
                         <table class="modern-table">
                             <thead><tr><th>학생 이름</th><th>성별</th><th>학년</th></tr></thead>
@@ -5956,6 +6023,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 </div>
             `;
+            bindRecordCoverageTooltips(modalClassDetailBody);
             const plannedCopyButton = document.getElementById('btn-copy-planned-books');
             plannedCopyButton.addEventListener('click', () => copyBookList(data.planned_books || [], document.getElementById('planned-copy-status'), plannedCopyButton, true));
             const plannedRows = document.getElementById('planned-book-rows');

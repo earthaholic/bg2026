@@ -123,3 +123,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 복제·삭제하지 않고 `StudentId`와 수정 감사 메타데이터만 변경한다. 원본 기록 번호·도서·날짜·내용·수업·진행 선생님·특강·당시 학년 스냅샷은 보존한다. 현재 반 소속을 제한하거나 자동 변경하지 않는다. 수업 종료 학생도 대상으로 검색할 수 있다.
 - 학생·도서의 rowid/Id 식별자 충돌, 같은 학생으로 이동, 기존/선택 내부의 학생·도서·날짜 중복, 정산 행·월 마감, 대상 학생 결석·수업 휴강을 검사한다. 전체 검사·변경·UPDATE 감사 이력은 하나의 트랜잭션이며 한 건이라도 실패하면 모두 취소한다.
 - 기존 저장 월말 보고 문구는 자동 변경하지 않는다. 화면에 재확인 안내를 표시한다. 회귀 테스트: `tests/test_studylog_bulk_transfer.py`, `tests/test_studylog_bulk_transfer_ui.js`.
+
+
+## 수업 학생 배지의 학습 기록 입력 현황
+- 수업 목록과 상세의 학생 배지는 하나의 원형 표시등을 좌우로 나눈다. 왼쪽은 `ActualTeacherUsername`, 오른쪽은 `LessonContent` 입력 비율이며, 해당 학생의 전체 기간·전체 수업 및 수업 미연결 `StudyLogs`가 분모다. 담당 선생님 추정값이나 `Description`은 포함하지 않고 공백만 있는 값도 제외한다.
+- 표시등은 기록 없음=회색, 0%=빨강, 0% 초과~50% 미만=주황, 50% 이상~100% 미만=노랑, 100%=초록이다. 마우스 올림·키보드 초점으로 각 항목의 입력 건수/전체 건수·비율을 안내하며 기존 클릭 동작을 유지한다.
+- `database._attach_student_record_coverage()`가 학생별 `RecordCoverage`(`total`, `teacher_filled`, `content_filled`)를 일괄 집계한다. 수업 목록과 `get_class_students(..., include_record_coverage=True)`를 사용하는 상세 API에서 제공하며, 나머지 학생 조회에는 기본적으로 추가하지 않는다.
+- 회귀 검증: `tests/test_student_record_coverage.py`, `tests/test_student_record_coverage_ui.js`.
