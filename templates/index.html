@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260920-student-record-coverage">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260920-student-coverage-filters">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -762,6 +762,28 @@
                                     </select>
                                 </div>
 
+                                <div class="filter-group">
+                                    <label for="student-filter-teacher-record">실제 진행 선생님 입력 상태 (왼쪽)</label>
+                                    <select id="student-filter-teacher-record" class="form-control">
+                                        <option value="">전체 상태</option>
+                                        <option value="empty">회색 · 학습 기록 없음</option>
+                                        <option value="none">빨강 · 미입력 (0%)</option>
+                                        <option value="low">주황 · 0% 초과~50% 미만</option>
+                                        <option value="partial">노랑 · 50% 이상~100% 미만</option>
+                                        <option value="complete">초록 · 입력 완료 (100%)</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="student-filter-content-record">수업 내용 입력 상태 (오른쪽)</label>
+                                    <select id="student-filter-content-record" class="form-control">
+                                        <option value="">전체 상태</option>
+                                        <option value="empty">회색 · 학습 기록 없음</option>
+                                        <option value="none">빨강 · 미입력 (0%)</option>
+                                        <option value="low">주황 · 0% 초과~50% 미만</option>
+                                        <option value="partial">노랑 · 50% 이상~100% 미만</option>
+                                        <option value="complete">초록 · 입력 완료 (100%)</option>
+                                    </select>
+                                </div>
                                 <div class="filter-group"><label class="checkbox-pill sm"><input type="checkbox" id="student-filter-include-ended" value="1"><span><i class="fa-solid fa-graduation-cap"></i> 수업 종료 학생 포함</span></label></div>
 
                                 <div class="filter-group filter-group-actions">
@@ -775,7 +797,7 @@
                         <!-- Student Results Summary Bar -->
                         <div class="results-bar">
                             <span id="student-search-total-count" class="badge badge-info">총 0 명의 학생</span>
-                            <span class="text-muted">목록에서 학생을 선택하면 상세 정보를 확인하거나 수업 종료 상태를 즉시 토글할 수 있습니다.</span>
+                            <span class="text-muted">입력 상태는 학생 전체 기간 기록 기준입니다. 두 상태를 선택하면 모두 충족하는 학생만 표시합니다.</span>
                         </div>
 
                         <!-- Student List Table Card -->
@@ -2512,6 +2534,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260920-student-record-coverage"></script>
+    <script src="/static/js/app.js?v=20260920-student-coverage-filters"></script>
 </body>
 </html>

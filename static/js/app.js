@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentSearchPage = 1;
     let studentSearchLimit = 30;
     let studentSearchTotalPages = 1;
+    let studentSearchRequestVersion = 0;
 
     // 도서 검색의 "미학습 학생" 필터: key는 Students.rowid
     const bookUnstudiedStudents = new Map();
@@ -320,6 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentSearchQ = document.getElementById('student-search-q');
     const btnDoStudentSearch = document.getElementById('btn-do-student-search');
     const studentFilterSex = document.getElementById('student-filter-sex');
+    const studentFilterTeacherRecord = document.getElementById('student-filter-teacher-record');
+    const studentFilterContentRecord = document.getElementById('student-filter-content-record');
     const studentFilterIncludeEnded = document.getElementById('student-filter-include-ended');
     const btnResetStudentFilters = document.getElementById('btn-reset-student-filters');
 
@@ -1159,11 +1162,15 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStudentSearchResults();
         });
 
+        [studentFilterTeacherRecord, studentFilterContentRecord].forEach(filter => {
+            filter.addEventListener('change', () => {
+                studentSearchPage = 1;
+                loadStudentSearchResults(true);
+            });
+        });
+
         btnResetStudentFilters.addEventListener('click', () => {
-            studentSearchQ.value = '';
-            studentFilterSex.value = '';
-            studentFilterIncludeEnded.checked = false;
-            studentSearchPage = 1;
+            resetStudentSearchFilters();
             loadStudentSearchResults();
         });
 
@@ -3632,25 +3639,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Student Search Handler
+    function buildStudentSearchParams() {
+        const params = new URLSearchParams({ page: studentSearchPage, limit: studentSearchLimit });
+        if (studentSearchQ.value.trim()) params.set('q', studentSearchQ.value.trim());
+        if (studentFilterSex.value) params.set('sex', studentFilterSex.value);
+        if (studentFilterIncludeEnded.checked) params.set('include_ended', 'true');
+        if (studentFilterTeacherRecord.value) params.set('teacher_record_state', studentFilterTeacherRecord.value);
+        if (studentFilterContentRecord.value) params.set('content_record_state', studentFilterContentRecord.value);
+        return params;
+    }
+
+    function resetStudentSearchFilters() {
+        studentSearchQ.value = '';
+        studentFilterSex.value = '';
+        studentFilterIncludeEnded.checked = false;
+        studentFilterTeacherRecord.value = '';
+        studentFilterContentRecord.value = '';
+        studentSearchPage = 1;
+    }
+
+    // 학생 검색 조건을 바꾸면 늦게 도착한 이전 결과는 무시한다.
     async function loadStudentSearchResults(directSearch = false) {
         const feedback = createActionFeedback();
         if (!token) return;
+        const requestVersion = ++studentSearchRequestVersion;
+        hideRecordCoverageTooltip();
         try {
             studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div></td></tr>';
 
-            const q = studentSearchQ.value.trim();
-            const sex = studentFilterSex.value;
-
-            const queryParams = new URLSearchParams({
-                page: studentSearchPage,
-                limit: studentSearchLimit
-            });
-            if (q) queryParams.append('q', q);
-            if (sex) queryParams.append('sex', sex);
-            if (studentFilterIncludeEnded && studentFilterIncludeEnded.checked) queryParams.append('include_ended', 'true');
-
+            const queryParams = buildStudentSearchParams();
             const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (requestVersion !== studentSearchRequestVersion) return;
             studentSearchTotalPages = data.total_pages;
 
             studentSearchTotalCount.textContent = `총 ${data.total_count} 명의 학생`;
@@ -3661,6 +3680,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudentCards(data.students);
         } catch (err) {
+            if (requestVersion !== studentSearchRequestVersion) return;
             feedback.show(err.message, 'error');
             studentCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
@@ -3686,7 +3706,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `
                 <tr data-student-id="${studentId}">
                     <td><strong>#${studentId}</strong></td>
-                    <td class="fw-semibold text-primary cell-clickable btn-open-student-detail" data-student-id="${studentId}">${name}</td>
+                    <td>${renderStudentSearchName(s)}</td>
                     <td>
                         <button type="button" class="badge btn-toggle-student-sex ${sex === '남' ? 'badge-info' : sex === '여' ? 'badge-danger' : 'badge-secondary'}" data-student-id="${studentId}" data-current-sex="${rawSex}" title="클릭하여 성별 변경: 미지정 → 여 → 남 → 여">${sex}</button>
                     </td>
@@ -3708,6 +3728,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         studentCardsGrid.innerHTML = html;
+        bindRecordCoverageTooltips(studentCardsGrid);
 
         document.querySelectorAll('.btn-open-student-detail').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -5797,7 +5818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return filled * 2 < total ? 'low' : 'partial';
     }
 
-    function renderClassStudentBadge(student, interactive = true) {
+    function studentRecordCoverageDisplay(student) {
         const coverage = student.RecordCoverage || { total: 0, teacher_filled: 0, content_filled: 0 };
         const total = coverage.total;
         const describe = (label, filled) => {
@@ -5812,13 +5833,25 @@ document.addEventListener('DOMContentLoaded', () => {
             describe('오른쪽 · 수업 내용', coverage.content_filled),
             '회색: 기록 없음 · 빨강: 0% · 주황: 0% 초과~50% 미만 · 노랑: 50% 이상~100% 미만 · 초록: 100%',
         ].join('\n');
+        const lamp = `<span class="student-record-lamp" aria-hidden="true"><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.teacher_filled, total)}"></span><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.content_filled, total)}"></span></span>`;
+        return { description, lamp };
+    }
+
+    function renderStudentSearchName(student) {
+        const { description, lamp } = studentRecordCoverageDisplay(student);
+        const name = student.Name || '이름 없음';
+        return `<button type="button" class="student-search-name cell-clickable btn-open-student-detail" data-student-id="${Number(student.row_id || student.Id)}" aria-label="${escapeHtml(`${name} 학생 상세 정보. ${description}`)}" data-record-tooltip="${escapeHtml(description)}">${escapeHtml(name)}${lamp}</button>`;
+    }
+
+    function renderClassStudentBadge(student, interactive = true) {
+        const { description, lamp } = studentRecordCoverageDisplay(student);
         const name = student.Name || '이름 없음';
         const special = Number(student.IsSpecial) === 1;
         const tag = interactive ? 'button' : 'span';
         const behavior = interactive ? `type="button" data-student-id="${Number(student.row_id)}"` : 'tabindex="0" role="group"';
         const label = `${name}${special ? ' 특강' : ''}${interactive ? ' 학생 상세 정보' : ''}. ${description}`;
         return `<${tag} ${behavior} class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge" aria-label="${escapeHtml(label)}" data-record-tooltip="${escapeHtml(description)}">
-            ${escapeHtml(name)}<span class="student-record-lamp" aria-hidden="true"><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.teacher_filled, total)}"></span><span class="record-lamp-half record-lamp-${recordCoverageLevel(coverage.content_filled, total)}"></span></span>
+            ${escapeHtml(name)}${lamp}
         </${tag}>`;
     }
 

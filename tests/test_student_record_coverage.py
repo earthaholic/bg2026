@@ -18,7 +18,10 @@ class StudentRecordCoverageTests(unittest.TestCase):
         self.addCleanup(connection_patch.stop)
         # Id를 INTEGER PRIMARY KEY로 만들지 않아 원본 Id와 SQLite rowid를 구분한다.
         self.conn.executescript('''
-            CREATE TABLE Students (Id INTEGER UNIQUE, Name TEXT);
+            CREATE TABLE Students (
+                Id INTEGER UNIQUE, Name TEXT, Sex TEXT, Grade TEXT,
+                Referrer TEXT, Description TEXT, IsClassEnded INTEGER DEFAULT 0
+            );
             CREATE TABLE StudyLogs (
                 StudentId INTEGER, ClassId INTEGER, StudiedDay TEXT,
                 ActualTeacherUsername TEXT, LessonContent TEXT, Description TEXT,
@@ -80,6 +83,143 @@ class StudentRecordCoverageTests(unittest.TestCase):
         self.add_log(1, ' \t\n\u3000', None, '메모만 있음', class_id=999)
         self.add_log(202, 'second_teacher', None, '별도 학생 메모', class_id=20)
         self.add_log(3, 'same_identifier_teacher', '동일 식별자 내용', class_id=10)
+
+    def search_response(self, **overrides):
+        import main
+        params = dict(q=None, sex=None, include_ended=False, page=1, limit=30,
+                      teacher_record_state=None, content_record_state=None,
+                      current_user={'username': 'admin', 'role': 'admin'})
+        params.update(overrides)
+        with patch.object(main, 'get_db_connection', side_effect=self.connect), \
+                patch.object(main, 'advance_student_grades'):
+            return main.user_search_students(**params)
+
+    def test_student_search_includes_same_coverage_as_class_detail(self):
+        self.seed_mixed_records()
+        result = self.search_response()
+        self.assertEqual(result['total_count'], 4)
+        detail = {row['row_id']: row['RecordCoverage'] for row in
+                  database.get_class_students(10, include_record_coverage=True)}
+        for student in result['students']:
+            self.assertEqual(student['RecordCoverage'], detail[student['row_id']])
+        self.assertCoverage(result['students'][0]['RecordCoverage'], 0, 0, 0)
+
+    def test_student_search_keeps_filters_and_pagination(self):
+        self.seed_mixed_records()
+        self.conn.execute('UPDATE Students SET Sex = ? WHERE rowid = 1', ('여',))
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 2')
+        self.conn.commit()
+        filtered = self.search_response(q='가 학생', sex='여')
+        self.assertEqual(filtered['total_count'], 1)
+        self.assertCoverage(filtered['students'][0]['RecordCoverage'], 4, 2, 2)
+        self.assertEqual(self.search_response()['total_count'], 3)
+        paged = self.search_response(include_ended=True, page=2, limit=2)
+        self.assertEqual(paged['total_count'], 4)
+        self.assertEqual(paged['total_pages'], 2)
+        self.assertEqual([row['row_id'] for row in paged['students']], [2, 1])
+        empty = self.search_response(q='없는 학생')
+        self.assertEqual(empty['students'], [])
+        self.assertEqual(empty['total_pages'], 1)
+
+    def test_student_search_keeps_teacher_scope_but_counts_all_student_history(self):
+        self.seed_mixed_records()
+        teacher = {'username': 'other_teacher', 'role': 'teacher'}
+        result = self.search_response(current_user=teacher)
+        self.assertEqual([row['row_id'] for row in result['students']], [2, 1])
+        self.assertCoverage(result['students'][1]['RecordCoverage'], 4, 2, 2)
+        hidden = self.search_response(q='다 학생', current_user=teacher)
+        self.assertEqual(hidden['students'], [])
+        self.assertEqual(hidden['total_count'], 0)
+
+    def seed_filter_states(self):
+        profiles = {10: (0, 0, 0), 11: (4, 0, 4), 12: (100, 49, 50),
+                    13: (100, 50, 49), 14: (100, 99, 0), 15: (100, 100, 99),
+                    16: (1, 1, 1), 17: (4, 0, 0)}
+        for student_id, (total, teacher, content) in profiles.items():
+            self.conn.execute('INSERT INTO Students(rowid, Id, Name, Sex) VALUES (?, ?, ?, ?)',
+                              (student_id, student_id + 10000, '상태 {}'.format(student_id), '여'))
+            self.conn.executemany('''INSERT INTO StudyLogs
+                (StudentId, ClassId, StudiedDay, ActualTeacherUsername, LessonContent, Description)
+                VALUES (?, ?, ?, ?, ?, ?)''', [
+                (student_id if i % 2 else student_id + 10000,
+                 999 if i % 2 else None, '2000-01-01',
+                 'teacher' if i < teacher else '\t\n\u3000',
+                 '수업 내용' if i < content else '\t\n\u3000', '메모만으로는 완료되지 않음')
+                for i in range(total)
+            ])
+        self.conn.commit()
+
+    def test_record_filters_match_all_five_lamp_states_and_boundaries(self):
+        self.seed_filter_states()
+        expected = {
+            'teacher_record_state': {'empty': [10], 'none': [17, 11], 'low': [12],
+                                     'partial': [14, 13], 'complete': [16, 15]},
+            'content_record_state': {'empty': [10], 'none': [17, 14], 'low': [13],
+                                     'partial': [15, 12], 'complete': [16, 11]},
+        }
+        for field, states in expected.items():
+            for state, ids in states.items():
+                with self.subTest(field=field, state=state):
+                    result = self.search_response(q='상태', **{field: state})
+                    self.assertEqual([row['row_id'] for row in result['students']], ids)
+                    self.assertEqual(result['total_count'], len(ids))
+                    self.assertEqual(result['total_pages'], 1)
+        # 두 필터의 모든 조합은 교집합이며 입력 비율은 서로 독립적이다.
+        for teacher_state, teacher_ids in expected['teacher_record_state'].items():
+            for content_state, content_ids in expected['content_record_state'].items():
+                with self.subTest(teacher=teacher_state, content=content_state):
+                    result = self.search_response(q='상태', teacher_record_state=teacher_state,
+                                                  content_record_state=content_state)
+                    ids = sorted(set(teacher_ids) & set(content_ids), reverse=True)
+                    self.assertEqual([row['row_id'] for row in result['students']], ids)
+                    self.assertEqual(result['total_count'], len(ids))
+
+    def test_record_filter_precedes_pagination_and_combines_existing_filters(self):
+        self.seed_filter_states()
+        first = self.search_response(q='상태', teacher_record_state='complete', limit=1)
+        second = self.search_response(q='상태', teacher_record_state='complete', page=2, limit=1)
+        self.assertEqual(first['total_count'], 2)
+        self.assertEqual(first['total_pages'], 2)
+        self.assertEqual([row['row_id'] for row in first['students']], [16])
+        self.assertEqual([row['row_id'] for row in second['students']], [15])
+        self.assertCoverage(second['students'][0]['RecordCoverage'], 100, 100, 99)
+        self.conn.execute('UPDATE Students SET IsClassEnded = 1 WHERE rowid = 16')
+        self.conn.commit()
+        self.assertEqual(self.search_response(q='상태', teacher_record_state='complete')['total_count'], 1)
+        self.assertEqual(self.search_response(q='상태', teacher_record_state='complete', include_ended=True)['total_count'], 2)
+        self.assertEqual(self.search_response(q='상태', teacher_record_state='complete', sex='남')['total_count'], 0)
+        self.assertEqual(self.search_response(q='상태 15', teacher_record_state='complete', sex='여')['total_count'], 1)
+
+    def test_record_filter_preserves_teacher_scope(self):
+        self.seed_filter_states()
+        self.conn.executemany('INSERT INTO ClassStudents VALUES (20, ?, 0)', [(10012,), (16,)])
+        self.conn.commit()
+        teacher = {'username': 'other_teacher', 'role': 'teacher'}
+        result = self.search_response(q='상태', teacher_record_state='complete', current_user=teacher)
+        self.assertEqual([row['row_id'] for row in result['students']], [16])
+        # 다른 수업·미연결 과거 기록도 학생의 전체 입력 비율에 포함한다.
+        result = self.search_response(q='상태', teacher_record_state='low', current_user=teacher)
+        self.assertEqual([row['row_id'] for row in result['students']], [12])
+        self.assertCoverage(result['students'][0]['RecordCoverage'], 100, 49, 50)
+
+    def test_record_filter_rejects_unknown_states(self):
+        import main
+        from fastapi.testclient import TestClient
+        for args in [('invalid', None), (None, "none' OR 1=1")]:
+            with self.assertRaises(ValueError):
+                database.student_record_coverage_filter(*args)
+        original_overrides = dict(main.app.dependency_overrides)
+        main.app.dependency_overrides[main.get_current_user] = lambda: {'username': 'admin', 'role': 'admin'}
+        try:
+            client = TestClient(main.app)
+            with patch.object(main, 'get_db_connection') as connection, patch('activity.write_activity'):
+                for field in ('teacher_record_state', 'content_record_state'):
+                    response = client.get('/api/user/students/search', params={field: 'invalid'})
+                    self.assertEqual(response.status_code, 422)
+                connection.assert_not_called()
+        finally:
+            main.app.dependency_overrides.clear()
+            main.app.dependency_overrides.update(original_overrides)
 
     def test_empty_input_does_not_query_database(self):
         statements = []

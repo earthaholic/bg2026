@@ -129,4 +129,6 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 수업 목록과 상세의 학생 배지는 하나의 원형 표시등을 좌우로 나눈다. 왼쪽은 `ActualTeacherUsername`, 오른쪽은 `LessonContent` 입력 비율이며, 해당 학생의 전체 기간·전체 수업 및 수업 미연결 `StudyLogs`가 분모다. 담당 선생님 추정값이나 `Description`은 포함하지 않고 공백만 있는 값도 제외한다.
 - 표시등은 기록 없음=회색, 0%=빨강, 0% 초과~50% 미만=주황, 50% 이상~100% 미만=노랑, 100%=초록이다. 마우스 올림·키보드 초점으로 각 항목의 입력 건수/전체 건수·비율을 안내하며 기존 클릭 동작을 유지한다.
 - `database._attach_student_record_coverage()`가 학생별 `RecordCoverage`(`total`, `teacher_filled`, `content_filled`)를 일괄 집계한다. 수업 목록과 `get_class_students(..., include_record_coverage=True)`를 사용하는 상세 API에서 제공하며, 나머지 학생 조회에는 기본적으로 추가하지 않는다.
-- 회귀 검증: `tests/test_student_record_coverage.py`, `tests/test_student_record_coverage_ui.js`.
+- 학생 검색 & 상세 조회의 검색 목록에서도 `학생 이름` 바로 옆에 동일한 표시등을 제공한다. `/api/user/students/search`는 기존 필터·페이지·선생님 조회 범위를 유지한 채 현재 페이지 학생의 `RecordCoverage`를 추가한다. `studentRecordCoverageDisplay()`를 수업 화면과 공유하고 이름 클릭은 기존 학생 상세 열기를 유지한다. 다른 페이지의 학생 배지나 학생 상세 모달까지 확대하지 않는다.
+- 학생 검색의 실제 진행 선생님/수업 내용 상태 필터는 각각 `teacher_record_state`/`content_record_state`(`empty`, `none`, `low`, `partial`, `complete`)를 전송하며, 두 조건은 AND로 결합한다. 필터는 전체 건수·페이지 계산 전에 적용한다. `student_record_coverage_filter()`와 표시등 집계는 동일한 입력 건수 SQL·공백 기준을 공유한다. 상태 변경 시 첫 페이지로 이동하고 초기화 시 두 상태를 함께 해제하며, 늦은 이전 검색 응답은 무시한다.
+- 회귀 검증: `tests/test_student_record_coverage.py`, `tests/test_student_record_coverage_ui.js`, `tests/test_student_record_filters_ui.js`.

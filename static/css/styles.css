@@ -1309,7 +1309,13 @@ body {
 }
 
 #view-student-search .filter-options-grid {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#view-student-search .filter-options-grid .form-control { min-width: 0; width: 100%; }
+@media (max-width: 900px) {
+    #view-student-search .filter-options-grid { grid-template-columns: 1fr; }
+    #view-student-search { overflow-y: auto; }
+    #view-student-search .book-search-layout { overflow: visible; flex: 0 0 auto; }
 }
 
 #view-studylog-search .filter-options-grid {
@@ -4436,6 +4442,26 @@ dialog.action-feedback::backdrop { background: rgba(0, 0, 0, .12); }
     gap: 0.4rem;
     font-family: inherit;
     white-space: nowrap;
+}
+
+#view-student-search .student-search-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+#view-student-search .student-search-name:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 0.2rem;
 }
 
 button.class-student-badge { cursor: pointer; }

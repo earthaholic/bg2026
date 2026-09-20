@@ -71,3 +71,28 @@ test('수업 목록과 상세에서 공통 렌더러와 도움말을 사용한�
     assert.ok(source.includes("badge.addEventListener('focus', show)"));
     assert.ok(source.includes("badge.addEventListener('mouseenter', show)"));
 });
+
+
+test('학생 검색의 이름 옆에 공통 표시등을 표시하고 상세 열기 대상을 유지한다', () => {
+    const html = context.renderStudentSearchName(student(10, 10, 3));
+    assert.match(html, /<button type="button" class="student-search-name cell-clickable btn-open-student-detail"/);
+    assert.match(html, /data-student-id="7"/);
+    assert.match(html, /가람<span class="student-record-lamp"/);
+    assert.equal((html.match(/class="student-record-lamp"/g) || []).length, 1);
+    assert.equal((html.match(/class="record-lamp-half /g) || []).length, 2);
+    assert.match(html, /record-lamp-complete/);
+    assert.match(html, /record-lamp-low/);
+    assert.match(html, /data-record-tooltip=/);
+    assert.match(html, /aria-label=/);
+    assert.match(html, /10\/10건 \(100%\)/);
+    assert.ok(source.includes('<td>${renderStudentSearchName(s)}</td>'));
+    assert.ok(source.includes('bindRecordCoverageTooltips(studentCardsGrid)'));
+});
+
+test('학생 검색의 빈 기록과 이름 이스케이프를 처리한다', () => {
+    const html = context.renderStudentSearchName({ ...student(0, 0, 0), Name: '<img src=x>"' });
+    assert.doesNotMatch(html, /<img/);
+    assert.match(html, /&lt;img src=x&gt;&quot;/);
+    assert.equal((html.match(/record-lamp-empty/g) || []).length, 2);
+    assert.match(html, /학습 기록 없음/);
+});

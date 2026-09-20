@@ -1071,24 +1071,53 @@ def validate_class_student_assignments(class_id: Optional[int], student_items: L
     finally:
         conn.close()
 
+# 표시등 집계와 검색 필터는 같은 공백·입력 건수 기준을 사용한다.
+_STUDENT_RECORD_WHITESPACE = ' \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'
+_STUDENT_RECORD_COUNTS_SQL = '''COUNT(sl.rowid) AS total,
+    SUM(CASE WHEN TRIM(COALESCE(sl."ActualTeacherUsername", ''), ?) != '' THEN 1 ELSE 0 END) AS teacher_filled,
+    SUM(CASE WHEN TRIM(COALESCE(sl."LessonContent", ''), ?) != '' THEN 1 ELSE 0 END) AS content_filled'''
+
+
+def student_record_coverage_filter(teacher_state: Optional[str], content_state: Optional[str]) -> Tuple[str, List[str]]:
+    """페이지 계산 전에 적용할 학생별 입력 상태 조건을 반환한다. 두 조건은 AND로 결합한다."""
+    conditions = []
+    for state, column in ((teacher_state, 'teacher_filled'), (content_state, 'content_filled')):
+        if not state:
+            continue
+        states = {
+            'empty': 'total = 0',
+            'none': f'total > 0 AND {column} = 0',
+            'low': f'{column} > 0 AND {column} * 2 < total',
+            'partial': f'{column} * 2 >= total AND {column} < total',
+            'complete': f'total > 0 AND {column} = total',
+        }
+        if state not in states:
+            raise ValueError('올바른 학습 기록 입력 상태를 선택해 주세요.')
+        conditions.append(f'({states[state]})')
+    if not conditions:
+        return '', []
+    return f'''EXISTS (
+        SELECT {_STUDENT_RECORD_COUNTS_SQL}
+        FROM "StudyLogs" sl
+        WHERE sl."StudentId" = "Students".rowid OR sl."StudentId" = "Students"."Id"
+        HAVING {' AND '.join(conditions)}
+    )''', [_STUDENT_RECORD_WHITESPACE, _STUDENT_RECORD_WHITESPACE]
+
+
 def _attach_student_record_coverage(conn, students: List[Dict[str, Any]]) -> None:
     """수업·기간과 무관한 학생의 전체 학습 기록 입력 건수를 일괄 집계한다."""
     student_ids = list({student['row_id'] for student in students})
     coverage = {}
-    # 공백만 있는 문자열은 입력으로 세지 않는다 (줄바꿈·탭·전각 공백 포함).
-    whitespace = ' \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'
     for offset in range(0, len(student_ids), 400):
         batch = student_ids[offset:offset + 400]
         placeholders = ','.join('?' for _ in batch)
         results = conn.execute(f'''
-            SELECT s.rowid AS student_row_id, COUNT(sl.rowid) AS total,
-                   SUM(CASE WHEN TRIM(COALESCE(sl."ActualTeacherUsername", ''), ?) != '' THEN 1 ELSE 0 END) AS teacher_filled,
-                   SUM(CASE WHEN TRIM(COALESCE(sl."LessonContent", ''), ?) != '' THEN 1 ELSE 0 END) AS content_filled
+            SELECT s.rowid AS student_row_id, {_STUDENT_RECORD_COUNTS_SQL}
             FROM "Students" s
             LEFT JOIN "StudyLogs" sl ON sl."StudentId" = s.rowid OR sl."StudentId" = s."Id"
             WHERE s.rowid IN ({placeholders})
             GROUP BY s.rowid
-        ''', [whitespace, whitespace] + batch)
+        ''', [_STUDENT_RECORD_WHITESPACE, _STUDENT_RECORD_WHITESPACE] + batch)
         for result in results:
             coverage[result['student_row_id']] = {
                 'total': result['total'],

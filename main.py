@@ -46,6 +46,8 @@ from database import (
     set_class_students,
     validate_class_student_assignments,
     get_class_students,
+    _attach_student_record_coverage,
+    student_record_coverage_filter,
     get_class_student_ids,
     get_teacher_options,
     write_audit_log,
@@ -979,6 +981,8 @@ def user_get_recent_students(current_user: Dict[str, Any] = Depends(get_current_
 def user_search_students(
     q: Optional[str] = Query(None),
     sex: Optional[str] = Query(None),
+    teacher_record_state: Optional[Literal['empty', 'none', 'low', 'partial', 'complete']] = Query(None),
+    content_record_state: Optional[Literal['empty', 'none', 'low', 'partial', 'complete']] = Query(None),
     include_ended: bool = Query(False),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
@@ -1026,6 +1030,12 @@ def user_search_students(
     if conditions:
         where_str = " WHERE " + " AND ".join(conditions)
 
+    # 표시등 상태는 전체 학생 집합에 먼저 적용하여 결과 수와 페이지가 일치하게 한다.
+    record_condition, record_params = student_record_coverage_filter(teacher_record_state, content_record_state)
+    if record_condition:
+        where_str += (' AND ' if conditions else ' WHERE ') + record_condition
+        params.extend(record_params)
+
     # Count total
     count_query = f'SELECT COUNT(*) as total FROM "Students"{where_str}'
     cursor.execute(count_query, params)
@@ -1035,7 +1045,8 @@ def user_search_students(
     offset = (page - 1) * limit
     data_query = f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
     cursor.execute(data_query, params)
-    rows = cursor.fetchall()
+    rows = [dict(row) for row in cursor.fetchall()]
+    _attach_student_record_coverage(conn, rows)
     conn.close()
 
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
