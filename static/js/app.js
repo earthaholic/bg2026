@@ -8631,21 +8631,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return rows;
     }
 
+    function studyLogCsvRowStatus(row) {
+        const messages = [...(row.errors || []).map(message => `<span class="utility-row-message is-error">${escapeHtml(message)}</span>`), ...(row.warnings || []).map(message => `<span class="utility-row-message is-warning">${escapeHtml(message)}</span>`)].join('');
+        return (row.ready ? '<span class="badge badge-success">등록 가능</span>' : '<span class="badge badge-danger">확인 필요</span>') + messages;
+    }
+
+    function updateStudyLogCsvSummary() {
+        const rows = studyLogCsvPreview?.rows || [];
+        document.getElementById('btn-import-studylog-csv').disabled = !rows.some(row => row.ready);
+        const ready = rows.filter(row => row.ready).length;
+        document.getElementById('studylog-csv-summary').textContent = `전체 ${rows.length}건 · 등록 가능 ${ready}건 · 확인 필요 ${rows.length - ready}건`;
+    }
+
     function renderStudyLogCsvPreview() {
         const body = document.getElementById('studylog-csv-preview-body');
         const card = document.getElementById('studylog-csv-preview-card');
-        const button = document.getElementById('btn-import-studylog-csv');
         const rows = studyLogCsvPreview?.rows || [];
         body.innerHTML = rows.map(row => {
             const selected = Number(row.book_id || 0);
             const options = ['<option value="">도서 후보 선택</option>', ...(row.book_candidates || []).map(book => `<option value="${Number(book.book_id)}" ${Number(book.book_id) === selected ? 'selected' : ''}>${escapeHtml(book.title)} (${(Number(book.score) * 100).toFixed(1)}%)${book.author ? ` · ${escapeHtml(book.author)}` : ''}</option>`)].join('');
-            const messages = [...(row.errors || []).map(message => `<span class="utility-row-message is-error">${escapeHtml(message)}</span>`), ...(row.warnings || []).map(message => `<span class="utility-row-message is-warning">${escapeHtml(message)}</span>`)].join('');
-            return `<tr><td>${Number(row.row_number)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.studied_day)}</td><td><b>${escapeHtml(row.book_title)}</b><small><select class="form-control utility-match-select" data-row-number="${Number(row.row_number)}">${options}</select></small></td><td class="utility-csv-content">${escapeHtml(row.lesson_content || '-')}</td><td>${row.ready ? '<span class="badge badge-success">등록 가능</span>' : '<span class="badge badge-danger">확인 필요</span>'}${messages}</td></tr>`;
+            return `<tr><td>${Number(row.row_number)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.studied_day)}</td><td><b>${escapeHtml(row.book_title)}</b><small><select class="form-control utility-match-select" data-row-number="${Number(row.row_number)}">${options}</select></small></td><td class="utility-csv-content">${escapeHtml(row.lesson_content || '-')}</td><td>${studyLogCsvRowStatus(row)}</td></tr>`;
         }).join('');
         card.classList.remove('hidden');
-        button.disabled = !rows.some(row => row.ready);
-        const ready = rows.filter(row => row.ready).length;
-        document.getElementById('studylog-csv-summary').textContent = `전체 ${rows.length}건 · 등록 가능 ${ready}건 · 확인 필요 ${rows.length - ready}건`;
+        updateStudyLogCsvSummary();
     }
 
     let studyLogCsvClassLinksPreview = null;
@@ -8847,11 +8855,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = event.target.closest('.utility-match-select');
         if (!select || !studyLogCsvPreview) return;
         const row = studyLogCsvPreview.rows.find(item => Number(item.row_number) === Number(select.dataset.rowNumber));
+        if (!row) return;
         row.book_id = Number(select.value) || null;
         row.errors = (row.errors || []).filter(message => !message.startsWith('도서 후보가 불확실') && !message.startsWith('같은 학생·도서') && message !== '도서를 선택해 주세요.');
         if (!row.book_id) row.errors.push('도서를 선택해 주세요.');
         row.ready = Boolean(row.student_id && row.book_id && !row.errors.length);
-        renderStudyLogCsvPreview();
+        // 표 전체를 다시 그리지 않아 사용자가 정렬한 행 순서와 입력 초점을 유지한다.
+        select.closest('tr').cells[5].innerHTML = studyLogCsvRowStatus(row);
+        updateStudyLogCsvSummary();
     });
 
     document.getElementById('btn-import-studylog-csv')?.addEventListener('click', async () => {
