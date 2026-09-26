@@ -9249,6 +9249,7 @@ document.addEventListener('DOMContentLoaded', () => {
         completionEl('field').value = completionState.field;
         completionEl('field').querySelector('[value="teacher"]').disabled = !isStaff();
         completionEl('student-results').replaceChildren();
+        completionEl('student-picker').open = !completionState.studentId;
         completionEl('back').textContent = completionState.origin?.view === 'class-list' ? '수업 목록으로 돌아가기' : completionState.origin?.view === 'utilities' ? '유틸리티로 돌아가기' : !completionState.origin || completionState.origin.view === 'student-search' ? '학생 검색으로 돌아가기' : '이전 화면으로 돌아가기';
         completionUrl();
         loadCompletionRows(true);
@@ -9304,7 +9305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const count = completionState.selected.size;
         completionEl('bulk-toolbar').hidden = !active;
         completionEl('select-heading').hidden = !active;
-        completionEl('selected-count').textContent = `현재 페이지에서 ${count}건 선택`;
+        completionEl('selected-count').textContent = `선택 ${count}건`;
         const all = completionEl('select-all');
         all.checked = eligible.length > 0 && count === eligible.length;
         all.indeterminate = count > 0 && count < eligible.length;

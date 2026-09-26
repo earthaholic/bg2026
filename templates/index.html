@@ -468,7 +468,7 @@
                 </section>
 
                 <!-- View 2: Book Search & Detail View -->
-                <section id="view-book-search" class="workspace-view">
+                <section id="view-book-search" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <!-- Top Search & Filter Bar Card -->
                         <div class="card search-filter-card">
@@ -738,7 +738,7 @@
                 </section>
 
                 <!-- View 4: Student Search & Detail View -->
-                <section id="view-student-search" class="workspace-view">
+                <section id="view-student-search" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <!-- Top Search & Filter Bar Card -->
                         <div class="card search-filter-card">
@@ -986,7 +986,7 @@
                 </section>
 
                 <!-- View 6: User StudyLog Search & Detail View -->
-                <section id="view-studylog-search" class="workspace-view active">
+                <section id="view-studylog-search" class="workspace-view active compact-search-view">
                     <div class="book-search-layout">
                         <!-- Top Search Bar Card -->
                         <div class="card search-filter-card">
@@ -1076,7 +1076,7 @@
                 </section>
 
                 <!-- View: Monthly Report Text Generator -->
-                <section id="view-teacher-payroll" class="workspace-view">
+                <section id="view-teacher-payroll" class="workspace-view compact-search-view">
                     <div class="payroll-layout">
                         <div class="card search-filter-card payroll-filter-card">
                             <div class="payroll-filter-heading">
@@ -1127,16 +1127,21 @@
                 <section id="view-studylog-completion" class="workspace-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
-                            <div class="completion-heading"><div><h2>학습 기록 보완</h2><p class="text-muted">학생의 기존 기록에서 빈 항목만 채웁니다. 날짜·도서·수업 연결은 변경하지 않습니다.</p></div><button type="button" id="completion-back" class="btn btn-outline">이전 화면으로 돌아가기</button></div>
-                            <form id="completion-student-form" class="completion-student-search"><label for="completion-student-q">학생 찾기</label><input id="completion-student-q" class="form-control" placeholder="학생 이름으로 검색" autocomplete="off"><button class="btn btn-outline" type="submit">학생 검색</button></form>
-                            <div id="completion-student-results" class="completion-student-results" aria-live="polite"></div>
+                            <div class="completion-heading"><h2>학습 기록 보완</h2><button type="button" id="completion-back" class="btn btn-outline">이전 화면으로 돌아가기</button></div>
                             <div class="completion-filters"><strong id="completion-student-name">학생을 선택해 주세요</strong><label for="completion-field">보완할 항목</label><select id="completion-field" class="form-control"><option value="content">수업 내용 미입력</option><option value="teacher">실제 진행 선생님 미입력</option></select><button id="completion-refresh" type="button" class="btn btn-outline">새로고침</button></div>
-                            <p class="text-muted completion-scope">전체 기간 · 학생의 모든 수업 및 수업 미연결 기록 기준입니다. 일반 선생님은 조회 권한이 있는 기록 중 본인 기록의 수업 내용만 보완할 수 있습니다.</p>
+                            <div class="completion-options">
+                                <details id="completion-student-picker" class="completion-disclosure"><summary>학생 찾기·변경</summary>
+                                    <form id="completion-student-form" class="completion-student-search"><label for="completion-student-q">학생 찾기</label><input id="completion-student-q" class="form-control" placeholder="학생 이름으로 검색" autocomplete="off"><button class="btn btn-outline" type="submit">학생 검색</button></form>
+                                    <div id="completion-student-results" class="completion-student-results" aria-live="polite"></div>
+                                </details>
+                                <details class="completion-disclosure completion-guide"><summary>입력·일괄 지정 안내</summary>
+                                    <div class="completion-guide-copy"><p>학생의 기존 기록에서 빈 항목만 채웁니다. 날짜·도서·수업 연결은 변경하지 않습니다.</p><p>전체 기간 · 학생의 모든 수업 및 수업 미연결 기록 기준입니다. 일반 선생님은 조회 권한이 있는 기록 중 본인 기록의 수업 내용만 보완할 수 있습니다.</p><p>현재 페이지의 보완 가능한 기록만 선택합니다. 학생·항목·페이지 변경 또는 새로고침 시 선택이 해제됩니다. 한 건이라도 적용할 수 없으면 전체 저장이 취소됩니다.</p></div>
+                                </details>
+                            </div>
                         </div>
                         <div class="results-bar"><div id="completion-summary">학생 이름 옆 표시등에서도 바로 들어올 수 있습니다.</div><span id="completion-count"></span></div>
                         <div id="completion-bulk-toolbar" class="completion-bulk-toolbar" hidden>
-                            <div class="completion-bulk-controls"><strong id="completion-selected-count" role="status" aria-live="polite">현재 페이지에서 0건 선택</strong><label for="completion-bulk-teacher">일괄 지정할 선생님</label><select id="completion-bulk-teacher" class="form-control"><option value="">선생님 선택</option></select><button id="completion-bulk-preview" type="button" class="btn btn-primary" disabled>선택한 기록에 지정</button><button id="completion-bulk-clear" type="button" class="btn btn-outline" disabled>선택 해제</button></div>
-                            <p>현재 페이지의 보완 가능한 기록만 선택합니다. 학생·항목·페이지 변경 또는 새로고침 시 선택이 해제됩니다. 한 건이라도 적용할 수 없으면 전체 저장이 취소됩니다.</p>
+                            <div class="completion-bulk-controls"><strong id="completion-selected-count" role="status" aria-live="polite" title="현재 페이지에서 선택한 기록">선택 0건</strong><label for="completion-bulk-teacher">일괄 지정할 선생님</label><select id="completion-bulk-teacher" class="form-control"><option value="">선생님 선택</option></select><button id="completion-bulk-preview" type="button" class="btn btn-primary" disabled>선택한 기록에 지정</button><button id="completion-bulk-clear" type="button" class="btn btn-outline" disabled>선택 해제</button></div>
                         </div>
                         <div id="completion-status" role="status" aria-live="polite"></div>
                         <div class="card table-card"><div class="table-responsive"><table class="modern-table completion-table"><thead><tr><th id="completion-select-heading" data-sortable="false" hidden><input type="checkbox" id="completion-select-all" aria-label="현재 페이지의 지정 가능한 기록 전체 선택"></th><th data-sortable="false">날짜 / 기록 번호</th><th data-sortable="false">수업 / 도서</th><th data-sortable="false">실제 진행 선생님</th><th data-sortable="false">수업 내용</th><th data-sortable="false">저장</th></tr></thead><tbody id="completion-body"><tr><td colspan="5" class="empty-state">학생을 검색하거나 표시등에서 보완할 항목을 선택해 주세요.</td></tr></tbody></table></div></div>
@@ -1531,7 +1536,7 @@
                     </div>
                 </section>
 
-                <section id="view-activity-log" class="workspace-view">
+                <section id="view-activity-log" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
                             <div class="card-header-styled"><div>
@@ -1560,7 +1565,7 @@
                 </section>
 
                 <!-- View: 계정별 변경 이력 조회 (Staff Only) -->
-                <section id="view-audit-log" class="workspace-view">
+                <section id="view-audit-log" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
                             <div class="card-header-styled">
@@ -1662,7 +1667,7 @@
                 </section>
 
                 <!-- View 8: 수업 목록 & 상세 조회 -->
-                <section id="view-class-list" class="workspace-view">
+                <section id="view-class-list" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <!-- Class Search Bar -->
                         <div class="card search-filter-card">
@@ -1673,10 +1678,6 @@
                                     <button id="btn-do-class-search" class="btn btn-primary btn-lg">
                                         <i class="fa-solid fa-magnifying-glass"></i> 검색
                                     </button>
-                                </div>
-                            </div>
-                            <div class="filter-options-grid">
-                                <div class="filter-group filter-group-actions">
                                     <button id="btn-reset-class-filter" class="btn btn-outline">
                                         <i class="fa-solid fa-rotate-left"></i> 필터 초기화
                                     </button>
@@ -1894,7 +1895,7 @@
                     </div>
                 </section>
 
-                <section id="view-tuition-payment-search" class="workspace-view">
+                <section id="view-tuition-payment-search" class="workspace-view compact-search-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
                             <div class="tuition-filter-fields">

@@ -4843,15 +4843,31 @@ button.class-student-badge { cursor: pointer; }
 .coverage-action p { margin: 0.35rem 0 0; color: var(--text-muted); }
 .completion-dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
 .completion-preview { padding: 1rem; border-radius: var(--radius-sm); background: var(--bg-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
-#view-studylog-completion .completion-heading h2 { font-size: 1.3rem; }
-#view-studylog-completion .completion-heading p { margin-top: 0.4rem; }
-#view-studylog-completion .completion-student-search { display: grid; grid-template-columns: auto minmax(120px, 320px) auto; align-items: center; justify-content: start; gap: 0.65rem; margin-top: 1rem; }
-#view-studylog-completion .completion-student-results { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
-#view-studylog-completion .completion-student-results:empty { display: none; }
-#view-studylog-completion .completion-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
-#view-studylog-completion .completion-filters select { width: auto; min-width: 200px; }
+/* 목록이 상단 카드에 밀려 0 높이가 되지 않도록 바깥 스크롤과 최소 높이를 함께 확보한다. */
+#view-studylog-completion { min-height: 0; overflow-y: auto; }
+#view-studylog-completion .book-search-layout { flex: 1 0 auto; overflow: visible; gap: 0.5rem; }
+#view-studylog-completion .search-filter-card { flex: 0 0 auto; padding: 0.75rem 1rem; gap: 0.5rem; }
+#view-studylog-completion .completion-heading { gap: 0.6rem; }
+#view-studylog-completion .completion-heading h2 { font-size: 1.1rem; }
+#view-studylog-completion .completion-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+#view-studylog-completion .completion-filters select { width: auto; min-width: 190px; }
 #view-studylog-completion .completion-filters strong { margin-right: auto; }
-#view-studylog-completion .completion-scope { margin-top: 0.75rem; font-size: 0.8rem; line-height: 1.6; }
+#view-studylog-completion .completion-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+#view-studylog-completion .completion-disclosure[open] { grid-column: 1 / -1; }
+#view-studylog-completion .completion-disclosure summary { width: fit-content; cursor: pointer; color: var(--text-muted); font-size: 0.8rem; }
+#view-studylog-completion .completion-disclosure summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+#view-studylog-completion .completion-guide-copy { display: grid; gap: 0.35rem; padding-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+#view-studylog-completion .completion-student-search { display: grid; grid-template-columns: auto minmax(120px, 320px) auto; align-items: center; justify-content: start; gap: 0.5rem; margin-top: 0.5rem; }
+#view-studylog-completion .completion-student-results { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; max-height: 160px; overflow-y: auto; }
+#view-studylog-completion .completion-student-results:empty { display: none; }
+#view-studylog-completion .results-bar { flex: 0 0 auto; flex-wrap: wrap; gap: 0.25rem 0.75rem; font-size: 0.8rem; }
+#view-studylog-completion .table-card { flex: 1 0 260px; min-height: 260px; }
+#view-studylog-completion .table-responsive { min-height: 0; }
+#view-studylog-completion .search-pagination-bar { flex: 0 0 auto; padding: 0.4rem 0.75rem; }
+#view-studylog-completion .search-filter-card .btn,
+#view-studylog-completion .search-filter-card .form-control,
+#view-studylog-completion .completion-bulk-controls .btn,
+#view-studylog-completion .completion-bulk-controls .form-control { padding: 0.4rem 0.65rem; font-size: 0.85rem; min-height: 34px; }
 #view-studylog-completion #completion-status:empty { display: none; }
 #view-studylog-completion #completion-status { padding: 0.7rem 1rem; border-radius: var(--radius-sm); background: var(--bg-selection); color: var(--text-selection-accent); }
 #view-studylog-completion .completion-table { min-width: 860px; }
@@ -4869,7 +4885,7 @@ button.class-student-badge { cursor: pointer; }
     .record-completion-button { width: 44px; height: 44px; flex-basis: 44px; }
     #view-studylog-completion { overflow-y: auto; }
     #view-studylog-completion .book-search-layout { overflow: visible; }
-    #view-studylog-completion .completion-heading { align-items: flex-start; flex-direction: column; }
+    #view-studylog-completion .completion-heading { align-items: center; flex-wrap: wrap; }
     #view-studylog-completion .completion-student-search { grid-template-columns: 1fr auto; }
     #view-studylog-completion .completion-student-search label { grid-column: 1 / -1; }
     #view-studylog-completion .completion-filters strong { width: 100%; }
@@ -4879,11 +4895,11 @@ button.class-student-badge { cursor: pointer; }
 #view-studylog-completion .completion-save:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 실제 진행 선생님은 현재 페이지의 미입력 기록만 선택하여 일괄 지정한다. */
-#view-studylog-completion .completion-bulk-toolbar { padding: 1rem 1.25rem; border: 1px solid var(--border-focus); border-radius: var(--radius-md); background: var(--bg-selection); }
+#view-studylog-completion .completion-bulk-toolbar { flex: 0 0 auto; padding: 0.55rem 0.75rem; border: 1px solid var(--border-focus); border-radius: var(--radius-md); background: var(--bg-selection); }
 #view-studylog-completion .completion-bulk-toolbar[hidden], #view-studylog-completion .completion-select-cell[hidden], #view-studylog-completion #completion-select-heading[hidden] { display: none; }
-#view-studylog-completion .completion-bulk-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; }
+#view-studylog-completion .completion-bulk-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; font-size: 0.85rem; }
 #view-studylog-completion .completion-bulk-controls strong { margin-right: auto; }
-#view-studylog-completion .completion-bulk-controls select { width: auto; min-width: 180px; max-width: 100%; }
+#view-studylog-completion .completion-bulk-controls select { flex: 0 1 180px; width: 180px; min-width: 150px; max-width: 100%; }
 #view-studylog-completion .completion-bulk-toolbar p { margin-top: 0.7rem; color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; }
 #view-studylog-completion .completion-select-cell, #view-studylog-completion #completion-select-heading { width: 44px; text-align: center; }
 #view-studylog-completion .completion-row-select, #view-studylog-completion #completion-select-all { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
@@ -4893,6 +4909,60 @@ button.class-student-badge { cursor: pointer; }
 #completion-confirm-dialog .completion-bulk-preview-list table { font-size: 0.85rem; }
 #completion-confirm-dialog .completion-bulk-preview-list td { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
-    #view-studylog-completion .completion-bulk-controls { align-items: stretch; flex-direction: column; }
-    #view-studylog-completion .completion-bulk-controls select { width: 100%; }
+    #view-studylog-completion .completion-bulk-controls { align-items: center; }
+    #view-studylog-completion .completion-bulk-controls strong { width: 100%; }
+    #view-studylog-completion .completion-bulk-controls select { flex: 1; min-width: 120px; }
+}
+
+/* 검색·조회 화면만 압축한다. 등록 폼과 설정 카드의 공용 간격은 유지한다. */
+.compact-search-view { min-height: 0; overflow-y: auto; }
+.compact-search-view .book-search-layout { flex: 1 0 auto; overflow: visible; gap: 0.65rem; }
+.compact-search-view .search-filter-card { flex: 0 0 auto; padding: 0.8rem; gap: 0.55rem; }
+.compact-search-view .search-filter-card .card-header-styled { margin-bottom: 0; padding-bottom: 0.5rem; }
+.compact-search-view .search-filter-card .card-header-styled h2 { font-size: 1.05rem; }
+.compact-search-view .filter-options-grid { gap: 0.55rem; padding-top: 0.5rem; }
+.compact-search-view .search-filter-card .filter-group { gap: 0.25rem; min-width: 0; }
+.compact-search-view .search-filter-card .form-control { min-width: 0; min-height: 36px; padding: 0.45rem 0.65rem; font-size: 0.85rem; }
+.compact-search-view .search-filter-card .search-input-wrapper .form-control { padding-left: 2.5rem; }
+.compact-search-view .search-filter-card .btn { min-height: 36px; padding: 0.45rem 0.8rem; font-size: 0.85rem; }
+.compact-search-view .search-filter-card .search-input-wrapper { gap: 0.5rem; }
+.compact-search-view .results-bar { flex: 0 0 auto; flex-wrap: wrap; gap: 0.35rem 0.65rem; }
+.compact-search-view .table-card { flex: 1 0 230px; min-height: 230px; }
+.compact-search-view .table-responsive { min-height: 0; }
+.compact-search-view .book-cards-grid { flex: 1 0 240px; min-height: 240px; }
+.compact-search-view .search-pagination-bar { flex: 0 0 auto; padding: 0.4rem 0.75rem; }
+#view-audit-log .table-responsive { max-height: none; }
+#view-audit-log .search-filter-card > .filter-row:not(.filter-group-actions) { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); align-items: end; gap: 0.55rem; }
+#view-audit-log .filter-row.filter-group-actions { gap: 0.5rem; }
+#view-audit-log .filter-checkbox-group { gap: 0.65rem; padding: 0.35rem 0; }
+#view-activity-log #activity-filter-form { display: flex; flex-direction: column; gap: 0.55rem; }
+#view-activity-log #activity-filter-form > .filter-row { gap: 0.55rem; }
+#view-activity-log #activity-filter-form > .filter-row:first-child { align-items: end; }
+#view-teacher-payroll .payroll-layout { gap: 0.65rem; }
+#view-teacher-payroll .payroll-filter-card { padding: 0.8rem; gap: 0.55rem; }
+#view-teacher-payroll .payroll-filter-heading { margin-bottom: 0; gap: 0.55rem; }
+#view-teacher-payroll .payroll-filter-heading p { margin-top: 0.2rem; font-size: 0.8rem; }
+#view-teacher-payroll .payroll-filter-fields { gap: 0.55rem; }
+#view-teacher-payroll .payroll-summary-card { margin-top: 0; padding: 0.6rem 0.8rem; gap: 0.5rem; flex-wrap: wrap; }
+#view-tuition-payment-search .search-filter-card { padding: 0.8rem; gap: 0.55rem; }
+#view-tuition-payment-search .tuition-filter-fields { gap: 0.55rem; }
+@media (min-width: 1201px) {
+    #view-studylog-search .search-filter-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; }
+    #view-studylog-search .filter-options-grid { grid-template-columns: 220px auto; border-top: 0; padding-top: 0; align-items: end; }
+    #view-studylog-search .filter-options-grid .filter-group:first-child { flex-direction: row; align-items: center; gap: 0.5rem; }
+    #view-studylog-search .filter-options-grid .filter-group:first-child label { flex: 0 0 auto; }
+}
+@media (min-width: 701px) and (max-width: 900px) {
+    #view-student-search .filter-options-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+    .compact-search-view .search-filter-card .btn, .compact-search-view .search-filter-card .form-control { min-height: 40px; }
+    #view-class-list .search-input-wrapper { flex-wrap: wrap; }
+    #view-class-list .search-input-wrapper .form-control { flex: 1 0 100%; }
+    #view-class-list .filter-icon { top: 0.8rem; }
+    #view-studylog-search .filter-options-grid { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+    #view-audit-log .search-filter-card > .filter-row:not(.filter-group-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 450px) {
+    #view-audit-log .search-filter-card > .filter-row:not(.filter-group-actions) { grid-template-columns: minmax(0, 1fr); }
 }

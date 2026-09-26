@@ -341,7 +341,7 @@ test('전체 선택은 권한·토큰·미입력 조건을 만족하는 현재 �
     assert.deepEqual([...h.state.selected], [10, 11]);
     assert.equal(h.element('completion-select-all').checked, true);
     assert.equal(h.element('completion-select-all').indeterminate, false);
-    assert.equal(h.element('completion-selected-count').textContent, '현재 페이지에서 2건 선택');
+    assert.equal(h.element('completion-selected-count').textContent, '선택 2건');
     for (const id of [12, 13, 14]) assert.equal(h.element(`completion-row-select-${id}`).disabled, true);
     selectRow(h, 12);
     assert.equal(h.state.selected.has(12), false);
@@ -538,4 +538,36 @@ test('확인창 취소는 저장하지 않고 선택을 유지하며 다음 확�
     h.context.openCompletionBulkPreview();
     assert.deepEqual([...h.state.pending.rows].map(row => row.row_id), [10]);
     assert.equal(h.element('completion-confirm-save').textContent, '1건 확인 후 저장');
+});
+
+
+test('학생이 지정된 보완 화면은 학생 찾기를 접고 핵심 조건과 목록을 먼저 표시한다', () => {
+    const h = harness();
+    h.location.search = '?view=studylog-completion&student_id=7&field=teacher&page=1';
+    h.element('completion-student-picker').open = true;
+    h.context.loadCompletionRows = () => {};
+    h.context.initCompletionView();
+    assert.equal(h.element('completion-student-picker').open, false);
+    assert.equal(h.state.studentId, 7);
+    assert.equal(h.element('completion-field').value, 'teacher');
+});
+
+test('학생 미선택 진입에서는 학생 찾기를 자동으로 펼쳐 검색할 수 있다', () => {
+    const h = harness();
+    h.element('completion-student-picker').open = false;
+    h.context.loadCompletionRows = () => {};
+    h.context.initCompletionView();
+    assert.equal(h.element('completion-student-picker').open, true);
+    assert.equal(h.state.studentId, null);
+});
+
+test('학생 찾기에서 대상을 고르면 다음 보완 진입 때 검색 영역을 다시 접는다', () => {
+    const h = harness();
+    h.context.loadCompletionRows = () => {};
+    h.context.initCompletionView();
+    assert.equal(h.element('completion-student-picker').open, true);
+    h.location.search = '?view=studylog-completion&student_id=9&field=content&page=1';
+    h.context.initCompletionView();
+    assert.equal(h.element('completion-student-picker').open, false);
+    assert.equal(h.state.studentId, 9);
 });
