@@ -170,3 +170,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 조회 뷰는 바깥 세로 스크롤을 허용하고 결과 표에 최소 높이를 두어 낮은 모니터에서도 목록이 0 높이로 축소되지 않게 한다. 수업 검색 초기화는 검색창과 같은 행에 둔다.
 - 학습 기록 보완은 학생이 선택되어 있으면 `학생 찾기·변경`을 접고, 미선택이면 펼친다. 설명은 `입력·일괄 지정 안내` 안에 기본 접힘으로 제공한다. 목록 최소 높이는 260px이며 필터·안내 확장 시에도 화면 스크롤로 접근한다.
 - 회귀 검증: `tests/test_compact_search_layout_ui.js`, `tests/test_studylog_completion_ui.js`. 작은 PC 검증 기준은 1024×600 및 1280×600이다.
+
+
+## 선생님 선택 목록 숨김
+- `선생님 계정 관리`에서 관리자·부관리자가 계정별 `선택 목록에서 숨김`을 설정·해제한다. `_app_users.hidden_from_teacher_options`는 기본 0이며 기존 계정에도 시작 시 추가한다. 계정 비활성화가 아니므로 로그인·역할·수업 및 학습 기록의 연결·이름 표시는 유지한다.
+- `PUT /api/admin/users/{user_id}/teacher-visibility`는 `{hidden_from_teacher_options: boolean}`을 받고 변경과 비밀번호를 제외한 감사 이력을 한 트랜잭션에 저장한다. 원래 선택 대상이 아닌 사이트 관리자 계정은 변경하지 않는다.
+- `/api/user/teachers-options` 및 학습 기록 보완 응답의 선생님 목록에서 숨김 계정을 제외한다. 수업·학습 기록의 기존 선택값과 수업 담당 자동 지정값은 수정 화면에서 보존해 의도치 않은 담당자 변경을 막는다. 활동·감사 조회의 계정 필터는 숨김 대상이 아니다.
+- 회귀 검증: `tests/test_teacher_visibility.py`, `tests/test_teacher_visibility_ui.js`.

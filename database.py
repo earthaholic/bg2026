@@ -64,6 +64,10 @@ def init_system_tables():
     if 'name' not in {row['name'] for row in cursor.execute('PRAGMA table_info(_app_users)')}:
         cursor.execute("ALTER TABLE _app_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
 
+    # 선택 목록 숨김은 로그인·권한·기존 연결과 별개로 관리한다.
+    if 'hidden_from_teacher_options' not in {row['name'] for row in cursor.execute('PRAGMA table_info(_app_users)')}:
+        cursor.execute("ALTER TABLE _app_users ADD COLUMN hidden_from_teacher_options INTEGER NOT NULL DEFAULT 0 CHECK(hidden_from_teacher_options IN (0, 1))")
+
     # Seed Admin User (사이트 관리자) if not exists
     cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.ADMIN_USERNAME,))
     if not cursor.fetchone():
@@ -813,7 +817,7 @@ def execute_raw_sql(sql_query: str) -> Dict[str, Any]:
 def list_all_users() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, name, role, created_at FROM _app_users ORDER BY id ASC")
+    cursor.execute("SELECT id, username, name, role, created_at, hidden_from_teacher_options FROM _app_users ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -1159,11 +1163,11 @@ def get_class_student_ids(class_id: int) -> List[int]:
     return [r["StudentId"] for r in rows]
 
 def get_teacher_options() -> List[Dict[str, Any]]:
-    """수업 담당 선생님으로 지정 가능한 계정(teacher/manager/subadmin) 목록을 반환한다."""
+    """선생님 선택 목록에 표시할 계정만 반환한다. 기존 연결·권한은 변경하지 않는다."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, name, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') ORDER BY username ASC"
+        "SELECT id, username, name, role FROM _app_users WHERE role IN ('teacher', 'manager', 'subadmin') AND hidden_from_teacher_options = 0 ORDER BY username ASC"
     )
     rows = cursor.fetchall()
     conn.close()

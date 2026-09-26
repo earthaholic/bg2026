@@ -13,7 +13,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, Upl
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
-from pydantic import BaseModel, StrictInt
+from pydantic import BaseModel, StrictInt, StrictBool
 
 from config import settings
 from database import (
@@ -111,6 +111,10 @@ class UserCreateRequest(BaseModel):
 
 class UserNameUpdateRequest(BaseModel):
     name: str
+
+class UserTeacherVisibilityRequest(BaseModel):
+    hidden_from_teacher_options: StrictBool
+
 
 class UserPasswordResetRequest(BaseModel):
     password: str
@@ -4666,6 +4670,36 @@ def admin_update_user_name(user_id: int, payload: UserNameUpdateRequest,
     _audit_update("_app_users", user_id, old, _strip_user_password(get_user_by_id(user_id)),
                   current_admin["username"], current_admin["role"])
     return {"status": "success", "message": "이름이 변경되었습니다."}
+
+
+@app.put("/api/admin/users/{user_id}/teacher-visibility")
+def admin_update_teacher_visibility(
+    user_id: int,
+    payload: UserTeacherVisibilityRequest,
+    current_admin: Dict[str, Any] = Depends(get_current_admin)
+):
+    """선택 목록의 표시 여부만 변경하며 감사 이력도 같은 트랜잭션에 저장한다."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM _app_users WHERE id = ?", (user_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="해당 계정을 찾을 수 없습니다.")
+            old = _strip_user_password(dict(row))
+            if old['role'] == 'admin':
+                raise HTTPException(status_code=400, detail="사이트 관리자는 선생님 선택 목록에 표시되지 않습니다.")
+            hidden = int(payload.hidden_from_teacher_options)
+            if old['hidden_from_teacher_options'] != hidden:
+                conn.execute("UPDATE _app_users SET hidden_from_teacher_options = ? WHERE id = ?", (hidden, user_id))
+                new = dict(old, hidden_from_teacher_options=hidden)
+                write_audit_log("_app_users", user_id, "UPDATE", old, new,
+                                ["hidden_from_teacher_options"], current_admin['username'],
+                                current_admin['role'], connection=conn)
+        return {"status": "success", "hidden_from_teacher_options": bool(hidden),
+                "message": "선생님 선택 목록에서 숨겼습니다." if hidden else "선생님 선택 목록에 다시 표시합니다."}
+    finally:
+        conn.close()
 
 
 @app.get("/api/admin/users")

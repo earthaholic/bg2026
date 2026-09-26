@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260920-payroll-lesson-type">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260926-teacher-visibility-2">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1502,6 +1502,7 @@
                             <div>
                                 <h2><i class="fa-solid fa-user-gear"></i> 선생님 계정 관리</h2>
                                 <p class="subtitle">부관리자, 관리 선생님, 선생님 계정을 발급·수정·삭제할 수 있습니다. 사이트 관리자 계정은 여기서 변경할 수 없습니다.</p>
+                                <p class="user-teacher-visibility-note">선택 목록에서 숨기면 새 선생님 선택 목록에 표시되지 않습니다. 로그인 권한과 기존 수업·학습 기록 연결은 유지되며, 기존 담당 선생님은 수정 화면에서 보존됩니다.</p>
                             </div>
                             <button id="btn-open-user-create" class="btn btn-success">
                                 <i class="fa-solid fa-plus"></i> 새 계정 발급
@@ -1519,13 +1520,14 @@
                                         <th>아이디</th>
                                         <th>이름</th>
                                         <th>역할</th>
+                                        <th>선택 목록</th>
                                         <th>가입일</th>
                                         <th style="text-align: right;">작업</th>
                                     </tr>
                                 </thead>
                                 <tbody id="user-manage-body">
                                     <tr>
-                                        <td colspan="5" class="empty-state">
+                                        <td colspan="6" class="empty-state">
                                             <i class="fa-solid fa-user-gear fa-2x"></i>
                                             <p>계정 목록을 불러오는 중...</p>
                                         </td>
@@ -2614,6 +2616,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20260920-payroll-lesson-type"></script>
+    <script src="/static/js/app.js?v=20260926-teacher-visibility"></script>
 </body>
 </html>

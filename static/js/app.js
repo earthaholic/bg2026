@@ -3246,9 +3246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const classOptions = '<option value="">수업 없음</option>' + groupedClassOptions(classes, cls =>
             `<option value="${cls.Id}" data-teacher="${escapeHtml(cls.TeacherUsername || '')}" ${Number(log.ClassId) === Number(cls.Id) ? 'selected' : ''}>${escapeHtml(cls.ClassName || '수업명 없음')} · ${escapeHtml(userName(cls.TeacherUsername || '-'))}</option>`
         );
-        const teacherOptions = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === (log.ActualTeacherUsername || '') ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}</option>`
-        ).join('');
+        const teacherOptions = '<option value="">선택하지 않음</option>' + teacherOptionsHtml(teachers, { currentUsername: log.ActualTeacherUsername || '' });
         const categoryOptions = '<option value="">정산에 포함하지 않음</option>' + categories.map(category =>
             `<option value="${category.Id}" ${Number(log.PayrollCategoryId) === Number(category.Id) ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
         ).join('');
@@ -3331,11 +3329,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const updateEditAssignmentOptions = (applyAssignedTeacher = true) => {
                 const hasClass = Boolean(editClassSelect.value);
                 editCategorySelect.disabled = hasClass;
-                if (hasClass) {
-                    editCategorySelect.value = '';
-                    const assignedTeacher = editClassSelect.selectedOptions[0]?.dataset.teacher || '';
-                    if (applyAssignedTeacher && assignedTeacher) editTeacherSelect.value = assignedTeacher;
-                }
+                const assignedTeacher = hasClass ? editClassSelect.selectedOptions[0]?.dataset.teacher || '' : '';
+                const selectedUsername = applyAssignedTeacher && assignedTeacher ? assignedTeacher : editTeacherSelect.value;
+                editTeacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teacherOptionsHtml(teachers, {
+                    currentUsername: log.ActualTeacherUsername || '', assignedUsername: assignedTeacher, selectedUsername
+                });
+                if (hasClass) editCategorySelect.value = '';
             };
             editClassSelect.addEventListener('change', () => updateEditAssignmentOptions(true));
             updateEditAssignmentOptions(false);
@@ -3433,6 +3432,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // 서버 선택 목록에 없는 계정은 저장된 현재값 또는 연결 수업 담당일 때만 보존한다.
+    function teacherOptionsHtml(teachers, { currentUsername = '', assignedUsername = '', selectedUsername = currentUsername, includeRoles = false } = {}) {
+        const options = [...teachers];
+        for (const username of [currentUsername, assignedUsername]) {
+            if (username && !options.some(t => t.username === username)) options.push({ username, preserved: true });
+        }
+        return options.map(teacher => {
+            const labels = [];
+            if (includeRoles && teacher.role) labels.push(ROLE_LABELS[teacher.role] || '선생님');
+            if (teacher.username === assignedUsername) labels.push('수업 담당');
+            if (teacher.preserved) labels.push(teacher.username === currentUsername ? '기존 값 보존' : '선택 목록 제외');
+            return `<option value="${escapeHtml(teacher.username)}" ${teacher.username === selectedUsername ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}${labels.length ? ' (' + labels.join(' · ') + ')' : ''}</option>`;
+        }).join('');
+    }
+
     function updateStudyLogActualTeacherOptions() {
         const classSelect = document.getElementById('studylog-class');
         const teacherSelect = document.getElementById('studylog-actual-teacher');
@@ -3445,9 +3459,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try { teachers = JSON.parse(teacherSelect.dataset.options || '[]'); } catch (_) { teachers = []; }
         const targetTeacher = classId ? assignedTeacher : selectedTeacher;
         teacherSelect.disabled = currentUser?.role === 'teacher';
-        teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teachers.map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === targetTeacher ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}${classId && teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
-        ).join('');
+        teacherSelect.innerHTML = '<option value="">선택하지 않음</option>' + teacherOptionsHtml(teachers, {
+            assignedUsername: classId ? assignedTeacher : '', selectedUsername: targetTeacher
+        });
         const selectedCategory = categorySelect.value;
         let categories = [];
         try { categories = JSON.parse(categorySelect.dataset.options || '[]'); } catch (_) { categories = []; }
@@ -5389,16 +5403,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- User Account Management (Admin Only) ---
 
+    async function saveTeacherVisibility(input, user) {
+        if (input.disabled || user.role === 'admin') return;
+        const previous = Boolean(user.hidden_from_teacher_options);
+        const hidden = input.checked;
+        const status = input.closest('td').querySelector('.user-teacher-visibility-status');
+        input.disabled = true;
+        status.textContent = '저장 중…';
+        try {
+            const result = await apiFetch(`/api/admin/users/${user.id}/teacher-visibility`, {
+                method: 'PUT', body: JSON.stringify({ hidden_from_teacher_options: hidden })
+            });
+            user.hidden_from_teacher_options = hidden ? 1 : 0;
+            status.textContent = hidden ? '선택 목록에서 숨김' : '선택 목록에 표시';
+            createActionFeedback(input).show(result.message || '선생님 선택 목록 설정을 저장했습니다.', 'success');
+        } catch (err) {
+            input.checked = previous;
+            status.textContent = `저장 실패 · ${previous ? '숨김 유지' : '표시 유지'}`;
+            createActionFeedback(input).show(err.message, 'error');
+        } finally {
+            input.disabled = false;
+        }
+    }
+
     async function loadUserAccounts() {
         const feedback = createActionFeedback();
         try {
-            userManageBody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
             const data = await apiFetch('/api/admin/users');
             await loadUserDisplayNames();
             renderUserAccounts(data.users);
         } catch (err) {
             feedback.show(err.message, 'error');
-            userManageBody.innerHTML = `<tr><td colspan="5" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
+            userManageBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
     }
 
@@ -5406,11 +5443,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userManageStats.textContent = `총 ${users.length} 명의 계정`;
 
         if (users.length === 0) {
-            userManageBody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
             return;
         }
 
-        let headHtml = '<th>아이디</th><th>이름</th><th>역할</th><th>가입일</th><th style="text-align: right;">작업</th>';
+        let headHtml = '<th>아이디</th><th>이름</th><th>역할</th><th>선택 목록</th><th>가입일</th><th style="text-align: right;">작업</th>';
         userManageHead.innerHTML = headHtml;
 
         let bodyHtml = '';
@@ -5443,6 +5480,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>${escapeHtml(u.username)}</strong></td>
                     <td><input class="form-control input-user-name" aria-label="선생님 이름" maxlength="100" value="${escapeHtml(u.name || '')}" placeholder="이름 미등록"></td>
                     <td><span class="role-pill ${u.role}">${roleLabel}</span></td>
+                    <td>${u.role === 'admin' ? '<span class="text-muted">선택 대상 아님</span>' : `<label class="user-teacher-visibility"><input type="checkbox" class="input-teacher-visibility" data-user-id="${u.id}" aria-label="${escapeHtml(u.username)} 선생님 선택 목록에서 숨김" ${u.hidden_from_teacher_options ? 'checked' : ''}> 숨김</label><small class="user-teacher-visibility-status" role="status" aria-live="polite">${u.hidden_from_teacher_options ? '선택 목록에서 숨김' : '선택 목록에 표시'}</small>`}</td>
                     <td>${createdAt}</td>
                     <td style="text-align: right;"><button type="button" class="btn btn-sm btn-outline btn-user-name" data-user-id="${u.id}">이름 변경</button> ${actionsHtml}</td>
                 </tr>
@@ -5450,6 +5488,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         userManageBody.innerHTML = bodyHtml;
+        userManageBody.querySelectorAll('.input-teacher-visibility').forEach(input => {
+            const user = users.find(u => String(u.id) === input.dataset.userId);
+            input.addEventListener('change', () => saveTeacherVisibility(input, user));
+        });
         userManageBody.querySelectorAll('.btn-user-name').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const user = users.find(u => String(u.id) === btn.dataset.userId);
@@ -6319,11 +6361,8 @@ document.addEventListener('DOMContentLoaded', () => {
             classEditSelectedStudentIds = new Set(checkedIds);
             classEditStudentSpecialIds = new Set(specialIds);
 
-            let teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>';
-            (tData.teachers || []).forEach(t => {
-                const sel = t.username === cls.TeacherUsername ? 'selected' : '';
-                const roleLabel = ROLE_LABELS[t.role] || '선생님';
-                teacherOpts += `<option value="${escapeHtml(t.username)}" ${sel}>${escapeHtml(userName(t.username))} (${roleLabel})</option>`;
+            const teacherOpts = '<option value="">-- 담당 선생님 선택 --</option>' + teacherOptionsHtml(tData.teachers || [], {
+                currentUsername: cls.TeacherUsername || '', includeRoles: true
             });
             const dayOpts = ['월', '화', '수', '목', '금', '토', '일'].map(d =>
                 `<option value="${d}" ${cls.DayOfWeek === d ? 'selected' : ''}>${DAY_LABELS[d]}</option>`
@@ -6617,9 +6656,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById(selectId);
         if (!select) return;
         const data = await apiFetch('/api/user/teachers-options');
-        select.innerHTML = (data.teachers || []).map(teacher =>
-            `<option value="${escapeHtml(teacher.username)}" ${teacher.username === assignedTeacher ? 'selected' : ''}>${escapeHtml(userName(teacher.username))}${teacher.username === assignedTeacher ? ' (수업 담당)' : ''}</option>`
-        ).join('');
+        select.innerHTML = '<option value="">수업 담당 선생님</option>' + teacherOptionsHtml(data.teachers || [], {
+            assignedUsername: assignedTeacher || '', selectedUsername: assignedTeacher || ''
+        });
     }
 
 
@@ -8177,7 +8216,7 @@ document.addEventListener('DOMContentLoaded', () => {
             options += `<option value="${escapeHtml(teacher.username)}">${escapeHtml(userName(teacher.username))} (${roleLabel})</option>`;
         });
         teacherSelect.innerHTML = options;
-        teacherSelect.value = selectedTeacher;
+        teacherSelect.value = payrollTeacherOptions.some(t => t.username === selectedTeacher) ? selectedTeacher : '';
     }
 
     async function loadTeacherPayroll() {
@@ -8447,7 +8486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await apiFetch('/api/user/teachers-options');
         teacherSelect.innerHTML = '<option value="">선생님 선택</option>' + (data.teachers || []).map(t =>
             `<option value="${escapeHtml(t.username)}">${escapeHtml(t.name || t.username)} (${escapeHtml(t.username)})</option>`).join('');
-        teacherSelect.value = previousTeacher;
+        teacherSelect.value = (data.teachers || []).some(t => t.username === previousTeacher) ? previousTeacher : '';
         if (teacherSelect.value !== previousTeacher) resetTeacherAssignment();
         await loadDuplicateBooksPreview();
         await loadStudyLogCsvRuns();
@@ -9372,13 +9411,15 @@ document.addEventListener('DOMContentLoaded', () => {
         completionEl('prev').disabled = data.page <= 1;
         completionEl('next').disabled = data.page >= data.total_pages;
         completionEl('body').innerHTML = data.rows.map(row => {
-            const draft = completionState.drafts.get(row.row_id) || '';
+            const savedDraft = completionState.drafts.get(row.row_id) || '';
+            const invalidTeacherDraft = completionState.field === 'teacher' && savedDraft && !completionState.teachers.some(t => t.username === savedDraft);
+            const draft = invalidTeacherDraft ? '' : savedDraft;
             const label = `${row.StudiedDay || '날짜 없음'} 기록 ${row.row_id}`;
             const teacherName = row.ActualTeacherUsername.trim() ? (data.teachers || []).find(t => t.username === row.ActualTeacherUsername)?.name || userName(row.ActualTeacherUsername) : '미입력';
             const input = completionState.field === 'teacher'
                 ? `<select class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 실제 진행 선생님" ${!row.CanEdit ? 'disabled' : ''}><option value="">선생님 선택</option>${(data.teachers || []).map(t => `<option value="${escapeHtml(t.username)}" ${draft === t.username ? 'selected' : ''}>${escapeHtml(t.name || t.username)}</option>`).join('')}</select>`
                 : `<textarea class="form-control completion-input" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 수업 내용" rows="2" maxlength="10000" placeholder="수업 내용을 입력하세요" ${!row.CanEdit ? 'disabled' : ''}>${escapeHtml(draft)}</textarea>`;
-            return `<tr data-completion-row="${row.row_id}" class="${draft ? 'completion-dirty' : ''}"><td class="completion-select-cell" ${completionBulkMode() ? '' : 'hidden'}><input type="checkbox" class="completion-row-select" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 선생님 일괄 지정 선택" ${!row.CanEdit || !row.token ? 'disabled' : ''}></td><td>${escapeHtml(row.StudiedDay || '-')}<small>#${row.row_id}</small></td><td class="completion-book-cell">${escapeHtml(row.ClassName || '수업 미연결')}<small>${escapeHtml(row.BookTitle || '도서 정보 없음')}</small></td><td>${completionState.field === 'teacher' ? input : escapeHtml(teacherName)}</td><td class="completion-content-cell">${completionState.field === 'content' ? input : `<span class="completion-content">${escapeHtml(row.LessonContent || '미입력')}</span>`}</td><td><button type="button" class="btn btn-primary completion-save" data-row-id="${row.row_id}" ${!row.CanEdit || !draft.trim() ? 'disabled' : ''}>확인·저장</button><small class="completion-row-state">${escapeHtml(row.CanEdit ? draft ? '저장 전' : '빈칸만 보완' : row.MutationBlockedReason || '수정할 수 없습니다.')}</small></td></tr>`;
+            return `<tr data-completion-row="${row.row_id}" class="${draft ? 'completion-dirty' : ''}"><td class="completion-select-cell" ${completionBulkMode() ? '' : 'hidden'}><input type="checkbox" class="completion-row-select" data-row-id="${row.row_id}" aria-label="${escapeHtml(label)} 선생님 일괄 지정 선택" ${!row.CanEdit || !row.token ? 'disabled' : ''}></td><td>${escapeHtml(row.StudiedDay || '-')}<small>#${row.row_id}</small></td><td class="completion-book-cell">${escapeHtml(row.ClassName || '수업 미연결')}<small>${escapeHtml(row.BookTitle || '도서 정보 없음')}</small></td><td>${completionState.field === 'teacher' ? input : escapeHtml(teacherName)}</td><td class="completion-content-cell">${completionState.field === 'content' ? input : `<span class="completion-content">${escapeHtml(row.LessonContent || '미입력')}</span>`}</td><td><button type="button" class="btn btn-primary completion-save" data-row-id="${row.row_id}" ${!row.CanEdit || !draft.trim() ? 'disabled' : ''}>확인·저장</button><small class="completion-row-state">${escapeHtml(row.CanEdit ? invalidTeacherDraft ? '선택 목록에서 제외된 선생님입니다. 다시 선택해 주세요.' : draft ? '저장 전' : '빈칸만 보완' : row.MutationBlockedReason || '수정할 수 없습니다.')}</small></td></tr>`;
         }).join('') || `<tr><td colspan="${completionBulkMode() ? 6 : 5}" class="empty-state">${!c.total ? '보완할 기존 기록이 없습니다.' : '조회 가능한 미입력 기록이 없습니다.'}</td></tr>`;
         updateCompletionSelection();
     }
@@ -9463,7 +9504,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!button || completionState.busy) return;
         const row = completionState.rows.find(r => r.row_id === Number(button.dataset.rowId));
         const value = completionState.drafts.get(row.row_id)?.trim();
-        if (!value) return;
+        if (!value || !row.CanEdit || (completionState.field === 'teacher' && !completionState.teachers.some(t => t.username === value))) return;
         completionState.pending = { row, value, field: completionState.field };
         completionEl('confirm-title').textContent = '보완 내용 확인';
         completionEl('confirm-save').textContent = '확인 후 저장';
@@ -9505,6 +9546,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (completionState.busy || !completionState.pending) return;
         if (completionState.pending.kind === 'bulk-teacher') return saveCompletionBulk();
         const { row, value, field } = completionState.pending;
+        if (field === 'teacher' && !completionState.teachers.some(t => t.username === value)) {
+            completionEl('confirm-dialog').close();
+            completionEl('status').textContent = '선택할 수 없는 선생님입니다. 목록을 새로고침하고 다시 선택해 주세요.';
+            return;
+        }
         completionState.busy = true;
         completionEl('confirm-save').disabled = completionEl('confirm-cancel').disabled = true;
         completionEl('confirm-save').textContent = '저장 중…';

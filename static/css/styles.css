@@ -4966,3 +4966,11 @@ button.class-student-badge { cursor: pointer; }
 @media (max-width: 450px) {
     #view-audit-log .search-filter-card > .filter-row:not(.filter-group-actions) { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 계정별 선생님 선택 목록 표시 설정 */
+#view-user-manage .user-teacher-visibility { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; cursor: pointer; }
+#view-user-manage .user-teacher-visibility-status { display: block; margin-top: 0.3rem; color: var(--text-dim); white-space: nowrap; }
+#view-user-manage .user-teacher-visibility-note { margin-top: 0.65rem; color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; }
+#view-user-manage .modern-table td:last-child { white-space: normal; min-width: 220px; overflow: visible; }
+#view-user-manage .modern-table td:last-child > button,
+#view-user-manage .modern-table td:last-child > select { margin-block: 0.15rem; }

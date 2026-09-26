@@ -161,7 +161,7 @@ def get_completion_records(student_id: int = Query(..., gt=0),
                             'CanEdit': blocked is None, 'MutationBlockedReason': blocked[1] if blocked else '',
                             'token': token})
         teachers = [dict(row) for row in conn.execute('''SELECT username, name FROM _app_users
-            WHERE role IN ('teacher','manager','subadmin') ORDER BY name, username''')] if current_user['role'] in STAFF_ROLES else []
+            WHERE role IN ('teacher','manager','subadmin') AND hidden_from_teacher_options = 0 ORDER BY name, username''')] if current_user['role'] in STAFF_ROLES else []
         return {'student': {'row_id': student['row_id'], 'Name': student['Name']},
                 'coverage': student['RecordCoverage'], 'page': page, 'limit': limit,
                 'total_count': total, 'total_pages': max(1, (total + limit - 1) // limit),
