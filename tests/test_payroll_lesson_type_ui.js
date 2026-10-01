@@ -58,3 +58,25 @@ test('학생별 구분 열을 추가하되 학생 행·차시·정산 금액은 
     assert.match(container.innerHTML, /<b>0회<\/b>/);
     assert.equal((container.innerHTML.match(/차시<\/span>/g) || []).length, 5);
 });
+
+test('같은 날짜의 정산 차시만큼 학생별 체크를 표시한다', () => {
+    const line = { ClassId: 1, ClassName: '검증반', StudentRowId: 1, StudentName: '두 번 학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000, IsSpecial: 0 };
+    context.renderPayrollTeamCards([
+        line, { ...line, Amount: 5000, IsSpecial: 1 },
+        { ...line, StudiedDay: '2026-09-08' },
+        { ...line, StudentRowId: 2, StudentName: '한 번 학생' },
+    ], false, [{ ClassId: 1, StudentRowId: 3, StudentName: '결석 학생', CurrentGrade: '초3' }]);
+    const rows = container.innerHTML.match(/<tbody>(.*?)<\/tbody>/s)[1].match(/<tr>.*?<\/tr>/gs);
+    const twice = rows.find(row => row.includes('두 번 학생'));
+    const once = rows.find(row => row.includes('한 번 학생'));
+    const absent = rows.find(row => row.includes('결석 학생'));
+    const cells = twice.match(/<td class="is-attended".*?<\/td>/gs);
+    assert.equal((cells[0].match(/fa-check/g) || []).length, 2);
+    assert.equal((cells[1].match(/fa-check/g) || []).length, 1);
+    assert.match(cells[0], /aria-label="수업 2회"/);
+    assert.equal((once.match(/fa-check/g) || []).length, 1);
+    assert.doesNotMatch(absent, /fa-check|is-attended/);
+    assert.match(twice, /<b>3회<\/b>/);
+    assert.match(twice, /25,000원/);
+    assert.match(container.innerHTML, /35,000원/);
+});

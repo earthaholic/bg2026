@@ -8372,9 +8372,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `<th><span>${index + 1}차시</span><small>${date ? escapeHtml(date.slice(5).replace('-', '/')) : '&nbsp;'}</small>${checkbox}</th>`;
             }).join('');
             const rows = [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(student => {
-                const attendedDates = new Set(student.lines.map(line => line.StudiedDay));
+                const attendanceCounts = new Map();
+                student.lines.forEach(line => {
+                    const date = line.StudiedDay;
+                    attendanceCounts.set(date, (attendanceCounts.get(date) || 0) + 1);
+                });
                 const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
-                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${dates.map(date => `<td class="${date && attendedDates.has(date) ? 'is-attended' : ''}">${date && attendedDates.has(date) ? '<i class="fa-solid fa-check"></i>' : '-'}</td>`).join('')}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
+                const attendanceCells = dates.map(date => {
+                    const count = date ? (attendanceCounts.get(date) || 0) : 0;
+                    return count
+                        ? `<td class="is-attended" aria-label="수업 ${count}회" title="수업 ${count}회"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span></td>`
+                        : '<td>-</td>';
+                }).join('');
+                return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${attendanceCells}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
             }).join('');
             return `<article class="card payroll-team-card"><header><div><span class="payroll-team-eyebrow">수업 팀</span><h3>${escapeHtml(teamName)}</h3></div><div class="payroll-team-total"><span>팀 정산액</span><strong>${teamTotal.toLocaleString()}원</strong></div></header><div class="table-responsive"><table class="modern-table payroll-session-table"><thead><tr><th>학년</th><th>이름</th><th>수업 구분</th>${headerCells}<th>총 차시</th><th>정산액</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
         }).join('');

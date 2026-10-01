@@ -4287,6 +4287,7 @@ body {
 .payroll-session-table th span, .payroll-session-table th small { display: block; }
 .payroll-session-table th small { margin-top: .15rem; color: var(--text-muted); font-weight: 400; }
 .payroll-session-table td { text-align: center; }
+.payroll-attendance-marks { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: .25rem; }
 .payroll-session-table .payroll-student-name { text-align: left; font-weight: 600; }
 #view-teacher-payroll .payroll-lesson-type {
     display: inline-block;

@@ -1651,6 +1651,25 @@ def get_student_tuition_progress(student_id: int, studied_day: Optional[str] = N
     return _get_tuition_progress(student_id, studied_day)
 
 # --- User StudyLog Registration & Search APIs ---
+def _find_duplicate_studylog(conn, student_id, book_id, studied_day, teacher_username):
+    """학생·도서의 원본 ID/rowid와 실제 진행 교사를 기준으로 중복을 찾는다."""
+    return conn.execute('''
+        SELECT sl.rowid FROM "StudyLogs" sl
+        LEFT JOIN "Classes" c ON c."Id" = sl."ClassId"
+        WHERE sl."StudentId" IN (
+            SELECT rowid FROM "Students" WHERE rowid=? OR "Id"=?
+            UNION SELECT "Id" FROM "Students" WHERE rowid=? OR "Id"=?
+        ) AND sl."BookId" IN (
+            SELECT rowid FROM "Books" WHERE rowid=? OR "Id"=?
+            UNION SELECT "Id" FROM "Books" WHERE rowid=? OR "Id"=?
+        ) AND SUBSTR(TRIM(sl."StudiedDay"), 1, 10) = ?
+          AND COALESCE(NULLIF(TRIM(sl."ActualTeacherUsername"), ''),
+                       TRIM(c."TeacherUsername"), '') = ?
+        LIMIT 1
+    ''', (student_id, student_id, student_id, student_id,
+          book_id, book_id, book_id, book_id, studied_day, teacher_username)).fetchone()
+
+
 @app.post("/api/user/studylogs")
 def user_register_studylog(
     payload: UserStudyLogRegisterRequest,
@@ -1737,9 +1756,14 @@ def user_register_studylog(
                 conn.close()
 
     created_log_ids = []
+    conn = get_db_connection()
     try:
+        # 중복 검사·여러 학생/도서 등록·감사를 함께 잠그고 전부 성공할 때만 저장한다.
+        conn.execute('BEGIN IMMEDIATE')
         for s_id in target_student_ids:
             for book_id in target_book_ids:
+                if _find_duplicate_studylog(conn, s_id, book_id, studied_day, actual_teacher):
+                    raise HTTPException(status_code=409, detail="학생·수업 교사·도서·날짜가 모두 같은 학습 기록이 이미 등록되어 있습니다. 기존 기록을 확인해 주세요. 이번 등록은 전체 취소되었습니다.")
                 log_data = {
                     "StudentId": s_id,
                     "BookId": book_id,
@@ -1754,14 +1778,17 @@ def user_register_studylog(
                     "GradeSnapshot": _student_grade(s_id) if class_row or payroll_category_id else "",
                     "CreatedBy": current_user["username"]
                 }
-                res = insert_table_row("StudyLogs", log_data)
-                log_id = res.get("id")
+                columns = ', '.join('"' + column + '"' for column in log_data)
+                placeholders = ', '.join('?' for _ in log_data)
+                log_id = conn.execute(f'INSERT INTO "StudyLogs" ({columns}) VALUES ({placeholders})',
+                                      list(log_data.values())).lastrowid
                 if log_id:
                     created_log_ids.append(log_id)
-                    new_snapshot = get_record_snapshot("StudyLogs", log_id)
-                    _audit_insert("StudyLogs", log_id, new_snapshot,
-                                  current_user["username"], current_user["role"])
+                    new_snapshot = dict(conn.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (log_id,)).fetchone())
+                    write_audit_log("StudyLogs", log_id, "INSERT", None, new_snapshot, None,
+                                    current_user["username"], current_user["role"], connection=conn)
 
+        conn.commit()
         count = len(created_log_ids)
         return {
             "status": "success",
@@ -1770,8 +1797,14 @@ def user_register_studylog(
             "log_ids": created_log_ids,
             "count": count
         }
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=400, detail=f"학습 기록 등록 중 오류가 발생했습니다: {str(e)}")
+    finally:
+        conn.close()
 
 @app.get("/api/user/recent-studylogs")
 def user_get_recent_studylogs(current_user: Dict[str, Any] = Depends(get_current_user)):
@@ -3058,11 +3091,10 @@ def user_batch_register_class_studylogs(
             grade = _student_grade(sid)
             for book_id in book_ids:
                 result = {"StudentId": sid, "Name": name, "BookId": book_id, "BookTitle": book_names[book_id]}
-                exists = conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "BookId"=? AND "StudiedDay"=? LIMIT 1',
-                                      (sid, book_id, day)).fetchone()
+                exists = _find_duplicate_studylog(conn, sid, book_id, day, actual_teacher)
                 if exists:
                     student_skipped += 1
-                    student_results.append(dict(result, status="duplicate", message="이미 등록된 학습 기록입니다."))
+                    student_results.append(dict(result, status="duplicate", message="학생·수업 교사·도서·날짜가 모두 같은 학습 기록이 이미 등록되어 있습니다."))
                     continue
                 data = {
                     "StudentId": sid, "BookId": book_id, "StudiedDay": day,
