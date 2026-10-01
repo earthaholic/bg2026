@@ -16,6 +16,7 @@ class PayrollLessonTypeTests(unittest.TestCase):
         connection_patch.start()
         self.addCleanup(connection_patch.stop)
         self.conn.executescript('''
+            CREATE TABLE _app_users (username TEXT, excluded_from_payroll INTEGER DEFAULT 0);
             CREATE TABLE Students (Id INTEGER PRIMARY KEY, Name TEXT, Grade TEXT);
             CREATE TABLE Classes (Id INTEGER PRIMARY KEY, ClassName TEXT, CategoryId INTEGER, TeacherUsername TEXT);
             CREATE TABLE ClassStudents (ClassId INTEGER, StudentId INTEGER, IsSpecial INTEGER);

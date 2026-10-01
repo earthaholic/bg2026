@@ -74,7 +74,7 @@ test('실패하면 체크와 기존 상태를 복원하고 관리자 대상 요�
     await h.c.saveTeacherVisibility(h.input, { id: 1, role: 'admin' });
     assert.equal(h.calls.length, 1);
 });
-test('계정 표는 관리자 행에 체크박스를 제공하지 않고 안내와 여섯 열을 표시한다', () => {
+test('계정 표는 관리자 행에 체크박스를 제공하지 않고 안내와 일곱 열을 표시한다', () => {
     const body = { innerHTML: '', querySelectorAll: () => [] }, head = { innerHTML: '' };
     const c = context({ userManageBody: body, userManageHead: head, userManageStats: {} });
     vm.runInContext(fn('renderUserAccounts'), c);
@@ -84,8 +84,29 @@ test('계정 표는 관리자 행에 체크박스를 제공하지 않고 안내�
     assert.doesNotMatch(body.innerHTML, /input-teacher-visibility/);
     c.renderUserAccounts([{ id: 2, username: '교사', role: 'teacher', hidden_from_teacher_options: 1 }]);
     assert.match(body.innerHTML, /input-teacher-visibility[^>]*checked/);
-    c.renderUserAccounts([]); assert.match(body.innerHTML, /colspan="6"/);
+    assert.match(body.innerHTML, /input-payroll-exclusion/);
+    c.renderUserAccounts([{ id: 2, username: '교사', role: 'teacher', excluded_from_payroll: 1 }]);
+    assert.match(body.innerHTML, /input-payroll-exclusion[^>]*checked/);
+    c.renderUserAccounts([]); assert.match(body.innerHTML, /colspan="7"/);
     assert.match(template, /로그인 권한과 기존 수업·학습 기록 연결은 유지/);
+});
+
+test('계정 정산 제외는 즉시 저장하고 실패하면 이전 설정을 복원한다', async () => {
+    const calls = [], status = { textContent: '' };
+    const input = { checked: true, disabled: false, closest: () => ({ querySelector: () => status }) };
+    let fail = false;
+    const c = context({ apiFetch: async (...args) => { calls.push(args); if (fail) throw new Error('저장 실패'); return {message: '저장 완료'}; }, createActionFeedback: () => ({show() {}}) });
+    vm.runInContext(fn('saveTeacherPayrollExclusion'), c);
+    const user = {id: 3, role: 'teacher', excluded_from_payroll: 0};
+    await c.saveTeacherPayrollExclusion(input, user);
+    assert.equal(calls[0][0], '/api/admin/users/3/payroll-exclusion');
+    assert.deepEqual(JSON.parse(calls[0][1].body), {excluded_from_payroll: true});
+    assert.equal(user.excluded_from_payroll, 1);
+    fail = true; input.checked = false;
+    await c.saveTeacherPayrollExclusion(input, user);
+    assert.equal(input.checked, true);
+    assert.equal(input.disabled, false);
+    assert.match(status.textContent, /정산 제외 유지/);
 });
 test('수정과 등록의 모든 담당자 보존 경로가 공통 함수를 사용한다', () => {
     assert.match(source, /teacherOptionsHtml\(teachers, \{ currentUsername: log.ActualTeacherUsername/);

@@ -5428,16 +5428,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function saveTeacherPayrollExclusion(input, user) {
+        if (input.disabled || user.role === 'admin') return;
+        const previous = Boolean(user.excluded_from_payroll);
+        const excluded = input.checked;
+        const status = input.closest('td').querySelector('.user-payroll-exclusion-status');
+        input.disabled = true;
+        status.textContent = '저장 중…';
+        try {
+            const result = await apiFetch(`/api/admin/users/${user.id}/payroll-exclusion`, {
+                method: 'PUT', body: JSON.stringify({ excluded_from_payroll: excluded })
+            });
+            user.excluded_from_payroll = excluded ? 1 : 0;
+            status.textContent = excluded ? '모든 수업 정산 제외' : '수업 정산 포함';
+            createActionFeedback(input).show(result.message, 'success');
+        } catch (err) {
+            input.checked = previous;
+            status.textContent = `저장 실패 · ${previous ? '정산 제외 유지' : '정산 포함 유지'}`;
+            createActionFeedback(input).show(err.message, 'error');
+        } finally {
+            input.disabled = false;
+        }
+    }
+
     async function loadUserAccounts() {
         const feedback = createActionFeedback();
         try {
-            userManageBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>계정 목록 로딩 중...</p></td></tr>';
             const data = await apiFetch('/api/admin/users');
             await loadUserDisplayNames();
             renderUserAccounts(data.users);
         } catch (err) {
             feedback.show(err.message, 'error');
-            userManageBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
+            userManageBody.innerHTML = `<tr><td colspan="7" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
     }
 
@@ -5445,11 +5468,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userManageStats.textContent = `총 ${users.length} 명의 계정`;
 
         if (users.length === 0) {
-            userManageBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
+            userManageBody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fa-solid fa-user-slash fa-2x"></i><p>등록된 계정이 없습니다.</p></td></tr>';
             return;
         }
 
-        let headHtml = '<th>아이디</th><th>이름</th><th>역할</th><th>선택 목록</th><th>가입일</th><th style="text-align: right;">작업</th>';
+        let headHtml = '<th>아이디</th><th>이름</th><th>역할</th><th>선택 목록</th><th>수업 정산</th><th>가입일</th><th style="text-align: right;">작업</th>';
         userManageHead.innerHTML = headHtml;
 
         let bodyHtml = '';
@@ -5483,6 +5506,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><input class="form-control input-user-name" aria-label="선생님 이름" maxlength="100" value="${escapeHtml(u.name || '')}" placeholder="이름 미등록"></td>
                     <td><span class="role-pill ${u.role}">${roleLabel}</span></td>
                     <td>${u.role === 'admin' ? '<span class="text-muted">선택 대상 아님</span>' : `<label class="user-teacher-visibility"><input type="checkbox" class="input-teacher-visibility" data-user-id="${u.id}" aria-label="${escapeHtml(u.username)} 선생님 선택 목록에서 숨김" ${u.hidden_from_teacher_options ? 'checked' : ''}> 숨김</label><small class="user-teacher-visibility-status" role="status" aria-live="polite">${u.hidden_from_teacher_options ? '선택 목록에서 숨김' : '선택 목록에 표시'}</small>`}</td>
+                    <td>${u.role === 'admin' ? '<span class="text-muted">설정 대상 아님</span>' : `<label class="user-teacher-visibility"><input type="checkbox" class="input-payroll-exclusion" data-user-id="${u.id}" aria-label="${escapeHtml(u.username)} 모든 수업 정산 제외" ${u.excluded_from_payroll ? 'checked' : ''}> 모든 수업 정산 제외</label><small class="user-payroll-exclusion-status" role="status" aria-live="polite">${u.excluded_from_payroll ? '모든 수업 정산 제외' : '수업 정산 포함'}</small>`}</td>
                     <td>${createdAt}</td>
                     <td style="text-align: right;"><button type="button" class="btn btn-sm btn-outline btn-user-name" data-user-id="${u.id}">이름 변경</button> ${actionsHtml}</td>
                 </tr>
@@ -5490,6 +5514,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         userManageBody.innerHTML = bodyHtml;
+        userManageBody.querySelectorAll('.input-payroll-exclusion').forEach(input => {
+            const user = users.find(u => String(u.id) === input.dataset.userId);
+            input.addEventListener('change', () => saveTeacherPayrollExclusion(input, user));
+        });
         userManageBody.querySelectorAll('.input-teacher-visibility').forEach(input => {
             const user = users.find(u => String(u.id) === input.dataset.userId);
             input.addEventListener('change', () => saveTeacherVisibility(input, user));
@@ -8430,7 +8458,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.getElementById('payroll-excluded-card');
         card.classList.toggle('hidden', !lines.length);
         document.getElementById('payroll-exclusion-guide').classList.toggle('hidden', !isStaff());
-        document.getElementById('payroll-excluded-body').innerHTML = lines.map(line => `<tr><td>${escapeHtml(userName(line.TeacherUsername))}</td><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(line.StudentName || '-')}</td><td>${escapeHtml(line.StudiedDay)}<small>기록 #${Number(line.StudyLogId)}</small></td><td>${line.IsSpecial ? '특강' : '일반'}</td><td>${escapeHtml(line.ExclusionReason || '정산에서만 제외')}</td><td>${canRestore && !line.IsPayrollClosed ? `<button type="button" class="btn btn-xs btn-outline payroll-restore-button" data-log-ids="${Number(line.StudyLogId)}">정산에 다시 포함</button>` : (line.IsPayrollClosed ? '마감 완료' : '-')}</td></tr>`).join('');
+        document.getElementById('payroll-excluded-body').innerHTML = lines.map(line => `<tr><td>${escapeHtml(userName(line.TeacherUsername))}</td><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(line.StudentName || '-')}</td><td>${escapeHtml(line.StudiedDay)}<small>기록 #${Number(line.StudyLogId)}</small></td><td>${line.IsSpecial ? '특강' : '일반'}</td><td>${escapeHtml(line.ExclusionReason || '정산에서만 제외')}</td><td>${canRestore && !line.IsPayrollClosed && !line.IsTeacherExcluded ? `<button type="button" class="btn btn-xs btn-outline payroll-restore-button" data-log-ids="${Number(line.StudyLogId)}">정산에 다시 포함</button>` : (line.IsPayrollClosed ? '마감 완료' : (line.IsTeacherExcluded ? '계정 관리에서 해제' : '-'))}</td></tr>`).join('');
     }
 
     function formatPayrollGrade(grade) {

@@ -117,6 +117,10 @@ class UserTeacherVisibilityRequest(BaseModel):
     hidden_from_teacher_options: StrictBool
 
 
+class UserPayrollExclusionRequest(BaseModel):
+    excluded_from_payroll: StrictBool
+
+
 class UserPasswordResetRequest(BaseModel):
     password: str
 
@@ -3317,6 +3321,8 @@ def set_payroll_exclusions(payload: PayrollExclusionRequest,
             row = rows.get(log_id)
             if not row or row['StudentRowId'] != payload.StudentRowId or row['StudiedDay'] != payload.StudiedDay:
                 raise HTTPException(status_code=409, detail="선택한 수업의 학생·날짜·진행 선생님이 변경되었거나 정산 대상이 아닙니다. 새로고침 후 다시 선택해 주세요.")
+            if row.get('IsTeacherExcluded'):
+                raise HTTPException(status_code=409, detail="선생님 계정 관리에서 모든 수업 정산 제외를 먼저 해제해 주세요.")
             if bool(row.get('IsExcluded')) == payload.Excluded:
                 raise HTTPException(status_code=409, detail="정산 포함 여부가 이미 변경되었습니다. 새로고침 후 다시 확인해 주세요.")
             if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId"=?', (log_id,)).fetchone():
@@ -4128,6 +4134,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
             if teacher_username and not include_excluded:
                 return frozen_rows
         exclusion_rows = conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "PayrollMonth"=?', (month,)).fetchall()
+        excluded_teachers = {r[0] for r in conn.execute('SELECT username FROM _app_users WHERE excluded_from_payroll=1')}
         exclusions = {(r['TeacherUsername'], r['StudyLogId']): dict(r) for r in exclusion_rows}
         sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudentId", sl."BookId", sl."StudiedDay", sl."ClassId", sl."PayrollCategoryId", sl."LessonContent", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus",
@@ -4148,9 +4155,11 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
             exclusion = exclusions.get((teacher, r['StudyLogId']))
             if exclusion and (exclusion['StudentId'], exclusion['BookId'], exclusion['StudiedDay']) != (str(r['StudentId']), str(r['BookId']), r['StudiedDay']):
                 exclusion = None
-            if (exclusion and not include_excluded) or (teacher in closed_teachers and not exclusion):
+            teacher_excluded = teacher in excluded_teachers and teacher not in closed_teachers
+            if ((exclusion or teacher_excluded) and not include_excluded) or (teacher in closed_teachers and not exclusion):
                 continue
-            r.update(IsExcluded=bool(exclusion), ExclusionReason=exclusion['Reason'] if exclusion else '',
+            r.update(IsExcluded=bool(exclusion or teacher_excluded), IsTeacherExcluded=teacher_excluded,
+                     ExclusionReason='선생님 계정 설정 · 모든 수업 정산 제외' if teacher_excluded else (exclusion['Reason'] if exclusion else ''),
                      IsPayrollClosed=teacher in closed_teachers)
             # 과거 학습 이력에 학년 스냅샷이 없으면 현재 학생 학년을 사용한다.
             payroll_grade = (r["GradeSnapshot"] or "").strip() or (r["CurrentGrade"] or "").strip()
@@ -4875,6 +4884,31 @@ def admin_update_teacher_visibility(
                                 current_admin['role'], connection=conn)
         return {"status": "success", "hidden_from_teacher_options": bool(hidden),
                 "message": "선생님 선택 목록에서 숨겼습니다." if hidden else "선생님 선택 목록에 다시 표시합니다."}
+    finally:
+        conn.close()
+
+
+@app.put("/api/admin/users/{user_id}/payroll-exclusion")
+def admin_update_payroll_exclusion(user_id: int, payload: UserPayrollExclusionRequest,
+                                   current_admin: Dict[str, Any] = Depends(get_current_admin)):
+    """미마감 수업의 계정별 정산 제외 설정과 감사 이력을 함께 저장한다."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM _app_users WHERE id=?', (user_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="해당 계정을 찾을 수 없습니다.")
+            old = _strip_user_password(dict(row))
+            if old['role'] == 'admin':
+                raise HTTPException(status_code=400, detail="사이트 관리자 계정은 여기서 변경할 수 없습니다.")
+            excluded = int(payload.excluded_from_payroll)
+            if old['excluded_from_payroll'] != excluded:
+                conn.execute('UPDATE _app_users SET excluded_from_payroll=? WHERE id=?', (excluded, user_id))
+                write_audit_log('_app_users', user_id, 'UPDATE', old, dict(old, excluded_from_payroll=excluded),
+                                ['excluded_from_payroll'], current_admin['username'], current_admin['role'], connection=conn)
+        return {'status': 'success', 'excluded_from_payroll': bool(excluded),
+                'message': '미마감된 모든 수업을 정산에서 제외합니다.' if excluded else '수업 정산 제외 설정을 해제했습니다.'}
     finally:
         conn.close()
 

@@ -68,6 +68,10 @@ def init_system_tables():
     if 'hidden_from_teacher_options' not in {row['name'] for row in cursor.execute('PRAGMA table_info(_app_users)')}:
         cursor.execute("ALTER TABLE _app_users ADD COLUMN hidden_from_teacher_options INTEGER NOT NULL DEFAULT 0 CHECK(hidden_from_teacher_options IN (0, 1))")
 
+    # 계정별 수업 정산 제외는 기존 기록과 별도로 관리한다.
+    if 'excluded_from_payroll' not in {row['name'] for row in cursor.execute('PRAGMA table_info(_app_users)')}:
+        cursor.execute("ALTER TABLE _app_users ADD COLUMN excluded_from_payroll INTEGER NOT NULL DEFAULT 0 CHECK(excluded_from_payroll IN (0, 1))")
+
     # Seed Admin User (사이트 관리자) if not exists
     cursor.execute("SELECT id FROM _app_users WHERE username = ?", (settings.ADMIN_USERNAME,))
     if not cursor.fetchone():
@@ -829,7 +833,7 @@ def execute_raw_sql(sql_query: str) -> Dict[str, Any]:
 def list_all_users() -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, name, role, created_at, hidden_from_teacher_options FROM _app_users ORDER BY id ASC")
+    cursor.execute("SELECT id, username, name, role, created_at, hidden_from_teacher_options, excluded_from_payroll FROM _app_users ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]

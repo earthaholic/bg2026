@@ -191,3 +191,9 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 정산 화면은 차시당 한 행 및 체크 한 개를 표시하고 `StudyLogIds`로 모든 도서 기록을 보관한다. 정산 제외 버튼은 차시의 모든 원본 번호를 전달한다. 일부 도서만 제외되어도 포함된 도서가 남으면 해당 차시의 수당은 한 번 지급한다.
 - 새 정산 마감은 모든 도서 기록을 `TeacherPayrollLines`에 저장하되 차시당 수당을 한 번만 저장하고 나머지는 0원으로 보관한다. `SessionKey`를 확정 저장하여 이후 기록 변경과 분리한다. 기존 마감의 빈 `SessionKey`는 원본 행 단위로 유지하며 기존 지급액을 소급 변경하지 않는다.
 - 회귀 검증: `tests/test_lesson_sessions.py`, `tests/test_monthly_report_absences.js`, `tests/test_payroll_lesson_type_ui.js`.
+
+## 선생님별 모든 수업 정산 제외
+- 선생님 계정 관리의 `모든 수업 정산 제외`는 `_app_users.excluded_from_payroll`(기본 0)로 저장한다. 관리자·부관리자만 `PUT /api/admin/users/{user_id}/payroll-exclusion`의 `{excluded_from_payroll: boolean}`으로 변경하며 설정과 비밀번호를 제외한 감사 이력은 같은 쓰기 트랜잭션이다.
+- 미마감된 모든 월의 수업에 적용한다. 실제 진행 선생님을 우선하며 빈 값은 수업 담당자를 사용한다. 학습 기록·월말 보고·수강 차시·추가 청구·자료 요청 금액 및 기존 마감 정산은 유지한다.
+- 계정 제외 수업도 정산의 제외 목록에서 사유를 조회할 수 있고 개별 복원 대신 계정 관리에서 해제한다. 해제해도 기존 학생별 개별 제외는 유지한다. 제외 설정은 마감과 동일한 쓰기 잠금으로 직렬화하며 제외 수업의 단가 미설정은 마감을 막지 않는다.
+- 회귀 검증: `tests/test_teacher_payroll_exclusion.py`, `tests/test_teacher_visibility_ui.js`.
