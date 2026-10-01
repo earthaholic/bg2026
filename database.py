@@ -334,6 +334,9 @@ def init_system_tables():
         "TeacherUsername" TEXT NOT NULL, "UnitAmount" INTEGER NOT NULL, "Amount" INTEGER NOT NULL,
         "Reason" TEXT DEFAULT '', UNIQUE("PayrollMonth", "StudyLogId")
     )''')
+    # 새 마감부터 복수 도서를 묶은 차시 키를 확정 보관한다. 기존 마감은 재계산하지 않는다.
+    if 'SessionKey' not in {row['name'] for row in cursor.execute('PRAGMA table_info("TeacherPayrollLines")')}:
+        cursor.execute('ALTER TABLE "TeacherPayrollLines" ADD COLUMN "SessionKey" TEXT DEFAULT \'\'')
     # 학습 기록을 수정하지 않고 정산 포함 여부만 별도로 저장한다.
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollExclusions" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL,

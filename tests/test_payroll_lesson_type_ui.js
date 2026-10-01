@@ -114,3 +114,14 @@ test('제외 목록은 마감 상태와 권한에 따라 복원 버튼을 숨긴
     context.renderPayrollExcludedLines([line], false);
     assert.doesNotMatch(body.innerHTML, /payroll-restore-button/);
 });
+
+test('복수 도서 묶음은 체크 한 개를 표시하고 제외 버튼에 모든 원본 번호를 넣는다', () => {
+    context.document.getElementById = () => container;
+    const line = {StudyLogId: 11, StudyLogIds: [11, 12], ClassId: 1, ClassName: '검증반', StudentRowId: 1,
+        StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000};
+    context.renderPayrollTeamCards([line], false, [], true);
+    assert.equal((container.innerHTML.match(/fa-check/g) || []).length, 1);
+    assert.match(container.innerHTML, /<b>1회<\/b>/);
+    assert.match(container.innerHTML, /data-log-ids="11,12"/);
+    assert.match(container.innerHTML, /10,000원/);
+});

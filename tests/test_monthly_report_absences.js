@@ -111,6 +111,33 @@ test('같은 날짜의 정규 수업과 결석은 하나로 합쳐지지 않는�
     assert.equal((text.match(/9\/18\(금\)/g) || []).length, 2);
 });
 
+test('같은 차시의 복수 도서는 한 강으로 합치고 도서명은 모두 유지한다', () => {
+    const base = {StudentRowId: 17, StudiedDay: '2026-09-18', ClassId: 1, EffectiveTeacherUsername: 'teacher_a', LessonContent: '토론', BookTitle: '첫 도서'};
+    const f = fixture([base, {...base, BookTitle: '두 번째 도서', LessonContent: ' 토론 '},
+        {...base, StudiedDay: '2026-09-19', BookTitle: '다음 도서'}]);
+    f.testApi.generate(true);
+    const text = f.nodes['monthly-report-result-text'].value;
+    assert.equal((text.match(/<\d+강>/g) || []).length, 2);
+    assert.match(text, /도서 : 첫 도서, 두 번째 도서/);
+    assert.match(text, /<2강>[\s\S]*다음 도서/);
+});
+
+test('날짜가 같아도 교사·반·일반특강·내용이 다르면 별도 강으로 출력한다', () => {
+    const base = {StudentRowId: 17, StudiedDay: '2026-09-18', ClassId: 1, EffectiveTeacherUsername: 'teacher_a', LessonContent: '토론', BookTitle: '첫 도서'};
+    for (const override of [{EffectiveTeacherUsername: 'teacher_b'}, {ClassId: 2}, {IsSpecial: 1}, {LessonContent: '독서'}]) {
+        const f = fixture([base, {...base, BookTitle: '두 번째 도서', ...override}]);
+        f.testApi.generate(true);
+        assert.equal((f.nodes['monthly-report-result-text'].value.match(/도서 :/g) || []).length, 2);
+    }
+});
+
+test('빈 수업 내용의 여러 도서도 같은 조건이면 한 강으로 출력한다', () => {
+    const base = {StudiedDay: '2026-09-18', BookTitle: '첫 도서', LessonContent: ''};
+    const f = fixture([base, {...base, BookTitle: '두 번째 도서', LessonContent: '  '}]);
+    f.testApi.generate(true);
+    assert.equal((f.nodes['monthly-report-result-text'].value.match(/<\d+강>/g) || []).length, 1);
+});
+
 test('시작 강의 자동계산은 결석을 제외하고 가장 이른 일반 수업일을 사용한다', async () => {
     const requests = [];
     const f = fixture([

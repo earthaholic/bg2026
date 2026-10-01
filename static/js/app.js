@@ -7044,6 +7044,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return studiedDay;
     }
 
+    function monthlyLessonSessionKey(log) {
+        const teacher = [log.EffectiveTeacherUsername, log.ActualTeacherUsername, log.TeacherUsername]
+            .map(value => String(value || '').trim()).find(Boolean) || '';
+        const classId = String(log.ClassId || '');
+        return [String(log.StudentRowId ?? log.StudentId ?? ''),
+            String(log.StudiedDay || log.studied_day || '').trim().slice(0, 10), teacher, classId,
+            classId ? '' : String(log.PayrollCategoryId || ''),
+            ['1', 'true'].includes(String(log.IsSpecial ?? log.is_special ?? 0).toLowerCase()),
+            String(log.LessonContent || log.lesson_content || '').trim()];
+    }
+
     function generateMonthlyReportText(skipAutoLecture = false) {
         const studentSelect = document.getElementById('monthly-report-student-select');
         const periodLabelInput = document.getElementById('monthly-report-period-label');
@@ -7101,25 +7112,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return idA - idB;
         });
 
-        // 같은 날짜·수업 내용·특강 여부의 기록은 도서명만 합쳐 한 강으로 출력한다.
+        // 학생·날짜·교사·수업·일반/특강·내용이 같으면 도서명을 합쳐 한 강으로 출력한다.
         const groupedLogMap = new Map();
         const groupedLogItems = [];
         checkedLogItems.forEach((log, logIndex) => {
             const studiedDay = String(log.StudiedDay || log.studied_day || '').trim();
             const lessonContent = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
-            const isSpecial = !!(log.IsSpecial || log.is_special);
             const isBreak = isMonthlyReportBreak(log);
-            const key = studiedDay && lessonContent && !log.IsAbsence
-                ? JSON.stringify([studiedDay, lessonContent, isSpecial, isBreak])
+            const key = studiedDay && !log.IsAbsence
+                ? JSON.stringify([...monthlyLessonSessionKey(log), isBreak, isBreak ? lessonContent : ''])
                 : JSON.stringify(['__single__', logIndex]);
             if (!groupedLogMap.has(key)) {
-                const grouped = { ...log, _bookTitles: [], _isBreak: isBreak };
+                const grouped = { ...log, _bookTitles: [], _lessonContents: [], _isBreak: isBreak };
                 groupedLogMap.set(key, grouped);
                 groupedLogItems.push(grouped);
             }
             const title = String(log.BookTitle || log.book_title || log.Title || '').trim();
             const titles = groupedLogMap.get(key)._bookTitles;
             if (title && !titles.includes(title)) titles.push(title);
+            const contents = groupedLogMap.get(key)._lessonContents;
+            if (lessonContent && !contents.includes(lessonContent)) contents.push(lessonContent);
         });
 
         const trimmedName = (studentName || '').replace(/\([^()]*\)|（[^（）]*）/g, '').trim();
@@ -7167,7 +7179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lines.push('');
             }
 
-            const isSpecial = !!(log.IsSpecial || log.is_special);
+            const isSpecial = ['1', 'true'].includes(String(log.IsSpecial ?? log.is_special ?? 0).toLowerCase());
             if (isSpecial) {
                 if (teacherSuffix) {
                     lines.push(`<특강> ${teacherSuffix}`);
@@ -7182,7 +7194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lines.push(`도서 : ${log._bookTitles.join(', ')}`);
 
             const dateStr = formatDateKorean(log.StudiedDay || log.studied_day || '');
-            const lessonContent = (log.LessonContent || log.lesson_content || log.Description || '').trim();
+            const lessonContent = log._lessonContents.join('\n');
             if (dateStr && lessonContent) {
                 lines.push(`${dateStr} ${lessonContent}`);
             } else if (dateStr) {
@@ -8280,7 +8292,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const payrollLines = data.lines || [];
         const excludedLines = data.excluded_lines || [];
         payrollExclusionRows.clear();
-        [...payrollLines, ...excludedLines].forEach(line => payrollExclusionRows.set(Number(line.StudyLogId), line));
+        [...payrollLines, ...excludedLines].forEach(line => {
+            (line.StudyLogIds || [line.StudyLogId]).forEach(id => payrollExclusionRows.set(Number(id), { ...line, StudyLogId: id }));
+        });
         const unconfiguredLines = payrollLines.filter(line => line.IsRateConfigured === false);
         const canTransfer = Boolean(isStaff() && teacher && !data.closed);
         renderPayrollTransferPanel(canTransfer, teacher);
@@ -8387,7 +8401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const count = date ? (attendanceCounts.get(date) || 0) : 0;
                     const dateLines = student.lines.filter(line => line.StudiedDay === date);
                     const excludeButton = canExclude && count && dateLines.every(line => !line.IsPayrollClosed)
-                        ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${dateLines.map(line => Number(line.StudyLogId)).join(',')}" aria-label="${escapeHtml(student.name)} ${escapeHtml(date)} 수업 ${count}건 정산에서만 제외">정산 제외</button>` : '';
+                        ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${dateLines.flatMap(line => line.StudyLogIds || [line.StudyLogId]).map(Number).join(',')}" aria-label="${escapeHtml(student.name)} ${escapeHtml(date)} 수업 ${count}차시 정산에서만 제외">정산 제외</button>` : '';
                     return count
                         ? `<td class="is-attended" aria-label="수업 ${count}회" title="수업 ${count}회"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${excludeButton}</td>`
                         : '<td>-</td>';
@@ -8407,7 +8421,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const grade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
             const lessonType = line.IsSpecial ? '특강' : '일반 수업';
             const excludeButton = isStaff() && document.getElementById('payroll-teacher').value && !line.IsPayrollClosed
-                ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${Number(line.StudyLogId)}">정산 제외</button>` : '';
+                ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${(line.StudyLogIds || [line.StudyLogId]).map(Number).join(',')}">정산 제외</button>` : '';
             return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}${excludeButton}</td></tr>`;
         }).join('');
     }

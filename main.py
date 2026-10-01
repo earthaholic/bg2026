@@ -2,6 +2,7 @@ import os
 import io
 import csv
 import re
+from lesson_sessions import lesson_session_key, group_payroll_sessions
 import json
 import logging
 import zipfile
@@ -338,7 +339,9 @@ def _count_general_lesson_sessions(
 ) -> int:
     """특강·휴강을 제외하고 같은 날짜·수업 내용의 복수 도서를 한 차시로 계산한다."""
     end_operator = "<=" if include_end else "<"
-    extra_columns = ''' , "Description", (SELECT b."Title" FROM "Books" b
+    extra_columns = ''' , "Description", "ClassId", "PayrollCategoryId", "ActualTeacherUsername",
+                       (SELECT c."TeacherUsername" FROM "Classes" c WHERE c."Id"="StudyLogs"."ClassId") AS "TeacherUsername",
+                       (SELECT b."Title" FROM "Books" b
                        WHERE b.rowid = "StudyLogs"."BookId" OR b."Id" = "StudyLogs"."BookId"
                        LIMIT 1) AS "BookTitle"''' if exclude_report_breaks else ""
     cursor.execute(f'''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
@@ -359,7 +362,8 @@ def _count_general_lesson_sessions(
         if exclude_report_breaks and _is_monthly_report_break(dict(row)):
             continue
         lesson_content = (row["LessonContent"] or "").strip()
-        key = (row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])
+        key = (lesson_session_key(dict(row), student_row_id) if exclude_report_breaks else
+               ((row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])))
         seen_sessions.add(key)
     return len(seen_sessions)
 
@@ -2123,7 +2127,7 @@ def build_monthly_report_text(
 
     lines.append("")
 
-    # 같은 날짜·수업 내용·특강 여부의 기록은 여러 도서를 사용했더라도 한 강으로 묶는다.
+    # 학생·날짜·교사·수업·일반/특강·내용이 같으면 여러 도서를 한 강으로 묶는다.
     grouped_logs: List[Dict[str, Any]] = []
     grouped_by_key: Dict[Any, Dict[str, Any]] = {}
     sorted_logs = sorted(logs, key=lambda log: str(log.get("StudiedDay") or log.get("studied_day") or ""))
@@ -2133,19 +2137,20 @@ def build_monthly_report_text(
             continue
         studied_day = str(log.get("StudiedDay") or log.get("studied_day") or "").strip()
         lesson_content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
-        is_special = bool(log.get("IsSpecial") or log.get("is_special"))
-        title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
         is_break = _is_monthly_report_break(log)
-        key = (studied_day, lesson_content, is_special, is_break) if studied_day and lesson_content else ("__single__", log_index)
+        key = (lesson_session_key(log), is_break, lesson_content if is_break else '') if studied_day else ("__single__", log_index)
         if key not in grouped_by_key:
             grouped = dict(log)
             grouped["_book_titles"] = []
+            grouped["_lesson_contents"] = []
             grouped["_is_break"] = is_break
             grouped_by_key[key] = grouped
             grouped_logs.append(grouped)
         title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
         if title and title not in grouped_by_key[key]["_book_titles"]:
             grouped_by_key[key]["_book_titles"].append(title)
+        if lesson_content and lesson_content not in grouped_by_key[key]["_lesson_contents"]:
+            grouped_by_key[key]["_lesson_contents"].append(lesson_content)
 
     current_lecture = start_lecture_num or 1
     teacher_suffix = (special_teacher_name or "").strip()
@@ -2170,7 +2175,7 @@ def build_monthly_report_text(
         if i > 0:
             lines.append("")
 
-        is_special = bool(log.get("IsSpecial") or log.get("is_special"))
+        is_special = str(log.get("IsSpecial", log.get("is_special", 0)) or 0).lower() in ('1', 'true')
         if is_special:
             if teacher_suffix:
                 lines.append(f"<특강> {teacher_suffix}")
@@ -2184,7 +2189,7 @@ def build_monthly_report_text(
         lines.append(f"도서 : {', '.join(book_titles)}")
 
         date_str = _format_date_korean(log.get("StudiedDay") or log.get("studied_day") or "")
-        lesson_content = (log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
+        lesson_content = '\n'.join(log.get('_lesson_contents') or [])
         if date_str and lesson_content:
             lines.append(f"{date_str} {lesson_content}")
         elif date_str:
@@ -2252,9 +2257,11 @@ def user_get_monthly_report_studylogs(
 
     query = '''
         SELECT sl.rowid as row_id, sl.*, 
-               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher
+               b.Title as BookTitle, b.Author as BookAuthor, b.Publisher as BookPublisher,
+               COALESCE(NULLIF(TRIM(sl."ActualTeacherUsername"), ''), c."TeacherUsername", '') AS "EffectiveTeacherUsername"
         FROM "StudyLogs" sl
         LEFT JOIN "Books" b ON sl.BookId = b.rowid OR sl.BookId = b.Id
+        LEFT JOIN "Classes" c ON c."Id"=sl."ClassId"
         WHERE (sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ? OR sl.StudentId = ?)
     '''
     params = [s_row_id, str(s_row_id), s_id, s_name]
@@ -2271,7 +2278,7 @@ def user_get_monthly_report_studylogs(
     for row in rows:
         log = dict(row)
         blocked = mutation_permission(conn, log, log["row_id"], current_user)
-        log.update(CanEdit=blocked is None,
+        log.update(StudentRowId=s_row_id, CanEdit=blocked is None,
                    MutationBlockedReason=blocked[1] if blocked else "")
         logs.append(log)
     absence_query = '''
@@ -3241,7 +3248,7 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
     teacher = current_user["username"] if current_user["role"] == "teacher" else (teacher_username or None)
     all_rows=_payroll_rows(month, teacher, include_excluded=True)
-    rows=[row for row in all_rows if not row.get("IsExcluded")]
+    rows=group_payroll_sessions([row for row in all_rows if not row.get("IsExcluded")])
     excluded_rows=[row for row in all_rows if row.get("IsExcluded")]
     totals={}
     for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
@@ -4056,7 +4063,7 @@ def close_payroll(month: str, teacher_username: str = Query(...), current_user: 
         rows=_payroll_rows(month, teacher_username, connection=conn)
         if any(not row.get("IsRateConfigured", True) for row in rows):
             raise HTTPException(status_code=400, detail="단가가 설정되지 않은 수업 내역이 있어 정산을 마감할 수 없습니다.")
-        for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason") VALUES(?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason']))
+        for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason","SessionKey") VALUES(?,?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason'],r.get('SessionKey', '')))
         conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","TeacherUsername","ClosedBy") VALUES(?,?,?)',(month,teacher_username,current_user['username'])); conn.commit()
         return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}
     except Exception:
@@ -4104,8 +4111,8 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
     conn = connection or get_db_connection()
     try:
         frozen_rows = []
-        closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
-        if closed:
+        closed_teachers = {r[0] for r in conn.execute('SELECT "TeacherUsername" FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,))}
+        if closed_teachers and (not teacher_username or teacher_username in closed_teachers):
             sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                             sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
                             CASE WHEN pl."Reason" LIKE '특강%' THEN 1 ELSE 0 END AS "IsSpecial"
@@ -4113,16 +4120,16 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"
                      LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"
                      LEFT JOIN "ClassCategories" pc ON sl."PayrollCategoryId"=pc."Id"
-                     WHERE pl."PayrollMonth"=?'''
+                     WHERE pl."PayrollMonth"=? AND EXISTS (SELECT 1 FROM "TeacherPayrollClosures" cl
+                         WHERE cl."PayrollMonth"=pl."PayrollMonth" AND cl."TeacherUsername"=pl."TeacherUsername")'''
             params = [month]
             if teacher_username: sql += ' AND pl."TeacherUsername"=?'; params.append(teacher_username)
             frozen_rows = [dict(r, IsPayrollClosed=True) for r in conn.execute(sql, params).fetchall()]
-            if not include_excluded:
+            if teacher_username and not include_excluded:
                 return frozen_rows
         exclusion_rows = conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "PayrollMonth"=?', (month,)).fetchall()
         exclusions = {(r['TeacherUsername'], r['StudyLogId']): dict(r) for r in exclusion_rows}
-        closed_teachers = {r[0] for r in conn.execute('SELECT "TeacherUsername" FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,))}
-        sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudentId", sl."BookId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
+        sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudentId", sl."BookId", sl."StudiedDay", sl."ClassId", sl."PayrollCategoryId", sl."LessonContent", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus",
                         s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                         COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
@@ -4136,12 +4143,12 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
                                                 AND COALESCE(sl."ActualTeacherUsername", '') != ''))'''
         rows=[]
         for row in conn.execute(sql, (month,)).fetchall():
-            r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
+            r=dict(row); teacher=str(r["ActualTeacherUsername"] or '').strip() or r["TeacherUsername"]
             if teacher_username and teacher != teacher_username: continue
             exclusion = exclusions.get((teacher, r['StudyLogId']))
             if exclusion and (exclusion['StudentId'], exclusion['BookId'], exclusion['StudiedDay']) != (str(r['StudentId']), str(r['BookId']), r['StudiedDay']):
                 exclusion = None
-            if (exclusion and not include_excluded) or (closed and not exclusion):
+            if (exclusion and not include_excluded) or (teacher in closed_teachers and not exclusion):
                 continue
             r.update(IsExcluded=bool(exclusion), ExclusionReason=exclusion['Reason'] if exclusion else '',
                      IsPayrollClosed=teacher in closed_teachers)
@@ -4167,6 +4174,17 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
                 "IsRateConfigured": bool(rate)
             })
             rows.append(r)
+        # 제외한 도서는 따로 유지하고, 포함된 도서는 같은 차시당 한 번만 수당을 계산한다.
+        seen_sessions = set()
+        for row in sorted(rows, key=lambda r: r['StudyLogId']):
+            key = lesson_session_key(row)
+            row['SessionKey'] = key
+            if row['IsExcluded']:
+                continue
+            if key in seen_sessions:
+                row['Amount'] = 0
+            else:
+                seen_sessions.add(key)
         return frozen_rows + rows
     finally:
         if connection is None:

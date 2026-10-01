@@ -40,6 +40,8 @@ class PayrollLessonTypeTests(unittest.TestCase):
             INSERT INTO TeacherPayRates VALUES (1, '초등', '2026-01-01', 10000);
             INSERT INTO SpecialLessonPayRates VALUES ('2026-01-01', 5000);
             ALTER TABLE StudyLogs ADD COLUMN BookId INTEGER DEFAULT 1;
+            ALTER TABLE StudyLogs ADD COLUMN LessonContent TEXT DEFAULT '';
+            ALTER TABLE TeacherPayrollLines ADD COLUMN SessionKey TEXT DEFAULT '';
             CREATE TABLE TeacherPayrollExclusions (Id INTEGER PRIMARY KEY, PayrollMonth TEXT,
                 TeacherUsername TEXT, StudyLogId INTEGER, StudentId TEXT, BookId TEXT,
                 StudiedDay TEXT, Reason TEXT);
@@ -59,7 +61,7 @@ class PayrollLessonTypeTests(unittest.TestCase):
     def test_closed_payroll_uses_frozen_type_even_if_log_changes(self):
         self.conn.executescript('''
             INSERT INTO TeacherPayrollClosures VALUES ('2026-09', 'teacher1');
-            INSERT INTO TeacherPayrollLines VALUES
+            INSERT INTO TeacherPayrollLines(PayrollMonth, StudyLogId, TeacherUsername, UnitAmount, Amount, Reason) VALUES
                 ('2026-09', 1, 'teacher1', 10000, 10000, '초등 일반 수업'),
                 ('2026-09', 2, 'teacher1', 5000, 5000, '특강 학생수당');
             UPDATE StudyLogs SET IsSpecial = 1 - IsSpecial;

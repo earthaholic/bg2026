@@ -141,4 +141,5 @@ class PayrollExclusionTests(unittest.TestCase):
         self.change(LogIds=[1])
         self.sql('UPDATE StudyLogs SET StudentId=2 WHERE Id=1')
         self.assertEqual(self.payroll()['excluded_lines'], [])
-        self.assertEqual(self.payroll()['totals'], {'teacher_a': 35000})
+        # 변경한 학생의 기존 같은 차시와 묶여 수당은 한 번만 계산된다.
+        self.assertEqual(self.payroll()['totals'], {'teacher_a': 25000})

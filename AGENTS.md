@@ -184,3 +184,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `POST /api/user/payroll/exclusions`는 `PayrollMonth`, `TeacherUsername`, `StudentRowId`, `StudiedDay`, `LogIds`, `Excluded`, 선택적 `Reason`을 받는다. 같은 학생·날짜의 1~50건을 재검증하고 변경 및 감사 로그를 한 트랜잭션에 저장한다. 마감된 월 및 확정 정산 행은 제외·복원하지 않는다.
 - 정산 조회는 `lines`와 `excluded_lines`를 분리하며 제외 내역은 정산 차시·합계·마감 행에서 빠진다. 마감과 제외 변경은 동일한 쓰기 잠금으로 직렬화한다. 제외한 단가 미설정 기록은 마감을 막지 않는다.
 - 회귀 검증: `tests/test_payroll_exclusions.py`, `tests/test_payroll_lesson_type_ui.js`.
+
+## 복수 도서의 차시 계산
+- 월급 정산과 월말 보고는 학생·날짜·실제 진행 선생님(빈 값이면 수업 담당자)·수업·일반/특강·수업 내용이 모두 같을 때 여러 도서를 1차시로 묶는다. 수업 미연결 기록은 정산 카테고리도 구분한다. 수업 내용의 앞뒤 공백은 제거하고 빈 내용끼리도 묶으며 도서와 메모는 차시 식별 기준에서 제외한다.
+- `lesson_sessions.py`의 `lesson_session_key()`를 정산 및 월말 보고 시작 강의 계산에 사용한다. 문자 생성의 Python/JS도 같은 기준을 사용하고 도서명은 모두 표시한다. 수업료 잔여 차시 계산의 기존 기준은 유지한다.
+- 정산 화면은 차시당 한 행 및 체크 한 개를 표시하고 `StudyLogIds`로 모든 도서 기록을 보관한다. 정산 제외 버튼은 차시의 모든 원본 번호를 전달한다. 일부 도서만 제외되어도 포함된 도서가 남으면 해당 차시의 수당은 한 번 지급한다.
+- 새 정산 마감은 모든 도서 기록을 `TeacherPayrollLines`에 저장하되 차시당 수당을 한 번만 저장하고 나머지는 0원으로 보관한다. `SessionKey`를 확정 저장하여 이후 기록 변경과 분리한다. 기존 마감의 빈 `SessionKey`는 원본 행 단위로 유지하며 기존 지급액을 소급 변경하지 않는다.
+- 회귀 검증: `tests/test_lesson_sessions.py`, `tests/test_monthly_report_absences.js`, `tests/test_payroll_lesson_type_ui.js`.
