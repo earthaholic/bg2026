@@ -204,6 +204,10 @@ class BookMaterialRequestReview(BaseModel):
     Status: str
     RejectReason: Optional[str] = ""
 
+class BookMaterialRequestReviewDate(BaseModel):
+    ReviewedDate: str
+    ExpectedReviewedAt: str
+
 class BookMaterialPayRateRequest(BaseModel):
     BookCategory: str
     UnitAmount: int
@@ -556,6 +560,56 @@ def delete_book_material_request(request_id: int, current_user: Dict[str, Any] =
         conn.close()
     _audit_delete("BookMaterialRequests", request_id, snapshot, current_user["username"], current_user["role"])
     return {"status": "success", "message": "요청 내역을 삭제하고 제작비 정산에서 제외했습니다. 등록된 도서·자료는 유지됩니다."}
+
+
+@app.put("/api/user/book-material-requests/{request_id}/review-date")
+def update_book_material_review_date(request_id: int, payload: BookMaterialRequestReviewDate,
+                                     current_user: Dict[str, Any] = Depends(get_current_staff)):
+    try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", payload.ReviewedDate):
+            raise ValueError()
+        datetime.strptime(payload.ReviewedDate, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="처리 날짜를 YYYY-MM-DD 형식의 올바른 날짜로 입력해 주세요.")
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT * FROM "BookMaterialRequests" WHERE "Id"=?', (request_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
+        old = dict(row)
+        if old["Status"] == "pending":
+            raise HTTPException(status_code=400, detail="승인 또는 반려된 요청만 처리 날짜를 변경할 수 있습니다.")
+        if old["ReviewedAt"] != payload.ExpectedReviewedAt:
+            raise HTTPException(status_code=409, detail="처리 내역이 변경되었습니다. 목록을 새로고침한 후 다시 시도해 주세요.")
+        reviewed_at = payload.ReviewedDate + (old["ReviewedAt"][10:] or " 00:00:00")
+        payroll_month, amount = old["PayrollMonth"], old["ApprovedAmount"]
+        data = _book_material_request_dict(row)
+        if old["Status"] == "approved" and not (old["RequestType"] == "new_book" and not data["MaterialFields"]):
+            payroll_month = payload.ReviewedDate[:7]
+            for month in {old["PayrollMonth"], payroll_month}:
+                if month and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                                          (month, old["RequestedBy"])).fetchone():
+                    raise HTTPException(status_code=400, detail="기존 또는 변경할 처리월의 정산이 마감되어 처리 날짜를 변경할 수 없습니다.")
+            rate = conn.execute('SELECT "UnitAmount" FROM "BookMaterialPayRates" WHERE "BookCategory"=? AND "EffectiveFrom"<=? ORDER BY "EffectiveFrom" DESC LIMIT 1',
+                                (old["BookCategory"], payload.ReviewedDate)).fetchone()
+            if not rate:
+                raise HTTPException(status_code=400, detail="변경할 처리 날짜 기준 자료 제작 단가가 설정되어 있지 않습니다.")
+            amount = rate[0]
+        conn.execute('UPDATE "BookMaterialRequests" SET "ReviewedAt"=?,"PayrollMonth"=?,"ApprovedAmount"=? WHERE "Id"=?',
+                     (reviewed_at, payroll_month, amount, request_id))
+        new = dict(conn.execute('SELECT * FROM "BookMaterialRequests" WHERE "Id"=?', (request_id,)).fetchone())
+        changed = [key for key in old if old[key] != new[key]]
+        if changed:
+            write_audit_log("BookMaterialRequests", request_id, "UPDATE", old, new, changed,
+                            current_user["username"], current_user["role"], connection=conn)
+        conn.commit()
+        return {"status": "success", "message": "처리 날짜를 변경했습니다. 승인된 자료 제작비는 변경한 날짜의 정산월과 단가를 반영했습니다."}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @app.post("/api/user/book-material-requests/{request_id}/review")

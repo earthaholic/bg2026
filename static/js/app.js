@@ -1535,16 +1535,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 const status = item.Status === 'pending' ? '대기' : item.Status === 'approved' ? '승인' : '반려';
                 const details = item.Status === 'approved' ? `${item.ReviewedAt} · ${Number(item.ApprovedAmount || 0).toLocaleString()}원` : item.Status === 'rejected' ? item.RejectReason : '-';
                 const deleteButton = isStaff() || (item.RequestedBy === currentUser.username && item.Status !== 'approved') ? ` <button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '';
-                const review = (item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : escapeHtml(details)) + deleteButton;
+                const dateEditor = forReview && isStaff() && item.Status !== 'pending' ? `<div class="material-review-date-editor"><label for="material-review-date-${Number(item.Id)}">처리 날짜</label><input id="material-review-date-${Number(item.Id)}" class="form-control" type="date" value="${escapeHtml((item.ReviewedAt || '').slice(0, 10))}" required><button type="button" class="btn btn-xs btn-outline btn-material-date-save" data-id="${Number(item.Id)}">날짜 저장</button></div>` : '';
+                const review = (item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : escapeHtml(details)) + dateEditor + deleteButton;
                 return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(userName(item.RequestedBy))}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
             }).join('');
             body.querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, () => loadBookMaterialRequests(forReview))));
             if (forReview) {
+                body.querySelectorAll('.btn-material-date-save').forEach(btn => btn.addEventListener('click', () => updateBookMaterialReviewDate(data.requests.find(item => Number(item.Id) === Number(btn.dataset.id)), btn)));
                 body.querySelectorAll('.btn-material-approve').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'approved')));
                 body.querySelectorAll('.btn-material-reject').forEach(btn => btn.addEventListener('click', () => reviewBookMaterialRequest(btn.dataset.id, 'rejected')));
             }
         } catch (err) {
             feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7" class="text-center">${escapeHtml(err.message)}</td></tr>`; }
+    }
+
+    async function updateBookMaterialReviewDate(item, button) {
+        const feedback = createActionFeedback();
+        const input = document.getElementById(`material-review-date-${Number(item.Id)}`);
+        if (!input.reportValidity()) return;
+        const date = input.value;
+        if (date === (item.ReviewedAt || '').slice(0, 10)) return;
+        if (!(await feedback.confirm(`처리 날짜를 ${date}(으)로 변경할까요?\n승인된 자료 제작비의 정산월과 단가도 변경한 날짜를 기준으로 반영됩니다.`))) return;
+        button.disabled = true;
+        try {
+            const result = await apiFetch(`/api/user/book-material-requests/${item.Id}/review-date`, { method: 'PUT', body: JSON.stringify({ ReviewedDate: date, ExpectedReviewedAt: item.ReviewedAt }) });
+            feedback.show(result.message, 'success');
+            await loadBookMaterialRequests(true);
+        } catch (err) { feedback.show(err.message, 'error'); }
+        finally { button.disabled = false; }
     }
 
     async function deleteBookMaterialRequest(id, refresh) {
