@@ -7204,7 +7204,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function isMonthlyReportBreak(log) {
         const title = String(log.BookTitle || log.book_title || log.Title || '').trim();
-        return title === '휴일' || title === '휴강';
+        const content = String(log.LessonContent || log.lesson_content || log.Description || '').trim();
+        return title === '휴일' || title === '휴강'
+            || (!title && /(?:^|\s)(?:휴일|휴강)[.!。]*$/.test(content));
     }
 
     async function updateMonthlyStartLecture(selectedLogs = getSelectedMonthlyLogs()) {

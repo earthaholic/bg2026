@@ -207,6 +207,25 @@ class StudentAbsenceTests(unittest.TestCase):
         self.assertLess(text.index('첫 도서'), text.index('수업 전 사정으로'))
         self.assertLess(text.index('수업 전 사정으로'), text.index('다음 도서'))
 
+    def test_report_bookless_break_continues_previous_lecture(self):
+        text = main.build_monthly_report_text('김학생', '', '8월', 3, '', [
+            {'StudiedDay': '2026-08-10', 'BookTitle': '1등 없는 1등', 'LessonContent': '스펜서와 토론'},
+            {'StudiedDay': '2026-08-17', 'BookTitle': '', 'LessonContent': '공휴일 휴강'},
+            {'StudiedDay': '2026-08-21', 'BookTitle': '스티커', 'LessonContent': '소우주의 활동'},
+        ])
+        self.assertTrue(text.endswith('<3강>\n도서 : 1등 없는 1등\n8/10(월) 스펜서와 토론\n8/17(월) 공휴일 휴강\n\n<4강>\n도서 : 스티커\n8/21(금) 소우주의 활동'))
+        self.assertFalse(main._is_monthly_report_break({'BookTitle': '스티커', 'LessonContent': '다음 주 휴강'}))
+        self.assertFalse(main._is_monthly_report_break({'BookTitle': '', 'LessonContent': ''}))
+        self.assertTrue(main._is_monthly_report_break({'Description': '개인 사정으로 휴강.'}))
+
+    def test_report_start_lecture_excludes_earlier_bookless_break(self):
+        self.sql("INSERT INTO TuitionPayments(StudentId, ClassType, PaidLessons, StartDate) VALUES (1, '독서', 10, '2026-08-01')")
+        self.sql("INSERT INTO StudyLogs(StudentId, BookId, StudiedDay, LessonContent) VALUES (1, 1, '2026-08-10', '정규 수업'), (1, 0, '2026-08-17', '공휴일 휴강')")
+        response = self.client.get('/api/user/monthly-report/start-lecture?student_id=1&first_studied_day=2026-08-21', headers=self.headers())
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['used_before'], 1)
+        self.assertEqual(response.json()['start_lecture_num'], 2)
+
 
 if __name__ == '__main__':
     unittest.main()

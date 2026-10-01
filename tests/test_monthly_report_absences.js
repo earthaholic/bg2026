@@ -117,6 +117,7 @@ test('시작 강의 자동계산은 결석을 제외하고 가장 이른 일반 
         { StudiedDay: '2026-09-01', IsAbsence: true, AbsenceReason: '개인 사정' },
         { StudiedDay: '2026-09-03', IsSpecial: true },
         { StudiedDay: '2026-09-05', BookTitle: '휴강', LessonContent: '휴강' },
+        { StudiedDay: '2026-09-06', BookTitle: '', LessonContent: '공휴일 휴강' },
         { StudiedDay: '2026-09-10', BookTitle: '정규 도서', LessonContent: '정규 수업' },
     ], {
         startLecture: '1',
@@ -130,6 +131,7 @@ test('시작 강의 자동계산은 결석을 제외하고 가장 이른 일반 
         { StudiedDay: '2026-09-01', IsAbsence: true },
         { StudiedDay: '2026-09-03', IsSpecial: true },
         { StudiedDay: '2026-09-05', BookTitle: '휴강' },
+        { StudiedDay: '2026-09-06', BookTitle: '', LessonContent: '공휴일 휴강' },
         { StudiedDay: '2026-09-10', BookTitle: '정규 도서' },
     ]);
 
@@ -137,4 +139,37 @@ test('시작 강의 자동계산은 결석을 제외하고 가장 이른 일반 
     assert.match(requests[0], /student_id=17/);
     assert.match(requests[0], /first_studied_day=2026-09-10/);
     assert.equal(f.nodes['monthly-report-start-lecture'].value, '8');
+});
+
+test('도서 없는 공휴일 휴강은 앞 강의 아래에 표시하고 다음 번호를 소진하지 않는다', () => {
+    const f = fixture([
+        {StudiedDay: '2026-08-10', BookTitle: '1등 없는 1등', LessonContent: '스펜서와 토론'},
+        {StudiedDay: '2026-08-17', BookTitle: '', LessonContent: '공휴일 휴강'},
+        {StudiedDay: '2026-08-21', BookTitle: '스티커', LessonContent: '소우주의 활동'},
+    ], {startLecture: '3'});
+    f.testApi.generate(true);
+    assert.ok(f.nodes['monthly-report-result-text'].value.endsWith(
+        '<3강>\n도서 : 1등 없는 1등\n8/10(월) 스펜서와 토론\n8/17(월) 공휴일 휴강\n\n<4강>\n도서 : 스티커\n8/21(금) 소우주의 활동'
+    ));
+});
+
+test('첫 기록과 연속 휴강 및 과거 메모의 휴강도 강의 번호 없이 표시한다', () => {
+    const f = fixture([
+        {StudiedDay: '2026-08-03', Description: ' 개인 사정으로 휴강. '},
+        {StudiedDay: '2026-08-10', BookTitle: '휴강', LessonContent: '강사 사정으로 휴강'},
+        {StudiedDay: '2026-08-17', BookTitle: '', LessonContent: '공휴일 휴강'},
+    ], {startLecture: '3'});
+    f.testApi.generate(true);
+    const text = f.nodes['monthly-report-result-text'].value;
+    assert.doesNotMatch(text, /<\d+강>|도서 :/);
+    assert.match(text, /8\/3\(월\) 개인 사정으로 휴강\.\n8\/10\(월\) 강사 사정으로 휴강\n8\/17\(월\) 공휴일 휴강/);
+});
+
+test('도서가 있는 수업의 휴강 언급과 내용 없는 기록은 일반 강의로 유지한다', () => {
+    const f = fixture([
+        {StudiedDay: '2026-08-10', BookTitle: '스티커', LessonContent: '토론 후 다음 주 휴강'},
+        {StudiedDay: '2026-08-17', BookTitle: '', LessonContent: ''},
+    ], {startLecture: '3'});
+    f.testApi.generate(true);
+    assert.match(f.nodes['monthly-report-result-text'].value, /<3강>[\s\S]*<4강>/);
 });

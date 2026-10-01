@@ -324,11 +324,16 @@ def _count_general_lesson_sessions(
     student_name: str,
     start_date: str,
     end_date: str,
-    include_end: bool = True
+    include_end: bool = True,
+    exclude_report_breaks: bool = False
 ) -> int:
     """특강·휴강을 제외하고 같은 날짜·수업 내용의 복수 도서를 한 차시로 계산한다."""
     end_operator = "<=" if include_end else "<"
+    extra_columns = ''' , "Description", (SELECT b."Title" FROM "Books" b
+                       WHERE b.rowid = "StudyLogs"."BookId" OR b."Id" = "StudyLogs"."BookId"
+                       LIMIT 1) AS "BookTitle"''' if exclude_report_breaks else ""
     cursor.execute(f'''SELECT rowid AS row_id, "StudiedDay", COALESCE("LessonContent", '') AS "LessonContent"
+                       {extra_columns}
                        FROM "StudyLogs"
                        WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
                          AND "StudiedDay" >= ? AND "StudiedDay" {end_operator} ?
@@ -342,6 +347,8 @@ def _count_general_lesson_sessions(
                    (student_row_id, str(student_row_id), student_id, student_name, start_date, end_date))
     seen_sessions = set()
     for row in cursor.fetchall():
+        if exclude_report_breaks and _is_monthly_report_break(dict(row)):
+            continue
         lesson_content = (row["LessonContent"] or "").strip()
         key = (row["StudiedDay"], lesson_content) if lesson_content else ("__single__", row["row_id"])
         seen_sessions.add(key)
@@ -1998,7 +2005,7 @@ def _get_monthly_report_start_lecture(student: Dict[str, Any], first_studied_day
         payment_start = current_payment["StartDate"]
         used_before = _count_general_lesson_sessions(
             cursor, student_row_id, student_id, student_name,
-            payment_start, first_studied_day, include_end=False
+            payment_start, first_studied_day, include_end=False, exclude_report_breaks=True
         )
         total_lessons = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
         return {
@@ -2037,6 +2044,13 @@ def _format_date_korean(studied_day: str) -> str:
         except Exception:
             pass
     return studied_day
+
+def _is_monthly_report_break(log: Dict[str, Any]) -> bool:
+    """도서로 표시한 휴강과 도서 없이 내용만 저장한 과거 휴강을 함께 판별한다."""
+    title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
+    content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
+    return title in ("휴일", "휴강") or (not title and bool(re.search(r"(?:^|\s)(?:휴일|휴강)[.!。]*$", content)))
+
 
 def build_monthly_report_text(
     student_name: str,
@@ -2079,7 +2093,7 @@ def build_monthly_report_text(
         lesson_content = str(log.get("LessonContent") or log.get("lesson_content") or log.get("Description") or "").strip()
         is_special = bool(log.get("IsSpecial") or log.get("is_special"))
         title = str(log.get("BookTitle") or log.get("book_title") or log.get("Title") or "").strip()
-        is_break = title in ("휴일", "휴강")
+        is_break = _is_monthly_report_break(log)
         key = (studied_day, lesson_content, is_special, is_break) if studied_day and lesson_content else ("__single__", log_index)
         if key not in grouped_by_key:
             grouped = dict(log)
