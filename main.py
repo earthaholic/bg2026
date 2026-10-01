@@ -287,6 +287,15 @@ class PayrollSessionTransferRequest(BaseModel):
     TargetTeacherUsername: str
     Sessions: List[PayrollSessionTransferItem]
 
+class PayrollExclusionRequest(BaseModel):
+    PayrollMonth: str
+    TeacherUsername: str
+    StudentRowId: int
+    StudiedDay: str
+    LogIds: List[int]
+    Excluded: bool
+    Reason: str = ""
+
 class TuitionFeeSettingRequest(BaseModel):
     ClassType: str
     PaidLessons: int
@@ -3231,7 +3240,9 @@ def get_special_pay_rates(current_user: Dict[str, Any] = Depends(get_current_use
 def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(get_current_user)):
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
     teacher = current_user["username"] if current_user["role"] == "teacher" else (teacher_username or None)
-    rows=_payroll_rows(month, teacher)
+    all_rows=_payroll_rows(month, teacher, include_excluded=True)
+    rows=[row for row in all_rows if not row.get("IsExcluded")]
+    excluded_rows=[row for row in all_rows if row.get("IsExcluded")]
     totals={}
     for r in rows: totals[r["TeacherUsername"]]=totals.get(r["TeacherUsername"],0)+r["Amount"]
     conn=get_db_connection()
@@ -3266,7 +3277,77 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
     for item in material_requests:
         totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
-    return {"month":month,"closed":closed,"lines":rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"totals":totals}
+    return {"month":month,"closed":closed,"lines":rows,"excluded_lines":excluded_rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"totals":totals}
+
+
+@app.post("/api/user/payroll/exclusions")
+def set_payroll_exclusions(payload: PayrollExclusionRequest,
+                           current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """학생별 날짜의 선택 내역을 정산에서만 제외하거나 다시 포함한다."""
+    month, teacher = payload.PayrollMonth.strip(), payload.TeacherUsername.strip()
+    try:
+        if datetime.strptime(month, "%Y-%m").strftime("%Y-%m") != month:
+            raise ValueError()
+        if datetime.strptime(payload.StudiedDay, "%Y-%m-%d").strftime("%Y-%m-%d") != payload.StudiedDay:
+            raise ValueError()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="정산월과 수업 날짜를 확인해 주세요.")
+    ids = payload.LogIds
+    if (not teacher or not payload.StudiedDay.startswith(month + '-') or payload.StudentRowId <= 0
+            or not 1 <= len(ids) <= 50 or len(set(ids)) != len(ids) or any(i <= 0 for i in ids)):
+        raise HTTPException(status_code=400, detail="같은 학생·날짜의 서로 다른 학습 기록 1~50건을 선택해 주세요.")
+    reason = payload.Reason.strip()
+    if len(reason) > 500:
+        raise HTTPException(status_code=400, detail="제외 사유는 500자 이내로 입력해 주세요.")
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                        (month, teacher)).fetchone():
+            raise HTTPException(status_code=409, detail="마감된 정산의 제외 여부는 변경할 수 없습니다.")
+        rows = {row['StudyLogId']: row for row in _payroll_rows(month, teacher, connection=conn, include_excluded=True)}
+        for log_id in ids:
+            row = rows.get(log_id)
+            if not row or row['StudentRowId'] != payload.StudentRowId or row['StudiedDay'] != payload.StudiedDay:
+                raise HTTPException(status_code=409, detail="선택한 수업의 학생·날짜·진행 선생님이 변경되었거나 정산 대상이 아닙니다. 새로고침 후 다시 선택해 주세요.")
+            if bool(row.get('IsExcluded')) == payload.Excluded:
+                raise HTTPException(status_code=409, detail="정산 포함 여부가 이미 변경되었습니다. 새로고침 후 다시 확인해 주세요.")
+            if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId"=?', (log_id,)).fetchone():
+                raise HTTPException(status_code=409, detail="확정 정산에 포함된 기록은 제외 여부를 변경할 수 없습니다.")
+        for log_id in ids:
+            row = rows[log_id]
+            old_row = conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "PayrollMonth"=? AND "TeacherUsername"=? AND "StudyLogId"=?',
+                                   (month, teacher, log_id)).fetchone()
+            old = dict(old_row) if old_row else None
+            if payload.Excluded:
+                # 날짜·학생·도서가 바뀌거나 삭제된 번호가 재사용되면 과거 제외를 적용하지 않는다.
+                conn.execute('''INSERT INTO "TeacherPayrollExclusions"
+                    ("PayrollMonth", "TeacherUsername", "StudyLogId", "StudentId", "BookId", "StudiedDay", "Reason", "ExcludedBy")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT("PayrollMonth", "TeacherUsername", "StudyLogId") DO UPDATE SET
+                    "StudentId"=excluded."StudentId", "BookId"=excluded."BookId", "StudiedDay"=excluded."StudiedDay",
+                    "Reason"=excluded."Reason", "ExcludedBy"=excluded."ExcludedBy", "ExcludedAt"=datetime('now','localtime')''',
+                    (month, teacher, log_id, str(row['StudentId']), str(row['BookId']), row['StudiedDay'], reason, current_user['username']))
+                new = dict(conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "PayrollMonth"=? AND "TeacherUsername"=? AND "StudyLogId"=?',
+                                        (month, teacher, log_id)).fetchone())
+                exclusion_id = new['Id']
+                write_audit_log("TeacherPayrollExclusions", exclusion_id, "UPDATE" if old else "INSERT", old, new, None,
+                                current_user['username'], current_user['role'], connection=conn)
+            else:
+                conn.execute('DELETE FROM "TeacherPayrollExclusions" WHERE "Id"=?', (old['Id'],))
+                write_audit_log("TeacherPayrollExclusions", old['Id'], "DELETE", old, None, None,
+                                current_user['username'], current_user['role'], connection=conn)
+        conn.commit()
+        return {"status": "success", "message": f"선택한 {len(ids)}건을 정산에서 제외했습니다." if payload.Excluded else f"선택한 {len(ids)}건을 정산에 다시 포함했습니다."}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        logging.exception("정산 제외 변경 실패")
+        raise HTTPException(status_code=500, detail="정산 제외 여부를 저장하지 못하여 전체 변경을 취소했습니다.")
+    finally:
+        conn.close()
 
 @app.post("/api/user/payroll/backfill-class-links")
 def backfill_payroll_class_links(
@@ -3968,16 +4049,19 @@ def delete_payroll_claim(claim_id: int, current_user: Dict[str, Any] = Depends(g
 def close_payroll(month: str, teacher_username: str = Query(...), current_user: Dict[str, Any] = Depends(get_current_staff)):
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
     if not get_user_by_username(teacher_username): raise HTTPException(status_code=404, detail="선생님 계정을 찾을 수 없습니다.")
-    rows=_payroll_rows(month, teacher_username)
-    if any(not row.get("IsRateConfigured", True) for row in rows):
-        raise HTTPException(status_code=400, detail="단가가 설정되지 않은 수업 내역이 있어 정산을 마감할 수 없습니다.")
     conn=get_db_connection()
     try:
+        conn.execute('BEGIN IMMEDIATE')
         if conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',(month,teacher_username)).fetchone(): raise HTTPException(status_code=400, detail="이미 마감된 선생님 정산입니다.")
+        rows=_payroll_rows(month, teacher_username, connection=conn)
+        if any(not row.get("IsRateConfigured", True) for row in rows):
+            raise HTTPException(status_code=400, detail="단가가 설정되지 않은 수업 내역이 있어 정산을 마감할 수 없습니다.")
         for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason") VALUES(?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason']))
         conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","TeacherUsername","ClosedBy") VALUES(?,?,?)',(month,teacher_username,current_user['username'])); conn.commit()
         return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}
-    except HTTPException: raise
+    except Exception:
+        conn.rollback()
+        raise
     finally: conn.close()
 
 # --- Domain Data Update/Delete APIs (관리 선생님 이상 전용) ---
@@ -4014,10 +4098,12 @@ def _grade_group(grade: str) -> str:
         return "중등"
     return "기타"
 
-def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Dict[str, Any]]:
+def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection=None,
+                  include_excluded=False) -> List[Dict[str, Any]]:
     """마감 전에는 해당 일자에 유효한 단가를, 마감 후에는 확정 단가를 반환한다."""
-    conn = get_db_connection()
+    conn = connection or get_db_connection()
     try:
+        frozen_rows = []
         closed = teacher_username and conn.execute('SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?', (month, teacher_username)).fetchone()
         if closed:
             sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
@@ -4030,8 +4116,13 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
                      WHERE pl."PayrollMonth"=?'''
             params = [month]
             if teacher_username: sql += ' AND pl."TeacherUsername"=?'; params.append(teacher_username)
-            return [dict(r) for r in conn.execute(sql, params).fetchall()]
-        sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
+            frozen_rows = [dict(r, IsPayrollClosed=True) for r in conn.execute(sql, params).fetchall()]
+            if not include_excluded:
+                return frozen_rows
+        exclusion_rows = conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "PayrollMonth"=?', (month,)).fetchall()
+        exclusions = {(r['TeacherUsername'], r['StudyLogId']): dict(r) for r in exclusion_rows}
+        closed_teachers = {r[0] for r in conn.execute('SELECT "TeacherUsername" FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,))}
+        sql = '''SELECT sl.rowid AS "StudyLogId", sl."StudentId", sl."BookId", sl."StudiedDay", sl."ClassId", sl."IsSpecial", sl."GradeSnapshot",
                         sl."ActualTeacherUsername", sl."SubstituteStatus",
                         s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
                         COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
@@ -4047,6 +4138,13 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
         for row in conn.execute(sql, (month,)).fetchall():
             r=dict(row); teacher=r["ActualTeacherUsername"] or r["TeacherUsername"]
             if teacher_username and teacher != teacher_username: continue
+            exclusion = exclusions.get((teacher, r['StudyLogId']))
+            if exclusion and (exclusion['StudentId'], exclusion['BookId'], exclusion['StudiedDay']) != (str(r['StudentId']), str(r['BookId']), r['StudiedDay']):
+                exclusion = None
+            if (exclusion and not include_excluded) or (closed and not exclusion):
+                continue
+            r.update(IsExcluded=bool(exclusion), ExclusionReason=exclusion['Reason'] if exclusion else '',
+                     IsPayrollClosed=teacher in closed_teachers)
             # 과거 학습 이력에 학년 스냅샷이 없으면 현재 학생 학년을 사용한다.
             payroll_grade = (r["GradeSnapshot"] or "").strip() or (r["CurrentGrade"] or "").strip()
             if r["IsSpecial"]:
@@ -4069,9 +4167,10 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None) -> List[Di
                 "IsRateConfigured": bool(rate)
             })
             rows.append(r)
-        return rows
+        return frozen_rows + rows
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 # --- 감사 로그(Audit Trail) 헬퍼 ---
 

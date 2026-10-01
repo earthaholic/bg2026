@@ -39,6 +39,10 @@ class PayrollLessonTypeTests(unittest.TestCase):
                 (2, 2, 1, NULL, '2026-09-01', 1, '초3', 'teacher1', 'approved');
             INSERT INTO TeacherPayRates VALUES (1, '초등', '2026-01-01', 10000);
             INSERT INTO SpecialLessonPayRates VALUES ('2026-01-01', 5000);
+            ALTER TABLE StudyLogs ADD COLUMN BookId INTEGER DEFAULT 1;
+            CREATE TABLE TeacherPayrollExclusions (Id INTEGER PRIMARY KEY, PayrollMonth TEXT,
+                TeacherUsername TEXT, StudyLogId INTEGER, StudentId TEXT, BookId TEXT,
+                StudiedDay TEXT, Reason TEXT);
         ''')
         self.conn.commit()
 

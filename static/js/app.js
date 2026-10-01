@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let monthlyLectureRequestSeq = 0;
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
+    const payrollExclusionRows = new Map();
     const payrollClaimsById = new Map();
     let payrollEditingClaimTeacher = '';
     let duplicateBooksPreviewData = null;
@@ -8277,11 +8278,15 @@ document.addEventListener('DOMContentLoaded', () => {
         payrollSelectedSessions.clear();
         const data = await apiFetch(`/api/user/payroll?month=${encodeURIComponent(month)}${teacher ? `&teacher_username=${encodeURIComponent(teacher)}` : ''}`);
         const payrollLines = data.lines || [];
+        const excludedLines = data.excluded_lines || [];
+        payrollExclusionRows.clear();
+        [...payrollLines, ...excludedLines].forEach(line => payrollExclusionRows.set(Number(line.StudyLogId), line));
         const unconfiguredLines = payrollLines.filter(line => line.IsRateConfigured === false);
         const canTransfer = Boolean(isStaff() && teacher && !data.closed);
         renderPayrollTransferPanel(canTransfer, teacher);
         renderPayrollUnconfiguredLines(unconfiguredLines);
-        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer, data.team_students || []);
+        renderPayrollTeamCards(payrollLines.filter(line => line.IsRateConfigured !== false), canTransfer, data.team_students || [], canTransfer);
+        renderPayrollExcludedLines(excludedLines, canTransfer);
         renderPayrollClaims(data.claims || []);
         renderPayrollMaterials(data.material_requests || []);
         const claimCard = document.getElementById('payroll-claim-card');
@@ -8334,7 +8339,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<span class="payroll-lesson-type is-${type}" tabindex="0" title="${detail}" aria-label="${label} · ${detail}">${label}</span>${lines.length ? '' : '<small class="payroll-lesson-type-note">현재 반 기준</small>'}`;
     }
 
-    function renderPayrollTeamCards(lines, canTransfer = false, teamStudents = []) {
+    function renderPayrollTeamCards(lines, canTransfer = false, teamStudents = [], canExclude = false) {
         const container = document.getElementById('payroll-team-cards');
         const teams = new Map();
         lines.forEach(line => {
@@ -8380,8 +8385,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const amount = student.lines.reduce((sum, line) => sum + Number(line.Amount || 0), 0);
                 const attendanceCells = dates.map(date => {
                     const count = date ? (attendanceCounts.get(date) || 0) : 0;
+                    const dateLines = student.lines.filter(line => line.StudiedDay === date);
+                    const excludeButton = canExclude && count && dateLines.every(line => !line.IsPayrollClosed)
+                        ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${dateLines.map(line => Number(line.StudyLogId)).join(',')}" aria-label="${escapeHtml(student.name)} ${escapeHtml(date)} 수업 ${count}건 정산에서만 제외">정산 제외</button>` : '';
                     return count
-                        ? `<td class="is-attended" aria-label="수업 ${count}회" title="수업 ${count}회"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span></td>`
+                        ? `<td class="is-attended" aria-label="수업 ${count}회" title="수업 ${count}회"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${excludeButton}</td>`
                         : '<td>-</td>';
                 }).join('');
                 return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${attendanceCells}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
@@ -8398,8 +8406,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('payroll-unconfigured-body').innerHTML = lines.map(line => {
             const grade = formatPayrollGrade(line.GradeSnapshot || line.CurrentGrade);
             const lessonType = line.IsSpecial ? '특강' : '일반 수업';
-            return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}</td></tr>`;
+            const excludeButton = isStaff() && document.getElementById('payroll-teacher').value && !line.IsPayrollClosed
+                ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${Number(line.StudyLogId)}">정산 제외</button>` : '';
+            return `<tr><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(grade)}</td><td><b>${escapeHtml(line.StudentName || '-')}</b></td><td>${escapeHtml(line.StudiedDay || '-')}</td><td>${lessonType}</td><td class="payroll-unconfigured-reason">${escapeHtml(line.Reason || '정산 기준 미설정')}${excludeButton}</td></tr>`;
         }).join('');
+    }
+
+    function renderPayrollExcludedLines(lines, canRestore) {
+        const card = document.getElementById('payroll-excluded-card');
+        card.classList.toggle('hidden', !lines.length);
+        document.getElementById('payroll-exclusion-guide').classList.toggle('hidden', !isStaff());
+        document.getElementById('payroll-excluded-body').innerHTML = lines.map(line => `<tr><td>${escapeHtml(userName(line.TeacherUsername))}</td><td>${escapeHtml(line.ClassName || '수업 정보 미연결')}</td><td>${escapeHtml(line.StudentName || '-')}</td><td>${escapeHtml(line.StudiedDay)}<small>기록 #${Number(line.StudyLogId)}</small></td><td>${line.IsSpecial ? '특강' : '일반'}</td><td>${escapeHtml(line.ExclusionReason || '정산에서만 제외')}</td><td>${canRestore && !line.IsPayrollClosed ? `<button type="button" class="btn btn-xs btn-outline payroll-restore-button" data-log-ids="${Number(line.StudyLogId)}">정산에 다시 포함</button>` : (line.IsPayrollClosed ? '마감 완료' : '-')}</td></tr>`).join('');
     }
 
     function formatPayrollGrade(grade) {
@@ -8467,6 +8484,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('payroll-month')?.addEventListener('change', () => {
         const feedback = createActionFeedback(); resetPayrollClaimForm(); loadTeacherPayroll().catch(e => feedback.show(e.message, 'error')); });
     document.getElementById('payroll-transfer-teacher')?.addEventListener('change', updatePayrollTransferSelection);
+    document.getElementById('view-teacher-payroll')?.addEventListener('click', async event => {
+        const button = event.target.closest('.payroll-exclude-button, .payroll-restore-button');
+        if (!button || button.disabled || !isStaff()) return;
+        const feedback = createActionFeedback(event);
+        const lines = button.dataset.logIds.split(',').map(id => payrollExclusionRows.get(Number(id)));
+        if (!lines.length || lines.some(line => !line)) return;
+        const excluded = button.classList.contains('payroll-exclude-button');
+        const action = excluded ? '정산에서만 제외' : '정산에 다시 포함';
+        const first = lines[0];
+        const month = document.getElementById('payroll-month').value;
+        const preview = lines.map(line => `${line.StudentName} · ${line.ClassName || '수업 미연결'} · ${line.StudiedDay} · 기록 #${line.StudyLogId}`).join('\n');
+        try {
+            if (!(await feedback.confirm(`${userName(first.TeacherUsername)} 선생님의 다음 ${lines.length}건을 ${action}할까요?\n\n${preview}\n\n학습 기록과 월말 보고는 유지되며, 정산 차시와 금액만 다시 계산됩니다.`))) return;
+            button.disabled = true;
+            const result = await apiFetch('/api/user/payroll/exclusions', {method: 'POST', body: JSON.stringify({
+                PayrollMonth: month, TeacherUsername: first.TeacherUsername, StudentRowId: first.StudentRowId,
+                StudiedDay: first.StudiedDay, LogIds: lines.map(line => Number(line.StudyLogId)), Excluded: excluded
+            })});
+            await loadTeacherPayroll();
+            feedback.show(result.message, 'success');
+        } catch (err) {
+            feedback.show(err.message, 'error');
+        } finally { button.disabled = false; }
+    });
     document.getElementById('view-teacher-payroll')?.addEventListener('change', event => {
         const checkbox = event.target.closest('.payroll-session-transfer-checkbox');
         if (!checkbox) return;

@@ -334,6 +334,15 @@ def init_system_tables():
         "TeacherUsername" TEXT NOT NULL, "UnitAmount" INTEGER NOT NULL, "Amount" INTEGER NOT NULL,
         "Reason" TEXT DEFAULT '', UNIQUE("PayrollMonth", "StudyLogId")
     )''')
+    # 학습 기록을 수정하지 않고 정산 포함 여부만 별도로 저장한다.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollExclusions" (
+        "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL,
+        "TeacherUsername" TEXT NOT NULL, "StudyLogId" INTEGER NOT NULL,
+        "StudentId" TEXT NOT NULL, "BookId" TEXT NOT NULL, "StudiedDay" TEXT NOT NULL,
+        "Reason" TEXT DEFAULT '', "ExcludedBy" TEXT NOT NULL,
+        "ExcludedAt" TEXT DEFAULT (datetime('now','localtime')),
+        UNIQUE("PayrollMonth", "TeacherUsername", "StudyLogId")
+    )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS "TeacherPayrollClaims" (
         "Id" INTEGER PRIMARY KEY, "PayrollMonth" TEXT NOT NULL, "TeacherUsername" TEXT NOT NULL,
         "ClaimDate" TEXT DEFAULT '', "ItemName" TEXT NOT NULL, "Amount" INTEGER NOT NULL CHECK("Amount" >= 0), "Description" TEXT DEFAULT '',

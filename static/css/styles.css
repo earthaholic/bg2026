@@ -4288,6 +4288,8 @@ body {
 .payroll-session-table th small { margin-top: .15rem; color: var(--text-muted); font-weight: 400; }
 .payroll-session-table td { text-align: center; }
 .payroll-attendance-marks { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: .25rem; }
+#view-teacher-payroll .payroll-exclude-button { display: block; margin: .35rem auto 0; }
+#view-teacher-payroll #payroll-excluded-body small { display: block; color: var(--text-muted); }
 .payroll-session-table .payroll-student-name { text-align: left; font-weight: 600; }
 #view-teacher-payroll .payroll-lesson-type {
     display: inline-block;

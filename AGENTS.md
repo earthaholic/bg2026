@@ -177,3 +177,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `PUT /api/admin/users/{user_id}/teacher-visibility`는 `{hidden_from_teacher_options: boolean}`을 받고 변경과 비밀번호를 제외한 감사 이력을 한 트랜잭션에 저장한다. 원래 선택 대상이 아닌 사이트 관리자 계정은 변경하지 않는다.
 - `/api/user/teachers-options` 및 학습 기록 보완 응답의 선생님 목록에서 숨김 계정을 제외한다. 수업·학습 기록의 기존 선택값과 수업 담당 자동 지정값은 수정 화면에서 보존해 의도치 않은 담당자 변경을 막는다. 활동·감사 조회의 계정 필터는 숨김 대상이 아니다.
 - 회귀 검증: `tests/test_teacher_visibility.py`, `tests/test_teacher_visibility_ui.js`.
+
+## 학생별 수업 정산 제외
+- 월급 정산에서 특정 선생님을 선택하면 학생별 날짜 칸의 `정산 제외`로 해당 칸의 내역을 제외할 수 있다. 제외 내역은 별도 목록에서 한 건씩 다시 포함한다. 관리자·부관리자·관리 선생님만 변경 가능하며 일반 선생님은 본인 제외 내역을 조회한다.
+- `TeacherPayrollExclusions`에 정산월·선생님·학습 기록 rowid와 당시 학생·도서·날짜를 저장한다. `StudyLogs`와 월말 보고·수강 차시는 변경하지 않는다. 기록의 학생·도서·날짜·진행 선생님이 바뀌면 이전 제외를 새 정산에 적용하지 않는다.
+- `POST /api/user/payroll/exclusions`는 `PayrollMonth`, `TeacherUsername`, `StudentRowId`, `StudiedDay`, `LogIds`, `Excluded`, 선택적 `Reason`을 받는다. 같은 학생·날짜의 1~50건을 재검증하고 변경 및 감사 로그를 한 트랜잭션에 저장한다. 마감된 월 및 확정 정산 행은 제외·복원하지 않는다.
+- 정산 조회는 `lines`와 `excluded_lines`를 분리하며 제외 내역은 정산 차시·합계·마감 행에서 빠진다. 마감과 제외 변경은 동일한 쓰기 잠금으로 직렬화한다. 제외한 단가 미설정 기록은 마감을 막지 않는다.
+- 회귀 검증: `tests/test_payroll_exclusions.py`, `tests/test_payroll_lesson_type_ui.js`.

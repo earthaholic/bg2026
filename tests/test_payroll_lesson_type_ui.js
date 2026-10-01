@@ -80,3 +80,37 @@ test('같은 날짜의 정산 차시만큼 학생별 체크를 표시한다', ()
     assert.match(twice, /25,000원/);
     assert.match(container.innerHTML, /35,000원/);
 });
+
+test('제외 버튼은 학생·날짜 칸의 모든 기록을 대상으로 하고 마감 상태에서는 숨긴다', () => {
+    const line = { StudyLogId: 11, ClassId: 1, ClassName: '검증반', StudentRowId: 1, StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000 };
+    const lines = [line, { ...line, StudyLogId: 12 }, { ...line, StudyLogId: 13, StudiedDay: '2026-09-08' }];
+    context.renderPayrollTeamCards(lines, false, [], true);
+    assert.match(container.innerHTML, /data-log-ids="11,12"/);
+    assert.match(container.innerHTML, /data-log-ids="13"/);
+    assert.equal((container.innerHTML.match(/class="btn btn-xs btn-outline payroll-exclude-button"/g) || []).length, 2);
+    context.renderPayrollTeamCards(lines, false, [], false);
+    assert.doesNotMatch(container.innerHTML, /payroll-exclude-button/);
+    context.renderPayrollTeamCards(lines.map(line => ({ ...line, IsPayrollClosed: true })), false, [], true);
+    assert.doesNotMatch(container.innerHTML, /payroll-exclude-button/);
+});
+
+test('제외 목록은 마감 상태와 권한에 따라 복원 버튼을 숨긴다', () => {
+    const nodes = new Map();
+    context.document.getElementById = id => {
+        if (!nodes.has(id)) nodes.set(id, { innerHTML: '', classList: { toggle() {} } });
+        return nodes.get(id);
+    };
+    context.isStaff = () => true;
+    context.userName = value => value;
+    const line = { StudyLogId: 11, StudentName: '<학생>', TeacherUsername: 'teacher_a', StudiedDay: '2026-09-01', ExclusionReason: '<사유>' };
+    context.renderPayrollExcludedLines([line], true);
+    const body = nodes.get('payroll-excluded-body');
+    assert.match(body.innerHTML, /정산에 다시 포함/);
+    assert.match(body.innerHTML, /&lt;학생&gt;/);
+    assert.match(body.innerHTML, /&lt;사유&gt;/);
+    context.renderPayrollExcludedLines([{ ...line, IsPayrollClosed: true }], true);
+    assert.doesNotMatch(body.innerHTML, /payroll-restore-button/);
+    assert.match(body.innerHTML, /마감 완료/);
+    context.renderPayrollExcludedLines([line], false);
+    assert.doesNotMatch(body.innerHTML, /payroll-restore-button/);
+});

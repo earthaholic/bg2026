@@ -1089,6 +1089,7 @@
                                 <button id="btn-load-payroll" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 정산 조회</button>
                             </div>
                             <div id="payroll-summary" class="payroll-summary-card"><span>정산월을 선택해 조회하세요.</span></div>
+                            <p id="payroll-exclusion-guide" class="text-muted hidden">선생님을 선택하면 학생별 날짜 칸에서 정산만 제외할 수 있습니다. 학습 기록은 유지되며 제외 내역에서 다시 포함할 수 있습니다. 마감된 정산은 변경할 수 없습니다.</p>
                             <div id="payroll-transfer-panel" class="payroll-transfer-panel hidden">
                                 <div class="payroll-transfer-copy"><strong><i class="fa-solid fa-arrow-right-arrow-left"></i> 선택 차시 담당 이전</strong><span id="payroll-transfer-selection">선택한 차시 없음</span></div>
                                 <div class="payroll-transfer-controls"><select id="payroll-transfer-teacher" class="form-control"><option value="">이전할 선생님 선택</option></select><button id="btn-transfer-payroll-sessions" class="btn btn-primary" disabled>선택 차시 이전</button></div>
@@ -1100,6 +1101,10 @@
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>팀</th><th>학년</th><th>학생</th><th>수업일</th><th>구분</th><th>미정산 원인</th></tr></thead><tbody id="payroll-unconfigured-body"></tbody></table></div>
                         </div>
                         <div id="payroll-team-cards" class="payroll-team-cards"></div>
+                        <div id="payroll-excluded-card" class="card table-card hidden">
+                            <div class="table-card-header"><h2>정산 제외 내역</h2></div>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>선생님</th><th>수업</th><th>학생</th><th>수업일</th><th>구분</th><th>제외 안내</th><th>관리</th></tr></thead><tbody id="payroll-excluded-body"></tbody></table></div>
+                        </div>
                         <div id="payroll-material-card" class="card table-card payroll-team-card hidden">
                             <header><h3><i class="fa-solid fa-file-lines"></i> 수업 자료 제작비 정산</h3><div class="payroll-team-total"><span>자료 제작비 합계</span><strong id="payroll-material-total">0원</strong></div></header>
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>선생님</th><th>승인일</th><th>도서</th><th>분류</th><th>자료 종류</th><th>정산액</th><th>관리</th></tr></thead><tbody id="payroll-material-body"></tbody></table></div>
@@ -1600,6 +1605,7 @@
                                         <option value="Books">도서</option>
                                         <option value="Students">학생</option>
                                         <option value="StudyLogs">학습 기록</option>
+                                        <option value="TeacherPayrollExclusions">정산 제외 내역</option>
                                         <option value="Classes">수업</option>
                                         <option value="MonthlyReports">월말보고</option>
                                         <option value="_app_users">계정</option>
