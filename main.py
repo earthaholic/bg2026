@@ -2211,6 +2211,13 @@ def user_get_monthly_report_studylogs(
     query += ' ORDER BY sl.StudiedDay DESC, sl.rowid DESC'
     cursor.execute(query, params)
     rows = cursor.fetchall()
+    logs = []
+    for row in rows:
+        log = dict(row)
+        blocked = mutation_permission(conn, log, log["row_id"], current_user)
+        log.update(CanEdit=blocked is None,
+                   MutationBlockedReason=blocked[1] if blocked else "")
+        logs.append(log)
     absence_query = '''
         SELECT a.* FROM "StudentAbsences" a
         WHERE (a."StudentId" = ? OR a."StudentId" = ?)
@@ -2229,7 +2236,6 @@ def user_get_monthly_report_studylogs(
     absences = [dict(row) for row in cursor.execute(absence_query, absence_params).fetchall()]
     conn.close()
 
-    logs = [dict(r) for r in rows]
     return {
         "student": student,
         "logs": logs,
@@ -2290,6 +2296,14 @@ def user_get_monthly_report(report_id: int, current_user: Dict[str, Any] = Depen
         raise HTTPException(status_code=404, detail="저장된 월말보고를 찾을 수 없습니다.")
     _get_monthly_report_student(cursor, row["StudentId"], current_user)
     result = _monthly_report_response(row)
+    # 저장 당시 권한 대신 현재 원본과 로그인 계정으로 수정 가능 여부를 판별한다.
+    for log in result["StudyLogSnapshot"]:
+        if not isinstance(log, dict) or log.get("IsAbsence"):
+            continue
+        row_id = log.get("row_id")
+        original = cursor.execute('SELECT * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone() if type(row_id) is int and row_id > 0 else None
+        blocked = mutation_permission(conn, dict(original), row_id, current_user) if original else (404, "원본 학습 기록을 찾을 수 없습니다. 기록을 다시 불러와 주세요.")
+        log.update(CanEdit=blocked is None, MutationBlockedReason=blocked[1] if blocked else "")
     conn.close()
     return {"report": result}
 

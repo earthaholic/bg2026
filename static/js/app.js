@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
+    let monthlyLogTypeSavingCount = 0;
     let currentMonthlyReportId = null;
     let monthlyLectureRequestSeq = 0;
     let payrollTeacherOptions = [];
@@ -7283,25 +7284,72 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         container.innerHTML = logs.map((log, idx) => {
             const isSpecial = !!(log.IsSpecial || log.is_special);
+            const canChangeType = log.CanEdit === true && Number(log.row_id) > 0;
+            const blockedReason = log.MutationBlockedReason || '원본 기록의 수정 권한을 확인하려면 기록을 다시 불러와 주세요.';
             return `
                 <div class="report-log-item" data-index="${idx}">
                     <input type="checkbox" class="chk-log-include" id="chk-log-${idx}" ${selectAll ? 'checked' : ''}>
                     <div class="report-log-info">
                         <div class="report-log-header"><span class="report-log-date">${formatDateKorean(log.StudiedDay || log.studied_day)}</span>
-                            ${log.IsAbsence ? '<span class="tag-badge warning">결석 · 강의 번호 제외</span>' : isSpecial ? '<span class="tag-badge warning">특강</span>' : '<span class="tag-badge primary">일반강의</span>'}</div>
+                            ${log.IsAbsence ? '<span class="tag-badge warning">결석 · 강의 번호 제외</span>' : isMonthlyReportBreak(log) ? '<span class="tag-badge warning">휴일·휴강 · 강의 번호 제외</span>' : `
+                                <label class="report-log-type-control" for="report-log-type-${idx}">수업 구분
+                                    <select id="report-log-type-${idx}" class="form-control report-log-type-select" ${canChangeType ? '' : `disabled title="${escapeHtml(blockedReason)}"`}>
+                                        <option value="general" ${isSpecial ? '' : 'selected'}>일반강의</option>
+                                        <option value="special" ${isSpecial ? 'selected' : ''}>특강</option>
+                                    </select>
+                                </label>`}</div>
                         ${log.IsAbsence ? '' : `<div class="report-log-book">도서: ${escapeHtml(log.BookTitle || log.book_title || '도서 제목 미입력')}</div>`}
                         <div class="report-log-content">${escapeHtml(log.IsAbsence ? formatMonthlyAbsenceReason(log.AbsenceReason) : log.LessonContent || log.lesson_content || log.Description || '수업 내용 미입력')}</div>
+                        ${!log.IsAbsence && !isMonthlyReportBreak(log) && !canChangeType ? `<div class="report-log-content">${escapeHtml(blockedReason)}</div>` : ''}
                     </div>
                 </div>`;
         }).join('');
-        container.querySelectorAll('.chk-log-include').forEach(chk => chk.addEventListener('change', generateMonthlyReportText));
+        container.querySelectorAll('.chk-log-include').forEach(chk => chk.addEventListener('change', () => generateMonthlyReportText()));
+        container.querySelectorAll('.report-log-type-select').forEach(select => select.addEventListener('change', () => updateMonthlyReportLogType(select)));
         container.querySelectorAll('.report-log-item').forEach(item => item.addEventListener('click', e => {
-            if (e.target.tagName !== 'INPUT') {
+            if (!e.target.closest('input, select, option, label')) {
                 const chk = item.querySelector('.chk-log-include');
                 chk.checked = !chk.checked;
                 generateMonthlyReportText();
             }
         }));
+    }
+
+    async function updateMonthlyReportLogType(select) {
+        const feedback = createActionFeedback(select);
+        const logs = currentMonthlyLogs;
+        const index = Number(select.closest('.report-log-item').dataset.index);
+        const log = logs[index];
+        const oldValue = (log.IsSpecial || log.is_special) ? 'special' : 'general';
+        const isSpecial = select.value === 'special';
+        const controls = Array.from(document.querySelectorAll('#monthly-report-logs-container .report-log-type-select'))
+            .filter(control => logs[Number(control.closest('.report-log-item').dataset.index)].row_id === log.row_id);
+        controls.forEach(control => { control.disabled = true; });
+        monthlyLogTypeSavingCount++;
+        try {
+            await apiFetch(`/api/user/studylogs/${log.row_id}`, {
+                method: 'PUT', body: JSON.stringify({ data: { IsSpecial: isSpecial ? 1 : 0 } })
+            });
+            // 같은 원본이 도서 조인으로 여러 번 표시되어도 모든 스냅샷을 함께 갱신한다.
+            logs.filter(item => !item.IsAbsence && item.row_id === log.row_id).forEach(item => {
+                item.IsSpecial = isSpecial;
+                item.is_special = isSpecial;
+            });
+            if (currentMonthlyLogs === logs) {
+                document.querySelectorAll('#monthly-report-logs-container .report-log-type-select').forEach(control => {
+                    const item = logs[Number(control.closest('.report-log-item').dataset.index)];
+                    if (item.row_id === log.row_id) control.value = isSpecial ? 'special' : 'general';
+                });
+                generateMonthlyReportText();
+            }
+            feedback.show('원본 학습 기록의 수업 구분을 변경했습니다. 기존에 저장한 월말 보고 문구는 자동 변경되지 않습니다.', 'success');
+        } catch (err) {
+            controls.forEach(control => { control.value = oldValue; });
+            feedback.show(`수업 구분 변경 실패: ${err.message}`, 'error');
+        } finally {
+            controls.forEach(control => { control.disabled = false; });
+            monthlyLogTypeSavingCount--;
+        }
     }
 
     async function loadMonthlyReportLogs() {
@@ -7468,6 +7516,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveMonthlyReport(status) {
         const feedback = createActionFeedback();
+        if (monthlyLogTypeSavingCount) return feedback.show('수업 구분 저장이 끝난 후 월말 보고를 저장해 주세요.', 'warning');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
         const yearMonth = document.getElementById('monthly-report-year-month')?.value;
         const content = document.getElementById('monthly-report-result-text')?.value.trim();

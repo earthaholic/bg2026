@@ -133,6 +133,62 @@ class StudentAbsenceTests(unittest.TestCase):
         database.init_system_tables()
         self.assertEqual(len(self.sql('SELECT * FROM StudentAbsences')), 1)
 
+    def test_report_lesson_type_changes_update_original_and_preserve_saved_snapshot(self):
+        self.register(include=True, day='2026-09-18')
+        self.register(include=True, day='2026-09-25')
+        self.sql("UPDATE StudyLogs SET IsSpecial=1 WHERE StudiedDay='2026-09-25'")
+        original = self.client.get('/api/user/monthly-report/studylogs?student_id=1&date_from=2026-09-01', headers=self.headers()).json()['logs']
+        before = [dict(row) for row in self.sql('SELECT * FROM StudyLogs ORDER BY rowid')]
+        logs = [dict(log) for log in original]
+        for log in logs:
+            self.assertTrue(log['CanEdit'])
+            log['IsSpecial'] = not bool(log.get('IsSpecial'))
+            log['is_special'] = log['IsSpecial']
+            response = self.client.put('/api/user/studylogs/%s' % log['row_id'], headers=self.headers(),
+                                       json={'data': {'IsSpecial': int(log['IsSpecial'])}})
+            self.assertEqual(response.status_code, 200, response.text)
+        expected_types = {log['row_id']: int(log['IsSpecial']) for log in logs}
+        after = [dict(row) for row in self.sql('SELECT rowid AS row_id, * FROM StudyLogs ORDER BY rowid')]
+        for old, new in zip(before, after):
+            self.assertEqual(new['IsSpecial'], expected_types.get(new['row_id'], old['IsSpecial']))
+            for field in old:
+                if field not in ('IsSpecial', 'UpdatedBy', 'UpdatedAt'):
+                    self.assertEqual(new[field], old[field])
+        self.assertEqual(len(self.sql("SELECT * FROM _app_audit_logs WHERE table_name='StudyLogs' AND action='UPDATE'")), len(logs))
+        content = main.build_monthly_report_text('김학생', '', '9월', 3, '', logs)
+        self.assertIn('<특강>\n도서', content)
+        self.assertIn('<3강>\n도서', content)
+        self.assertNotIn('<4강>', content)
+        for status in ('draft', 'completed'):
+            response = self.client.post('/api/user/monthly-reports', headers=self.headers(), json={
+                'student_id': 1, 'report_year_month': '2026-09', 'report_month_label': '9월',
+                'logs': logs, 'content': content, 'status': status
+            })
+            self.assertEqual(response.status_code, 200, response.text)
+            report_id = response.json()['report']['Id']
+            saved = self.client.get('/api/user/monthly-reports/%s' % report_id, headers=self.headers()).json()['report']
+            self.assertEqual(saved['StudyLogSnapshot'], logs)
+            self.assertEqual(saved['Content'], content)
+            self.assertEqual(saved['Status'], status)
+        self.assertEqual([dict(row) for row in self.sql('SELECT rowid AS row_id, * FROM StudyLogs ORDER BY rowid')], after)
+
+    def test_monthly_lesson_type_permissions_match_original_mutation_api(self):
+        self.register(include=True)
+        log = self.client.get('/api/user/monthly-report/studylogs?student_id=1&date_from=2026-09-01', headers=self.headers()).json()['logs'][0]
+        self.assertTrue(log['CanEdit'])
+        self.sql("UPDATE StudyLogs SET ActualTeacherUsername='teacher_b' WHERE rowid=?", (log['row_id'],))
+        blocked = self.client.get('/api/user/monthly-report/studylogs?student_id=1&date_from=2026-09-01', headers=self.headers()).json()['logs'][0]
+        self.assertFalse(blocked['CanEdit'])
+        self.assertTrue(blocked['MutationBlockedReason'])
+        self.assertEqual(self.client.put('/api/user/studylogs/%s' % log['row_id'], headers=self.headers(),
+                                        json={'data': {'IsSpecial': 1}}).status_code, 403)
+        self.sql("UPDATE StudyLogs SET ActualTeacherUsername='teacher_a' WHERE rowid=?", (log['row_id'],))
+        self.sql("INSERT INTO TeacherPayrollClosures(PayrollMonth, TeacherUsername, ClosedBy) VALUES ('2026-09', 'teacher_a', 'manager_a')")
+        blocked = self.client.get('/api/user/monthly-report/studylogs?student_id=1&date_from=2026-09-01', headers=self.headers()).json()['logs'][0]
+        self.assertFalse(blocked['CanEdit'])
+        self.assertEqual(self.client.put('/api/user/studylogs/%s' % log['row_id'], headers=self.headers(),
+                                        json={'data': {'IsSpecial': 1}}).status_code, 409)
+
     def test_report_date_order_and_no_lecture_number_for_absence(self):
         text = main.build_monthly_report_text('김학생', '2학기', '9월', 3, '', [
             {'StudiedDay': '2026-09-25', 'BookTitle': '다음 도서', 'LessonContent': '토론'},

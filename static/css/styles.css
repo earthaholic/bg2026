@@ -3374,6 +3374,31 @@ body {
     color: var(--primary);
 }
 
+#view-monthly-report .report-log-header {
+    flex-wrap: wrap;
+}
+
+#view-monthly-report .report-log-type-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    cursor: default;
+}
+
+#view-monthly-report .report-log-type-select {
+    width: auto;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+#view-monthly-report .monthly-report-type-guide {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
 .report-log-book {
     font-size: 0.85rem;
     font-weight: 700;
