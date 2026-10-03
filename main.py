@@ -3317,6 +3317,15 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         class_ids = sorted({r["ClassId"] for r in rows if r.get("ClassId") is not None})
         if class_ids:
             placeholders = ','.join('?' for _ in class_ids)
+            # 마감 여부와 관계없이 현재 수업 일정으로 화면의 팀 순서를 정한다.
+            schedules = {r['Id']: dict(r) for r in conn.execute(f'''
+                SELECT * FROM "Classes"
+                WHERE "Id" IN ({placeholders})
+            ''', class_ids).fetchall()}
+            for row in rows:
+                schedule = schedules.get(row.get('ClassId'), {})
+                row['DayOfWeek'] = schedule.get('DayOfWeek')
+                row['StartTime'] = schedule.get('StartTime')
             team_students = [dict(r) for r in conn.execute(f'''
                 SELECT DISTINCT cs."ClassId", s.rowid AS "StudentRowId",
                        s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",

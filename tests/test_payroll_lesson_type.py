@@ -47,6 +47,11 @@ class PayrollLessonTypeTests(unittest.TestCase):
                 TeacherUsername TEXT, StudyLogId INTEGER, StudentId TEXT, BookId TEXT,
                 StudiedDay TEXT, Reason TEXT);
         ''')
+        self.conn.executescript('''
+            ALTER TABLE Classes ADD COLUMN DayOfWeek TEXT;
+            ALTER TABLE Classes ADD COLUMN StartTime TEXT;
+            UPDATE Classes SET DayOfWeek='월', StartTime='09:00';
+        ''')
         self.conn.commit()
 
     def connect(self):
@@ -79,6 +84,9 @@ class PayrollLessonTypeTests(unittest.TestCase):
         self.assertEqual(roster[2]['IsSpecial'], 1)
         self.assertEqual(roster[3]['IsSpecial'], 1)
         self.assertEqual(data['totals'], {'teacher1': 15000})
+        for row in data['lines']:
+            self.assertEqual(row['DayOfWeek'], '월')
+            self.assertEqual(row['StartTime'], '09:00')
 
 
 if __name__ == '__main__':

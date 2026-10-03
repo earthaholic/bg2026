@@ -8416,7 +8416,20 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '<div class="card payroll-empty-state"><i class="fa-solid fa-calendar-xmark"></i><p>해당 월에 정산할 수업 내역이 없습니다.</p></div>';
             return;
         }
-        container.innerHTML = [...teams.values()].map(teamLines => {
+        const dayOrder = day => {
+            const value = String(day || '').trim().replace(/요일$/, '').toUpperCase();
+            const index = ['월', '화', '수', '목', '금', '토', '일'].indexOf(value);
+            const legacyIndex = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].indexOf(value);
+            return index >= 0 ? index : legacyIndex >= 0 ? legacyIndex : 7;
+        };
+        const compare = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), 'ko', { numeric: true });
+        const sortedTeams = [...teams.values()].sort(([a], [b]) =>
+            dayOrder(a.DayOfWeek) - dayOrder(b.DayOfWeek)
+            || compare(a.StartTime || '99:99', b.StartTime || '99:99')
+            || compare(a.ClassName, b.ClassName)
+            || compare(a.ClassId, b.ClassId)
+        );
+        container.innerHTML = sortedTeams.map(teamLines => {
             const teamName = teamLines[0].ClassName || '수업 정보 미연결';
             const lessonDates = [...new Set(teamLines.map(line => line.StudiedDay).filter(Boolean))].sort();
             // 정산 표는 비교하기 쉽게 항상 1~5차시 칸을 유지한다.

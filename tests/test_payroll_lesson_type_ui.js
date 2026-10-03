@@ -138,3 +138,20 @@ test('보존한 수업 종류·단가·출처는 체크 칸의 툴팁과 접근�
     assert.doesNotMatch(container.innerHTML.replace(/<[^>]*>/g, ''), /도입 시점 기준 보존|독서글쓰기/);
     assert.equal((container.innerHTML.match(/fa-check/g) || []).length, 1);
 });
+
+
+test('수업은 월~일·시간순으로 정렬하고 미지정 일정은 뒤에 둔다', () => {
+    context.document.getElementById = () => container;
+    const teams = [
+        ['가 일요일', '일', '09:00'], ['나 월요일 늦음', '월', '16:00'],
+        ['다 화요일', 'TUE', '09:00'], ['라 월요일 빠름', '월요일', '9:00'],
+        ['마 미지정', null, null], ['바 월요일 시간 없음', '월', ''],
+    ];
+    context.renderPayrollTeamCards(teams.map(([ClassName, DayOfWeek, StartTime], index) => ({
+        ClassId: index + 1, ClassName, DayOfWeek, StartTime, StudentRowId: 1,
+        StudentName: '학생', StudiedDay: '2026-09-01', Amount: 10000,
+    })));
+    const names = [...container.innerHTML.matchAll(/<h3>(.*?)<\/h3>/g)].map(match => match[1]);
+    assert.deepEqual(names, ['라 월요일 빠름', '나 월요일 늦음', '바 월요일 시간 없음', '다 화요일', '가 일요일', '마 미지정']);
+    assert.equal((container.innerHTML.match(/10,000원/g) || []).length, 12);
+});
