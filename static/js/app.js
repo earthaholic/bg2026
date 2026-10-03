@@ -8457,7 +8457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `${line.IsSpecial ? '특강' : (line.CategoryName || '종류 미설정')} · ${Number(line.UnitAmount).toLocaleString()}원 · ${line.PayrollBasisLabel}`
                         : '').filter(Boolean).join(' / ');
                     return count
-                        ? `<td class="is-attended" aria-label="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}" title="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${basisText ? `<small class="payroll-basis-note">${escapeHtml(basisText)}</small>` : ''}${excludeButton}</td>`
+                        ? `<td class="is-attended" aria-label="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}" title="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${excludeButton}</td>`
                         : '<td>-</td>';
                 }).join('');
                 return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${attendanceCells}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;

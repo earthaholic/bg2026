@@ -5015,4 +5015,3 @@ button.class-student-badge { cursor: pointer; }
 }
 
 /* 수업 당시 보존된 정산 기준은 현재 반 이름과 구분해서 표시한다. */
-#view-teacher-payroll .payroll-basis-note { display: block; font-size: 0.72rem; font-weight: 400; white-space: normal; color: var(--text-muted, #64748b); margin-top: 0.25rem; }

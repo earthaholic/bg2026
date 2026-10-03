@@ -126,11 +126,15 @@ test('복수 도서 묶음은 체크 한 개를 표시하고 제외 버튼에 �
     assert.match(container.innerHTML, /10,000원/);
 });
 
-test('보존한 수업 종류·단가·출처를 현재 반 이름과 별도로 표시한다', () => {
+test('보존한 수업 종류·단가·출처는 체크 칸의 툴팁과 접근성 안내에만 표시한다', () => {
     context.renderPayrollTeamCards([{ ClassId: 1, ClassName: '현재 토론반', StudentRowId: 1,
         StudentName: '검증학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000,
         IsSpecial: 0, UnitAmount: 10000, CategoryName: '독서글쓰기', PayrollBasisLabel: '도입 시점 기준 보존' }]);
     assert.match(container.innerHTML, /현재 토론반/);
     assert.match(container.innerHTML, /독서글쓰기 · 10,000원 · 도입 시점 기준 보존/);
-    assert.match(container.innerHTML, /payroll-basis-note/);
+    assert.match(container.innerHTML, /title="수업 1회 독서글쓰기 · 10,000원 · 도입 시점 기준 보존"/);
+    assert.match(container.innerHTML, /aria-label="수업 1회 독서글쓰기 · 10,000원 · 도입 시점 기준 보존"/);
+    assert.doesNotMatch(container.innerHTML, /payroll-basis-note/);
+    assert.doesNotMatch(container.innerHTML.replace(/<[^>]*>/g, ''), /도입 시점 기준 보존|독서글쓰기/);
+    assert.equal((container.innerHTML.match(/fa-check/g) || []).length, 1);
 });
