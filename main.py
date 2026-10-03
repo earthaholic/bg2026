@@ -15,7 +15,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, Upl
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
-from pydantic import BaseModel, StrictInt, StrictBool
+from pydantic import BaseModel, StrictInt, StrictBool, StrictStr
 
 from config import settings
 from database import (
@@ -1233,6 +1233,46 @@ def user_get_student_detail(
     if current_user.get("role") in ("admin", "subadmin", "manager"):
         result["tuition_progress"] = _get_tuition_progress(s_row_id)
     return result
+
+class StudentDescriptionRequest(BaseModel):
+    Description: StrictStr
+    original_description: StrictStr
+
+    class Config:
+        extra = "forbid"
+
+
+@app.put("/api/user/students/{student_id}/description")
+def user_update_student_description(
+    student_id: int,
+    payload: StudentDescriptionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """조회 가능한 학생의 특이사항만 수정하며 다른 학생 정보 권한은 유지한다."""
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        # 이 전용 API는 상세 응답의 정확한 row_id만 받는다.
+        row = conn.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ?', (student_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+        old = dict(row)
+        if (old.get('Description') or '') != payload.original_description:
+            raise HTTPException(status_code=409, detail="다른 사용자가 특이사항을 수정했습니다. 입력 내용을 복사한 뒤 학생 상세를 다시 열어 주세요.")
+        if (old.get('Description') or '') != payload.Description:
+            conn.execute('UPDATE "Students" SET "Description" = ?, "UpdatedBy" = ?, "UpdatedAt" = ? WHERE rowid = ?',
+                         (payload.Description, current_user['username'], datetime.now().strftime('%Y-%m-%d %H:%M:%S'), student_id))
+            new = dict(conn.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ?', (student_id,)).fetchone())
+            write_audit_log('Students', student_id, 'UPDATE', old, new, ['Description'],
+                            current_user['username'], current_user['role'], connection=conn)
+        conn.commit()
+        return {"message": "학습 특성 및 특이사항을 저장했습니다."}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 class StudentClassesRequest(BaseModel):
     regular_class_id: Optional[int] = None

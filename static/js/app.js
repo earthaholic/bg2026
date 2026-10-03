@@ -4152,7 +4152,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="student-detail-section">
                             <div class="detail-section-title"><i class="fa-solid fa-note-sticky"></i> 학습 특성 및 특이사항</div>
-                            <div class="detail-desc-box">${escapeHtml(s.Description || '등록된 메모나 특이사항이 없습니다.')}</div>
+                            <div id="student-description-display" class="detail-desc-box">${escapeHtml(s.Description || '등록된 메모나 특이사항이 없습니다.')}</div>
+                            <button type="button" id="btn-edit-student-description" class="btn btn-sm btn-outline">특이사항 수정</button>
+                            <form id="student-description-form" class="hidden">
+                                <label for="student-description-input">학습 특성 및 특이사항</label>
+                                <textarea id="student-description-input" class="form-control" rows="5">${escapeHtml(s.Description || '')}</textarea>
+                                <button type="submit" class="btn btn-sm btn-primary">특이사항 저장</button>
+                                <button type="button" id="btn-cancel-student-description" class="btn btn-sm btn-outline">취소</button>
+                            </form>
+                            <div id="student-description-message" role="status" class="hidden"></div>
                         </div>
 
                         <div class="student-detail-section student-studylogs-section">
@@ -4204,6 +4212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             modalStudentDetailBody.innerHTML = html;
+            bindStudentDescriptionEditor(s);
             if (isStaff()) loadStudentClassAssignment(studentId);
 
             modalStudentDetailBody.querySelectorAll('.student-studylog-item').forEach(item => {
@@ -4230,6 +4239,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Difficulty Weight Helper (선택안함/초등부: 1.0, 중등부: 2.0, 심화반/독서모임: 3.0)
+    // 특이사항 전용 편집은 일반 선생님에게도 제공한다.
+    function bindStudentDescriptionEditor(student) {
+        const form = document.getElementById('student-description-form');
+        const input = document.getElementById('student-description-input');
+        const display = document.getElementById('student-description-display');
+        const edit = document.getElementById('btn-edit-student-description');
+        const cancel = document.getElementById('btn-cancel-student-description');
+        const message = document.getElementById('student-description-message');
+        const save = form.querySelector('[type="submit"]');
+        const toggle = editing => {
+            form.classList.toggle('hidden', !editing);
+            display.classList.toggle('hidden', editing);
+            edit.classList.toggle('hidden', editing);
+        };
+        edit.addEventListener('click', () => {
+            input.value = student.Description || '';
+            message.classList.add('hidden');
+            toggle(true);
+            input.focus();
+        });
+        cancel.addEventListener('click', () => {
+            input.value = student.Description || '';
+            message.classList.add('hidden');
+            toggle(false);
+        });
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (save.disabled) return;
+            const value = input.value;
+            save.disabled = cancel.disabled = input.disabled = true;
+            message.classList.add('hidden');
+            try {
+                await apiFetch(`/api/user/students/${student.row_id}/description`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ Description: value, original_description: student.Description || '' })
+                });
+                student.Description = value;
+                display.textContent = value || '등록된 메모나 특이사항이 없습니다.';
+                toggle(false);
+                message.className = 'alert alert-success';
+                message.textContent = '학습 특성 및 특이사항을 저장했습니다.';
+            } catch (err) {
+                message.className = 'alert alert-danger';
+                message.textContent = err.message;
+            } finally {
+                save.disabled = cancel.disabled = input.disabled = false;
+            }
+        });
+    }
+
     async function openStudentConsultationsModal(studentId, studentName) {
         modalStudentConsultationsTitle.innerHTML = `<i class="fa-solid fa-comments"></i> ${escapeHtml(studentName)} 상담 기록`;
         modalStudentConsultationsBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>상담 기록 조회 중...</p></div>';

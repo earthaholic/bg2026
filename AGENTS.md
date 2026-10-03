@@ -215,3 +215,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `PUT /api/user/studylogs/{log_id}`는 연결 변경 시 수업 존재 여부, 확정 정산 행 포함 여부, 기존 진행 선생님의 기존 월 및 변경 대상 선생님의 대상 월 마감을 확인한다. 마감된 연결 변경은 거부한다.
 - 수업 선택 목록은 100건 이후 페이지도 조회한다. 연결 변경은 해당 기록의 수업 종류·단가 보존값을 다시 산정하므로 화면 안내에 현재 소속 불변·정산 기준 변경·실제 진행 선생님 확인을 명시한다. 잘못 연결된 과거 기록은 자동 일괄 변경하지 않는다.
 - 회귀 검증: `tests/test_studylog_class_correction.py`, `tests/test_class_options_ui.js`.
+
+
+## 학생 특이사항 전용 수정
+- 학생 상세의 `특이사항 수정`은 일반 선생님에게도 제공한다. 기존 전체 학생 수정·삭제는 staff 전용으로 유지한다.
+- `PUT /api/user/students/{student_id}/description`은 상세 응답의 정확한 `row_id`와 `{Description, original_description}`만 받는다. 기존 학생 상세 조회와 동일하게 로그인 사용자가 접근하며 다른 필드는 거부한다.
+- 원본 특이사항을 비교해 동시 수정은 409로 차단하며 변경 메타데이터와 UPDATE 감사 기록을 같은 트랜잭션에 저장한다. 실패 시 입력을 유지한다.
+- 검증: `tests/test_student_description.py`, `tests/test_student_description_ui.js`.
