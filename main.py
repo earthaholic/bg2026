@@ -3,6 +3,7 @@ import io
 import csv
 import re
 from lesson_sessions import lesson_session_key, group_payroll_sessions
+from payroll_basis import load_payroll_basis
 import json
 import logging
 import zipfile
@@ -4203,6 +4204,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
                    AND (c."Id" IS NOT NULL OR (sl."ClassId" IS NULL AND sl."PayrollCategoryId" IS NOT NULL
                                                 AND COALESCE(sl."ActualTeacherUsername", '') != ''))'''
         rows=[]
+        saved_bases = load_payroll_basis(conn, month)
         for row in conn.execute(sql, (month,)).fetchall():
             r=dict(row); teacher=str(r["ActualTeacherUsername"] or '').strip() or r["TeacherUsername"]
             if teacher_username and teacher != teacher_username: continue
@@ -4229,6 +4231,16 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
                     reason=f'{grade_group} 일반 수업 단가 미설정'
                 else:
                     reason=f'{grade_group} 일반 수업'
+            basis = saved_bases.get(r['StudyLogId'])
+            if basis and basis.get('PayBasisSource'):
+                r.update(basis)
+                r['CategoryId'] = basis['PayCategoryId']
+                r['CategoryName'] = basis['PayCategoryName']
+                rate = (basis['PayUnitAmount'],) if basis['PayUnitAmount'] is not None else None
+                reason = '특강 학생수당' if r['IsSpecial'] else '{} 일반 수업'.format(basis['PayGradeGroup'])
+                if not rate:
+                    reason += ' 단가 미설정'
+                r['PayrollBasisLabel'] = ('도입 시점 기준 보존' if basis['PayBasisSource'] == 'legacy' else '종류 보완 시점 기준 보존' if basis['PayBasisSource'] == 'completed' else '수업별 기준 보존')
             r.update({
                 "TeacherUsername": teacher,
                 "UnitAmount": rate[0] if rate else 0,
@@ -4629,6 +4641,15 @@ def user_update_studylog(
             try:
                 if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId" = ?', (row_id,)).fetchone():
                     raise HTTPException(status_code=409, detail="이미 마감된 정산에 포함된 학습 기록의 수업·선생님·카테고리는 수정할 수 없습니다.")
+                original_teacher = str(old_snapshot.get("ActualTeacherUsername") or "").strip()
+                if not original_teacher and old_snapshot.get("ClassId"):
+                    original_class = conn.execute('SELECT "TeacherUsername" FROM "Classes" WHERE "Id"=?',
+                                                  (old_snapshot["ClassId"],)).fetchone()
+                    original_teacher = str(original_class["TeacherUsername"] or "").strip() if original_class else ""
+                if original_teacher and conn.execute(
+                        'SELECT 1 FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=? AND "TeacherUsername"=?',
+                        (str(old_snapshot.get("StudiedDay") or "")[:7], original_teacher)).fetchone():
+                    raise HTTPException(status_code=409, detail="기존 진행 선생님의 해당 월 정산이 마감되어 수업 연결을 정정할 수 없습니다.")
             finally:
                 conn.close()
 
@@ -4645,8 +4666,7 @@ def user_update_studylog(
                 class_row = get_class_by_id(int(target_class_id))
                 if not class_row:
                     raise HTTPException(status_code=400, detail="정산에 연결할 수업 정보를 찾을 수 없습니다.")
-                if student_id not in set(get_class_student_ids(int(target_class_id))):
-                    raise HTTPException(status_code=400, detail="해당 학생이 선택한 수업에 배정되어 있지 않습니다.")
+                # 과거 기록 정정은 현재 반 소속과 무관하며 학생 배정은 변경하지 않는다.
                 target_teacher = target_teacher or class_row["TeacherUsername"]
                 target_category_id = None
             elif target_category_id:

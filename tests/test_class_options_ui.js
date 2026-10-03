@@ -72,3 +72,28 @@ test('주요 수업 선택 메뉴는 공통 그룹 함수를 사용한다', () =
         assert.ok(source.includes("const options = '<option value=\"\">수업 선택 안 함</option>' + groupedClassOptions("));
     }
 });
+
+
+test('과거 학습 기록 정정은 첫 페이지 이후 수업도 선택할 수 있다', async () => {
+    const begin = source.indexOf('                classes = classData.classes || [];');
+    const finish = source.indexOf('                teachers = teacherData.teachers || [];', begin);
+    assert.ok(begin > 0 && finish > begin);
+    const requests = [];
+    const scope = vm.createContext({
+        classData: { classes: [{ Id: 200 }], total_pages: 3 },
+        apiFetch: async url => {
+            requests.push(url);
+            return { classes: [{ Id: url.endsWith('page=2') ? 100 : 1 }] };
+        }
+    });
+    const result = await vm.runInContext(`(async () => { let classes; ${source.slice(begin, finish)} return classes; })()`, scope);
+    assert.deepEqual(Array.from(result, row => row.Id), [200, 100, 1]);
+    assert.deepEqual(requests, ['/api/user/classes?limit=100&page=2', '/api/user/classes?limit=100&page=3']);
+});
+
+test('과거 반 정정 안내는 현재 소속 불변과 정산 기준 변경을 설명한다', () => {
+    assert.match(source, /aria-describedby="edit-studylog-class-help"/);
+    assert.match(source, /현재 소속과 관계없이 과거에 진행한 수업으로 정정할 수 있습니다/);
+    assert.match(source, /학생의 현재 반 배정은 바뀌지 않으며/);
+    assert.match(source, /실제 진행 선생님도 확인해 주세요/);
+});

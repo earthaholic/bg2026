@@ -143,7 +143,8 @@ class CsvClassLinkTests(unittest.TestCase):
         self.assertEqual(response.json()['linked_count'], 2)
         audits = self.audits()
         self.assertEqual(len(audits), 2)
-        mutable = {'ClassId', 'ActualTeacherUsername', 'SubstituteStatus', 'GradeSnapshot', 'UpdatedBy', 'UpdatedAt'}
+        from payroll_basis import COLUMNS
+        mutable = {'ClassId', 'ActualTeacherUsername', 'SubstituteStatus', 'GradeSnapshot', 'UpdatedBy', 'UpdatedAt'} | set(COLUMNS)
         for old, new, audit in zip(before, self.records(), audits):
             self.assertEqual({k: v for k, v in new.items() if k not in mutable},
                              {k: v for k, v in old.items() if k not in mutable})

@@ -152,7 +152,8 @@ class StudentAbsenceTests(unittest.TestCase):
         for old, new in zip(before, after):
             self.assertEqual(new['IsSpecial'], expected_types.get(new['row_id'], old['IsSpecial']))
             for field in old:
-                if field not in ('IsSpecial', 'UpdatedBy', 'UpdatedAt'):
+                from payroll_basis import COLUMNS
+                if field not in ('IsSpecial', 'UpdatedBy', 'UpdatedAt') and field not in COLUMNS:
                     self.assertEqual(new[field], old[field])
         self.assertEqual(len(self.sql("SELECT * FROM _app_audit_logs WHERE table_name='StudyLogs' AND action='UPDATE'")), len(logs))
         content = main.build_monthly_report_text('김학생', '', '9월', 3, '', logs)

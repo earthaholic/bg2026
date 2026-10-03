@@ -3255,6 +3255,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiFetch('/api/user/payroll/categories')
                 ]);
                 classes = classData.classes || [];
+                // 이전 반도 선택할 수 있도록 첫 100개 이후의 수업까지 조회한다.
+                for (let classPage = 2; classPage <= (classData.total_pages || 1); classPage++) {
+                    const moreClasses = await apiFetch(`/api/user/classes?limit=100&page=${classPage}`);
+                    classes.push(...(moreClasses.classes || []));
+                }
                 teachers = teacherData.teachers || [];
                 categories = categoryData.categories || [];
             } catch (err) {
@@ -3271,7 +3276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `<option value="${category.Id}" ${Number(log.PayrollCategoryId) === Number(category.Id) ? 'selected' : ''}>${escapeHtml(category.Name)}</option>`
         ).join('');
         const assignmentFields = isTeacher ? '' : `
-            <div class="form-group"><label for="edit-studylog-class">연결 수업</label><select id="edit-studylog-class" class="form-control">${classOptions}</select></div>
+            <div class="form-group"><label for="edit-studylog-class">연결 수업</label><select id="edit-studylog-class" class="form-control" aria-describedby="edit-studylog-class-help">${classOptions}</select><div id="edit-studylog-class-help" class="text-muted">현재 소속과 관계없이 과거에 진행한 수업으로 정정할 수 있습니다. 학생의 현재 반 배정은 바뀌지 않으며, 이 기록의 정산 종류·단가는 변경한 수업 기준으로 다시 저장됩니다. 실제 진행 선생님도 확인해 주세요.</div></div>
             <div class="form-group"><label for="edit-studylog-actual-teacher">실제 진행 선생님</label><select id="edit-studylog-actual-teacher" class="form-control">${teacherOptions}</select></div>
             <div class="form-group"><label for="edit-studylog-payroll-category">정산 카테고리</label><select id="edit-studylog-payroll-category" class="form-control">${categoryOptions}</select><div class="text-muted">수업이 없을 때 실제 진행 선생님과 함께 지정하면 정산에 포함됩니다.</div></div>
         `;
@@ -8448,8 +8453,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dateLines = student.lines.filter(line => line.StudiedDay === date);
                     const excludeButton = canExclude && count && dateLines.every(line => !line.IsPayrollClosed)
                         ? `<button type="button" class="btn btn-xs btn-outline payroll-exclude-button" data-log-ids="${dateLines.flatMap(line => line.StudyLogIds || [line.StudyLogId]).map(Number).join(',')}" aria-label="${escapeHtml(student.name)} ${escapeHtml(date)} 수업 ${count}차시 정산에서만 제외">정산 제외</button>` : '';
+                    const basisText = dateLines.map(line => line.PayrollBasisLabel
+                        ? `${line.IsSpecial ? '특강' : (line.CategoryName || '종류 미설정')} · ${Number(line.UnitAmount).toLocaleString()}원 · ${line.PayrollBasisLabel}`
+                        : '').filter(Boolean).join(' / ');
                     return count
-                        ? `<td class="is-attended" aria-label="수업 ${count}회" title="수업 ${count}회"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${excludeButton}</td>`
+                        ? `<td class="is-attended" aria-label="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}" title="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${basisText ? `<small class="payroll-basis-note">${escapeHtml(basisText)}</small>` : ''}${excludeButton}</td>`
                         : '<td>-</td>';
                 }).join('');
                 return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${attendanceCells}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;

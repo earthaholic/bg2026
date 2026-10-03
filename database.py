@@ -532,6 +532,8 @@ def init_system_tables():
     cursor.execute("""CREATE TABLE IF NOT EXISTS _app_book_student_counts_state (
         id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL
     )""")
+    from payroll_basis import install_payroll_basis
+    install_payroll_basis(conn)
     conn.commit()
     if all(cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
            for name in ("Books", "Students", "StudyLogs")):

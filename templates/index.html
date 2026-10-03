@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261001-material-review-date">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261003-payroll-basis">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1080,7 +1080,7 @@
                     <div class="payroll-layout">
                         <div class="card search-filter-card payroll-filter-card">
                             <div class="payroll-filter-heading">
-                                <div><h2><i class="fa-solid fa-money-check-dollar"></i> 월급 정산</h2><p>팀별 수업 차시와 정산 금액을 한눈에 확인하세요.</p></div>
+                                <div><h2><i class="fa-solid fa-money-check-dollar"></i> 월급 정산</h2><p>수업별로 보존한 종류·단가로 계산합니다. 기존 기록의 ‘도입 시점 기준 보존’은 과거 기준을 복원한 값이 아닙니다.</p></div>
                                 <div class="payroll-filter-actions"><button id="btn-close-payroll" class="btn btn-danger hidden">선택 선생님 정산 마감</button></div>
                             </div>
                             <div class="payroll-filter-fields">
@@ -1884,7 +1884,7 @@
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>수업명</th><th>담당 선생님</th><th>현재 카테고리</th><th>저장</th></tr></thead><tbody id="class-category-assignment-body"></tbody></table></div>
                         </div>
                         <div class="card search-filter-card">
-                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-won-sign"></i> 일반 수업 단가</h3><p class="subtitle">카테고리와 학생 학교급별 적용 시작일 기준 단가입니다.</p></div></div>
+                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-won-sign"></i> 일반 수업 단가</h3><p class="subtitle">카테고리와 학생 학교급별 적용 시작일 기준 단가입니다. 이미 보존된 수업 단가는 설정 변경으로 소급되지 않으며, 미설정 기록은 해당 단가를 처음 설정할 때 보존합니다.</p></div></div>
                             <form id="form-class-pay-rate" class="settings-grid-form">
                                 <div class="form-group"><label for="rate-category">카테고리</label><select id="rate-category" class="form-control" required></select></div>
                                 <div class="form-group"><label for="rate-grade-group">학교급</label><select id="rate-grade-group" class="form-control"><option>초등</option><option>중등</option><option>기타</option></select></div>
@@ -1895,7 +1895,7 @@
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>카테고리</th><th>학교급</th><th>단가</th><th>적용 시작일</th></tr></thead><tbody id="class-pay-rate-body"></tbody></table></div>
                         </div>
                         <div class="card search-filter-card">
-                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-users"></i> 특강 학생수당 단가</h3><p class="subtitle">특강으로 등록된 참석 학생 1명당 수업 1회에 적용되는 공통 단가입니다.</p></div></div>
+                            <div class="card-header-styled"><div><h3><i class="fa-solid fa-users"></i> 특강 학생수당 단가</h3><p class="subtitle">특강 참석 학생 1명당 수업 1회에 적용되는 공통 단가입니다. 이미 보존된 수업 단가는 변경하지 않으며, 미설정 기록은 해당 단가를 처음 설정할 때 보존합니다.</p></div></div>
                             <form id="form-special-pay-rate" class="settings-grid-form">
                                 <div class="form-group"><label for="special-rate-amount">학생 1명당 단가</label><input id="special-rate-amount" type="number" min="0" class="form-control" required></div>
                                 <div class="form-group"><label for="special-rate-date">적용 시작일</label><input id="special-rate-date" type="date" class="form-control" required></div>
@@ -2625,6 +2625,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20261001-material-review-date"></script>
+    <script src="/static/js/app.js?v=20261003-past-class-correction"></script>
 </body>
 </html>
