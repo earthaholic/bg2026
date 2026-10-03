@@ -222,3 +222,12 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `PUT /api/user/students/{student_id}/description`은 상세 응답의 정확한 `row_id`와 `{Description, original_description}`만 받는다. 기존 학생 상세 조회와 동일하게 로그인 사용자가 접근하며 다른 필드는 거부한다.
 - 원본 특이사항을 비교해 동시 수정은 409로 차단하며 변경 메타데이터와 UPDATE 감사 기록을 같은 트랜잭션에 저장한다. 실패 시 입력을 유지한다.
 - 검증: `tests/test_student_description.py`, `tests/test_student_description_ui.js`.
+
+
+## 상담 기록·상담 건당 월급 정산
+- `consultation_payroll.py`의 라우터가 학생별 상담 조회·등록과 상담 수정·삭제를 담당한다. 등록·수정·삭제는 기존 staff 권한을 유지하며 상담일(`ConsultationDate`), 소요 분(`DurationMinutes`, 1~1440), 상담 선생님(`TeacherUsername`), 내용을 받는다. 기존 상담은 날짜·시간·담당자를 추정하지 않고 명시적으로 보완한 뒤 정산한다.
+- `상담 단가 설정`은 staff 전용 화면이다. `/api/user/consultation-pay-rates`의 적용 시작일별 공통 건당 단가를 사용하며, 시간 비례 계산은 하지 않는다. 상담에 `PayUnitAmount`/`PayEffectiveFrom`을 보존하고 이미 정해진 단가는 설정 변경으로 소급하지 않는다. 단가 미설정은 NULL, 명시적 0원은 유효하다. 날짜 정정 시 단가를 재산정한다.
+- 월급 정산 API는 `consultation_lines`/`excluded_consultations`를 반환하고 포함된 상담 금액을 기존 수업·자료·추가 청구와 합산한다. 상세 창에서 상담 내용을 읽고 staff가 건별 제외·복원한다. 제외해도 상담 원본 내용은 삭제하지 않는다. 제외는 상담 건 자체에 귀속되어 날짜·담당자 정정 후에도 유지하며, 화면에서 안내하고 명시적으로 복원한다. 계정의 `모든 수업 정산 제외`는 기존 수업 전용 의미를 유지해 상담에 자동 적용하지 않는다.
+- `POST /api/user/payroll/consultations/{id}/exclusion`은 `{Excluded, Reason, PayrollMonth, TeacherUsername}`을 받고 기존 월·담당자를 재검증한다. 상담 변경·단가 설정·제외와 감사 로그는 각각 동일한 쓰기 트랜잭션으로 처리한다.
+- 월급 마감 트랜잭션에서 `TeacherPayrollConsultationLines`에 포함·제외 상담의 내용·학생명·날짜·분·선생님·금액을 확정 보존한다. 포함된 단가 미설정 상담은 마감을 막는다. 마감된 상담의 수정·삭제·제외·복원과 마감 월로의 등록·이동은 차단하며 기존 마감 월에 상담 금액을 소급 추가하지 않는다.
+- 검증: `tests/test_consultation_payroll.py`, `tests/test_consultation_ui.js`.

@@ -534,6 +534,8 @@ def init_system_tables():
     )""")
     from payroll_basis import install_payroll_basis
     install_payroll_basis(conn)
+    from consultation_payroll import install_consultation_payroll
+    install_consultation_payroll(conn)
     conn.commit()
     if all(cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
            for name in ("Books", "Students", "StudyLogs")):

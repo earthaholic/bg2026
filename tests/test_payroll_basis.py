@@ -68,7 +68,7 @@ class PayrollBasisTests(PayrollLessonTypeTests):
     def test_explicit_class_change_recalculates(self):
         self.conn.executescript("""
             INSERT INTO ClassCategories VALUES (2,'토론');
-            INSERT INTO Classes VALUES (2,'토론반',2,'teacher1');
+            INSERT INTO Classes(Id,ClassName,CategoryId,TeacherUsername) VALUES (2,'토론반',2,'teacher1');
             INSERT INTO TeacherPayRates VALUES (2,'초등','2026-01-01',20000);
             UPDATE StudyLogs SET ClassId=2 WHERE Id=1;
         """)
@@ -99,7 +99,7 @@ class PayrollBasisTests(PayrollLessonTypeTests):
 
     def test_first_category_assignment_completes_only_unresolved_kind(self):
         self.conn.executescript("""
-            INSERT INTO Classes VALUES (2,'새 반',NULL,'teacher1');
+            INSERT INTO Classes(Id,ClassName,CategoryId,TeacherUsername) VALUES (2,'새 반',NULL,'teacher1');
             INSERT INTO StudyLogs(StudentId,ClassId,StudiedDay,IsSpecial,GradeSnapshot,ActualTeacherUsername,BookId)
                 VALUES(1,2,'2026-09-17',0,'초3','teacher1',1);
             UPDATE Classes SET CategoryId=1 WHERE Id=2;

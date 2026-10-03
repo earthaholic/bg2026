@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import patch
 
 import main
+from consultation_payroll import install_consultation_payroll
 
 
 class PayrollLessonTypeTests(unittest.TestCase):
@@ -52,6 +53,11 @@ class PayrollLessonTypeTests(unittest.TestCase):
             ALTER TABLE Classes ADD COLUMN StartTime TEXT;
             UPDATE Classes SET DayOfWeek='월', StartTime='09:00';
         ''')
+        # 월급 조회에 연결된 상담 정산 스키마도 실제 시작 시점과 같이 준비한다.
+        self.conn.execute('''CREATE TABLE StudentConsultations (
+            Id INTEGER PRIMARY KEY, StudentId INTEGER, Content TEXT DEFAULT '',
+            CreatedAt TEXT DEFAULT '', CreatedBy TEXT DEFAULT '', UpdatedBy TEXT DEFAULT '', UpdatedAt TEXT DEFAULT '')''')
+        install_consultation_payroll(self.conn)
         self.conn.commit()
 
     def connect(self):

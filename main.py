@@ -65,6 +65,7 @@ from teacher_assignment import MAX_ASSIGNMENT_ROWS
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from csv_class_links import router as csv_class_links_router
 from studylog_completion import router as studylog_completion_router
+from consultation_payroll import router as consultation_router, payroll_consultation_rows, freeze_payroll_consultations
 from jose import jwt
 
 app = FastAPI(
@@ -73,6 +74,7 @@ app = FastAPI(
 )
 
 app.middleware("http")(activity_middleware)
+app.include_router(consultation_router)
 app.include_router(activity_router)
 app.include_router(csv_class_links_router)
 app.include_router(studylog_completion_router)
@@ -223,9 +225,6 @@ class UserStudentRegisterRequest(BaseModel):
     Referrer: Optional[str] = ""
     IsClassEnded: Optional[int] = 0
     Description: Optional[str] = ""
-
-class StudentConsultationRequest(BaseModel):
-    Content: str
 
 class UserStudyLogRegisterRequest(BaseModel):
     StudentId: Optional[int] = None
@@ -1327,89 +1326,6 @@ def user_update_student_classes(student_id: int, payload: StudentClassesRequest,
     finally:
         conn.close()
 
-
-@app.get("/api/user/students/{student_id}/consultations")
-def user_get_student_consultations(
-    student_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    row_id = _resolve_domain_pk("Students", student_id)
-    if row_id is None:
-        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''SELECT rowid AS row_id, * FROM "StudentConsultations"
-                          WHERE "StudentId" = ? ORDER BY "CreatedAt" DESC, rowid DESC''', (row_id,))
-        return {"consultations": [dict(row) for row in cursor.fetchall()]}
-    finally:
-        conn.close()
-
-@app.post("/api/user/students/{student_id}/consultations")
-def user_create_student_consultation(
-    student_id: int,
-    payload: StudentConsultationRequest,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
-):
-    row_id = _resolve_domain_pk("Students", student_id)
-    content = payload.Content.strip()
-    if row_id is None:
-        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
-    if not content:
-        raise HTTPException(status_code=400, detail="상담 기록을 입력해 주세요.")
-    try:
-        res = insert_table_row("StudentConsultations", {
-            "StudentId": row_id, "Content": content, "CreatedBy": current_user["username"]
-        })
-        consultation_id = res.get("id")
-        _audit_insert("StudentConsultations", consultation_id,
-                      get_record_snapshot("StudentConsultations", consultation_id),
-                      current_user["username"], current_user["role"])
-        return {"status": "success", "message": "상담 기록이 추가되었습니다.", "id": consultation_id}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"상담 기록 추가 중 오류가 발생했습니다: {str(e)}")
-
-@app.put("/api/user/consultations/{consultation_id}")
-def user_update_student_consultation(
-    consultation_id: int,
-    payload: StudentConsultationRequest,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
-):
-    row_id = _resolve_domain_pk("StudentConsultations", consultation_id)
-    content = payload.Content.strip()
-    if row_id is None:
-        raise HTTPException(status_code=404, detail="해당 상담 기록을 찾을 수 없습니다.")
-    if not content:
-        raise HTTPException(status_code=400, detail="상담 기록을 입력해 주세요.")
-    try:
-        old_snapshot = get_record_snapshot("StudentConsultations", row_id)
-        update_table_row("StudentConsultations", "rowid", row_id, {
-            "Content": content, "UpdatedBy": current_user["username"],
-            "UpdatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-        _audit_update("StudentConsultations", row_id, old_snapshot,
-                      get_record_snapshot("StudentConsultations", row_id),
-                      current_user["username"], current_user["role"])
-        return {"status": "success", "message": "상담 기록이 수정되었습니다."}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"상담 기록 수정 중 오류가 발생했습니다: {str(e)}")
-
-@app.delete("/api/user/consultations/{consultation_id}")
-def user_delete_student_consultation(
-    consultation_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
-):
-    row_id = _resolve_domain_pk("StudentConsultations", consultation_id)
-    if row_id is None:
-        raise HTTPException(status_code=404, detail="해당 상담 기록을 찾을 수 없습니다.")
-    try:
-        old_snapshot = get_record_snapshot("StudentConsultations", row_id)
-        delete_table_row("StudentConsultations", "rowid", row_id)
-        _audit_delete("StudentConsultations", row_id, old_snapshot,
-                      current_user["username"], current_user["role"])
-        return {"status": "success", "message": "상담 기록이 삭제되었습니다."}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"상담 기록 삭제 중 오류가 발생했습니다: {str(e)}")
 
 # --- Options List APIs for Forms ---
 @app.get("/api/user/students-options")
@@ -3386,13 +3302,18 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
         if teacher:
             material_sql += ' AND r."RequestedBy"=?'; material_params.append(teacher)
         material_requests = [_book_material_request_dict(r) for r in conn.execute(material_sql, material_params).fetchall()]
+        consultation_rows = payroll_consultation_rows(conn, month, teacher)
     finally: conn.close()
     # 추가 청구는 별도 승인 없이 등록 즉시 해당 월 정산에 포함한다.
     for claim in claims:
         totals[claim["TeacherUsername"]] = totals.get(claim["TeacherUsername"], 0) + claim["Amount"]
     for item in material_requests:
         totals[item["RequestedBy"]] = totals.get(item["RequestedBy"], 0) + (item["ApprovedAmount"] or 0)
-    return {"month":month,"closed":closed,"lines":rows,"excluded_lines":excluded_rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"totals":totals}
+    consultation_lines = [r for r in consultation_rows if not r["IsExcluded"]]
+    excluded_consultations = [r for r in consultation_rows if r["IsExcluded"]]
+    for item in consultation_lines:
+        totals[item["TeacherUsername"]] = totals.get(item["TeacherUsername"], 0) + item["Amount"]
+    return {"month":month,"closed":closed,"lines":rows,"excluded_lines":excluded_rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"consultation_lines":consultation_lines,"excluded_consultations":excluded_consultations,"totals":totals}
 
 
 @app.post("/api/user/payroll/exclusions")
@@ -4173,6 +4094,7 @@ def close_payroll(month: str, teacher_username: str = Query(...), current_user: 
         rows=_payroll_rows(month, teacher_username, connection=conn)
         if any(not row.get("IsRateConfigured", True) for row in rows):
             raise HTTPException(status_code=400, detail="단가가 설정되지 않은 수업 내역이 있어 정산을 마감할 수 없습니다.")
+        freeze_payroll_consultations(conn, month, teacher_username)
         for r in rows: conn.execute('INSERT INTO "TeacherPayrollLines"("PayrollMonth","StudyLogId","TeacherUsername","UnitAmount","Amount","Reason","SessionKey") VALUES(?,?,?,?,?,?,?)',(month,r['StudyLogId'],r['TeacherUsername'],r['UnitAmount'],r['Amount'],r['Reason'],r.get('SessionKey', '')))
         conn.execute('INSERT INTO "TeacherPayrollClosures"("PayrollMonth","TeacherUsername","ClosedBy") VALUES(?,?,?)',(month,teacher_username,current_user['username'])); conn.commit()
         return {"status":"success","message":f"{month} 급여 정산을 마감했습니다."}

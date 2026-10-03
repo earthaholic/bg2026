@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261003-payroll-tooltip">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261003-consultation-payroll">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -233,6 +233,9 @@
                     <div class="menu-nav-item" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
+                    </div>
+                    <div class="menu-nav-item staff-only hidden" data-view="consultation-rate-settings">
+                        <i class="fa-solid fa-comments nav-icon"></i><span>상담 단가 설정</span>
                     </div>
                     <div class="menu-nav-item staff-only hidden" data-view="class-rate-settings">
                         <i class="fa-solid fa-coins nav-icon"></i>
@@ -1076,6 +1079,24 @@
                 </section>
 
                 <!-- View: Monthly Report Text Generator -->
+                <section id="view-consultation-rate-settings" class="workspace-view">
+                    <div class="consultation-rates-layout">
+                        <div class="card form-card">
+                            <div class="card-header-styled"><div><h2>상담 단가 설정</h2><p class="subtitle">소요 시간과 관계없이 상담 1건에 적용되는 공통 단가입니다.</p></div></div>
+                            <form id="consultation-rate-form">
+                                <div class="consultation-fields">
+                                    <div class="form-group"><label for="consultation-rate-date">적용 시작일</label><input id="consultation-rate-date" type="date" class="form-control" required></div>
+                                    <div class="form-group"><label for="consultation-rate-amount">상담 1건당 금액 (원)</label><input id="consultation-rate-amount" type="number" min="0" step="1" class="form-control" required></div>
+                                    <button type="submit" class="btn btn-primary">상담 단가 저장</button>
+                                </div>
+                                <p class="text-muted">상담일에 유효한 단가를 기록에 보존합니다. 이미 단가가 보존된 상담과 마감된 정산에는 소급 적용하지 않습니다. 미설정 상담은 유효한 단가를 처음 설정할 때 반영하며, 0원도 유효한 단가입니다.</p>
+                                <div id="consultation-rate-message" class="hidden" role="status"></div>
+                            </form>
+                        </div>
+                        <div class="card table-card"><div class="table-card-header"><h3>상담 단가 이력</h3></div><div class="table-responsive"><table class="modern-table"><thead><tr><th>적용 시작일</th><th>건당 단가</th></tr></thead><tbody id="consultation-rates-body"></tbody></table></div></div>
+                    </div>
+                </section>
+
                 <section id="view-teacher-payroll" class="workspace-view compact-search-view">
                     <div class="payroll-layout">
                         <div class="card search-filter-card payroll-filter-card">
@@ -1104,6 +1125,10 @@
                         <div id="payroll-excluded-card" class="card table-card hidden">
                             <div class="table-card-header"><h2>정산 제외 내역</h2></div>
                             <div class="table-responsive"><table class="modern-table"><thead><tr><th>선생님</th><th>수업</th><th>학생</th><th>수업일</th><th>구분</th><th>제외 안내</th><th>관리</th></tr></thead><tbody id="payroll-excluded-body"></tbody></table></div>
+                        </div>
+                        <div id="payroll-consultation-card" class="card table-card payroll-team-card">
+                            <header><div><h3><i class="fa-solid fa-comments"></i> 상담 정산</h3><p class="text-muted">상담일 기준 건당 정산입니다. 상세에서 상담 내용을 확인하고 정산 제외·복원할 수 있습니다. 단가 미설정 상담은 합계에 반영되지 않으며, 단가를 설정하거나 해당 상담을 제외해야 마감할 수 있습니다. 날짜·시간·담당자가 없는 기존 상담은 포함되지 않으므로 학생 상세의 상담 기록에서 먼저 보완해 주세요.</p></div><div class="payroll-team-total"><span id="payroll-consultation-count">0건</span><strong id="payroll-consultation-total">0원</strong></div></header>
+                            <div class="table-responsive"><table class="modern-table"><thead><tr><th>선생님</th><th>상담일</th><th>학생</th><th>소요 시간</th><th>건당 단가</th><th>정산 상태</th><th>상세·관리</th></tr></thead><tbody id="payroll-consultation-body"></tbody></table></div>
                         </div>
                         <div id="payroll-material-card" class="card table-card payroll-team-card hidden">
                             <header><h3><i class="fa-solid fa-file-lines"></i> 수업 자료 제작비 정산</h3><div class="payroll-team-total"><span>자료 제작비 합계</span><strong id="payroll-material-total">0원</strong></div></header>
@@ -2180,6 +2205,11 @@
         </div>
     </div>
 
+    <dialog id="payroll-consultation-dialog" class="consultation-payroll-dialog">
+        <div class="modal-header"><h3>상담 정산 상세</h3><button type="button" id="close-payroll-consultation-dialog" class="btn-close" aria-label="상담 정산 상세 닫기">&times;</button></div>
+        <div id="payroll-consultation-detail" class="modal-body"></div>
+    </dialog>
+
     <!-- 학생 상담 기록 모달 -->
     <div id="modal-student-consultations" class="modal-backdrop hidden">
         <div class="modal-card detail-card consultation-modal-card">
@@ -2625,6 +2655,6 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20261003-payroll-tooltip"></script>
+    <script src="/static/js/app.js?v=20261003-consultation-payroll"></script>
 </body>
 </html>

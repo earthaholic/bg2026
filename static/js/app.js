@@ -650,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'utilities', 'audit-log'];
+    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'consultation-rate-settings', 'utilities', 'audit-log'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'activity-log'];
 
     function isAdmin() {
@@ -856,6 +856,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBookMaterialRequests();
         } else if (targetView === 'book-material-review') {
             loadBookMaterialRequests(true);
+        } else if (targetView === 'consultation-rate-settings') {
+            loadConsultationRates();
         } else if (targetView === 'book-material-rates') {
             loadBookMaterialRates();
         } else if (targetView === 'studylog-completion') {
@@ -4295,62 +4297,167 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudentConsultations.classList.remove('hidden');
         try {
             const data = await fetchDetail(`/api/user/students/${studentId}/consultations`);
-            renderStudentConsultations(studentId, studentName, data.consultations || []);
+            await renderStudentConsultations(studentId, studentName, data.consultations || []);
         } catch (err) {
             modalStudentConsultationsBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
         }
     }
 
-    function renderStudentConsultations(studentId, studentName, consultations) {
-        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form"><div class="form-group"><label for="student-consultation-content">새 상담 기록</label><textarea id="student-consultation-content" class="form-control" rows="4" placeholder="상담 내용을 입력하세요." required></textarea></div><button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> 기록 추가</button>
-</form>` : '';
-        const listHtml = consultations.length ? consultations.map(item => `
-            <article class="consultation-item" data-consultation-id="${item.row_id || item.Id}">
-                <div class="consultation-item-header"><span><i class="fa-regular fa-clock"></i> ${escapeHtml(item.CreatedAt || '작성 시각 없음')}${item.CreatedBy ? ` · ${escapeHtml(userName(item.CreatedBy))}` : ''}</span>${isStaff() ? '<span><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></span>' : ''}</div>
+    async function renderStudentConsultations(studentId, studentName, consultations) {
+        let teachers = [];
+        if (isStaff()) {
+            try { teachers = (await apiFetch('/api/user/teachers-options')).teachers || []; }
+            catch (err) { modalStudentConsultationsBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; return; }
+        }
+        const minutes = consultations.reduce((sum, item) => sum + Number(item.DurationMinutes || 0), 0);
+        const incomplete = consultations.filter(item => !item.ConsultationDate || !item.DurationMinutes || !item.TeacherUsername).length;
+        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form">
+            <h4 id="consultation-form-heading">새 상담 기록</h4>
+            <div class="consultation-fields">
+                <div class="form-group"><label for="student-consultation-date">상담 날짜</label><input id="student-consultation-date" type="date" class="form-control" required></div>
+                <div class="form-group"><label for="student-consultation-duration">소요 시간 (분)</label><input id="student-consultation-duration" type="number" min="1" max="1440" step="1" class="form-control" placeholder="예: 30" required></div>
+                <div class="form-group"><label for="student-consultation-teacher">상담 선생님</label><select id="student-consultation-teacher" class="form-control" required></select></div>
+            </div>
+            <div class="form-group"><label for="student-consultation-content">상담 내용</label><textarea id="student-consultation-content" class="form-control" rows="5" placeholder="상담 주제, 논의한 내용과 후속 조치를 기록하세요." required></textarea></div>
+            <p class="text-muted">상담일이 속한 달의 월급에 건당 단가로 반영됩니다. 소요 시간은 기록용이며 지급액을 배수로 계산하지 않습니다. 상담일을 정정하면 해당 날짜의 단가로 다시 산정합니다. 정산 제외된 상담은 날짜·담당자를 바꿔도 제외 상태를 유지하며, 월급 정산 상세에서 다시 포함할 수 있습니다.</p>
+            <div class="consultation-form-actions"><button type="submit" id="save-student-consultation" class="btn btn-primary">상담 기록 추가</button><button type="button" id="cancel-student-consultation" class="btn btn-outline hidden">수정 취소</button></div>
+            <div id="student-consultation-message" class="hidden" role="status"></div>
+        </form>` : '';
+        const listHtml = consultations.length ? consultations.map(item => {
+            const complete = item.ConsultationDate && item.DurationMinutes && item.TeacherUsername;
+            const state = item.IsPayrollClosed ? '정산 마감' : !complete ? '정산 정보 보완 필요' : item.ExcludedFromPayroll ? '정산 제외' : item.PayUnitAmount == null ? '단가 미설정' : `건당 ${Number(item.PayUnitAmount).toLocaleString()}원`;
+            return `<article class="consultation-item" data-consultation-id="${Number(item.row_id || item.Id)}">
+                <div class="consultation-item-header"><div><strong>${escapeHtml(item.ConsultationDate || '상담일 미입력')}</strong><span class="badge badge-info">${item.DurationMinutes ? `${Number(item.DurationMinutes)}분` : '소요 시간 미입력'}</span><span>${escapeHtml(item.TeacherUsername ? userName(item.TeacherUsername) : '상담 선생님 미지정')}</span></div><span class="badge ${!complete || item.PayUnitAmount == null ? 'badge-warning' : 'badge-info'}">${escapeHtml(state)}</span></div>
                 <div class="consultation-content">${escapeHtml(item.Content || '')}</div>
-            </article>`).join('') : '<div class="empty-state"><i class="fa-solid fa-comments fa-2x"></i><p>등록된 상담 기록이 없습니다.</p></div>';
-        modalStudentConsultationsBody.innerHTML = `${formHtml}<div class="consultation-list">${listHtml}</div>`;
-
+                <div class="consultation-item-footer"><small class="text-muted">등록 ${escapeHtml(item.CreatedAt || '')} · ${escapeHtml(userName(item.CreatedBy || ''))}</small>${isStaff() && !item.IsPayrollClosed ? '<div><button type="button" class="btn btn-xs btn-outline btn-edit-consultation">수정</button> <button type="button" class="btn btn-xs btn-danger btn-delete-consultation">삭제</button></div>' : ''}</div>
+            </article>`;
+        }).join('') : '<div class="empty-state"><i class="fa-solid fa-comments fa-2x"></i><p>등록된 상담 기록이 없습니다.</p></div>';
+        modalStudentConsultationsBody.innerHTML = `<div class="consultation-summary"><strong>상담 ${consultations.length}건</strong><span>총 ${minutes.toLocaleString()}분</span>${incomplete ? `<span class="badge badge-warning">정산 정보 보완 ${incomplete}건</span>` : ''}</div>${incomplete ? '<p class="text-muted">기존 상담의 날짜·시간·담당자는 자동 추정하지 않습니다. 정보를 보완한 상담부터 정산에 반영합니다.</p>' : ''}${formHtml}<div class="consultation-list">${listHtml}</div>`;
         const reload = () => openStudentConsultationsModal(studentId, studentName);
         const form = document.getElementById('student-consultation-form');
-        if (form) form.addEventListener('submit', async event => {
-            const feedback = createActionFeedback(event);
+        if (!form) return;
+        const date = document.getElementById('student-consultation-date');
+        const duration = document.getElementById('student-consultation-duration');
+        const teacher = document.getElementById('student-consultation-teacher');
+        const content = document.getElementById('student-consultation-content');
+        const save = document.getElementById('save-student-consultation');
+        const cancel = document.getElementById('cancel-student-consultation');
+        const message = document.getElementById('student-consultation-message');
+        let editingId = null;
+        const teacherOptions = selected => {
+            const options = [...teachers];
+            if (selected && !options.some(t => t.username === selected)) options.push({username: selected});
+            teacher.innerHTML = '<option value="">상담 선생님 선택</option>' + options.map(t => `<option value="${escapeHtml(t.username)}">${escapeHtml(userName(t.username))} (${escapeHtml(t.username)})</option>`).join('');
+            teacher.value = selected || '';
+        };
+        const reset = () => {
+            editingId = null;
+            form.reset();
+            const today = new Date();
+            date.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            teacherOptions(teachers.some(t => t.username === currentUser.username) ? currentUser.username : '');
+            document.getElementById('consultation-form-heading').textContent = '새 상담 기록';
+            save.textContent = '상담 기록 추가';
+            cancel.classList.add('hidden');
+            message.classList.add('hidden');
+        };
+        reset();
+        cancel.addEventListener('click', reset);
+        form.addEventListener('submit', async event => {
             event.preventDefault();
-            const content = document.getElementById('student-consultation-content').value.trim();
-            if (!content) return;
+            if (save.disabled || !content.value.trim()) return;
+            save.disabled = cancel.disabled = true;
+            const payload = { Content: content.value.trim(), ConsultationDate: date.value, DurationMinutes: Number(duration.value), TeacherUsername: teacher.value };
             try {
-                await apiFetch(`/api/user/students/${studentId}/consultations`, { method: 'POST', body: JSON.stringify({ Content: content }) });
-                feedback.show('상담 기록을 추가했습니다.', 'success'); reload();
-            } catch (err) { feedback.show(err.message, 'danger'); }
+                await apiFetch(editingId ? `/api/user/consultations/${editingId}` : `/api/user/students/${studentId}/consultations`, {method: editingId ? 'PUT' : 'POST', body: JSON.stringify(payload)});
+                await reload();
+                if (document.getElementById('view-teacher-payroll').classList.contains('active')) await loadTeacherPayroll();
+            } catch (err) { message.className = 'alert alert-danger'; message.textContent = err.message; }
+            finally { save.disabled = cancel.disabled = false; }
         });
-
         modalStudentConsultationsBody.querySelectorAll('.btn-edit-consultation').forEach(button => button.addEventListener('click', () => {
-            const itemEl = button.closest('.consultation-item');
-            const contentEl = itemEl.querySelector('.consultation-content');
-            const original = contentEl.textContent;
-            contentEl.innerHTML = `<textarea class="form-control consultation-edit-input" rows="4">${escapeHtml(original)}</textarea><div class="modal-actions"><button type="button" class="btn btn-sm btn-primary btn-save-consultation">저장</button><button type="button" class="btn btn-sm btn-outline btn-cancel-consultation">취소</button></div>`;
-            button.closest('.consultation-item-header').querySelector('span:last-child').innerHTML = '';
-            itemEl.querySelector('.btn-cancel-consultation').addEventListener('click', reload);
-            itemEl.querySelector('.btn-save-consultation').addEventListener('click', async () => {
-                const feedback = createActionFeedback();
-                const content = itemEl.querySelector('.consultation-edit-input').value.trim();
-                if (!content) return feedback.show('상담 기록을 입력해 주세요.', 'warning');
-                try {
-                    await apiFetch(`/api/user/consultations/${itemEl.dataset.consultationId}`, { method: 'PUT', body: JSON.stringify({ Content: content }) });
-                    feedback.show('상담 기록을 수정했습니다.', 'success'); reload();
-                } catch (err) { feedback.show(err.message, 'danger'); }
-            });
+            const id = Number(button.closest('.consultation-item').dataset.consultationId);
+            const item = consultations.find(item => Number(item.row_id || item.Id) === id);
+            if (!item || item.IsPayrollClosed) return;
+            editingId = id;
+            date.value = item.ConsultationDate || '';
+            duration.value = item.DurationMinutes || '';
+            teacherOptions(item.TeacherUsername);
+            content.value = item.Content || '';
+            document.getElementById('consultation-form-heading').textContent = `상담 기록 #${id} 수정`;
+            save.textContent = '상담 수정 저장';
+            cancel.classList.remove('hidden');
+            message.classList.add('hidden');
+            date.focus();
         }));
-
         modalStudentConsultationsBody.querySelectorAll('.btn-delete-consultation').forEach(button => button.addEventListener('click', async () => {
-            const feedback = createActionFeedback();
-            if (!(await feedback.confirm('이 상담 기록을 삭제하시겠습니까?'))) return;
-            try {
-                await apiFetch(`/api/user/consultations/${button.closest('.consultation-item').dataset.consultationId}`, { method: 'DELETE' });
-                feedback.show('상담 기록을 삭제했습니다.', 'success'); reload();
-            } catch (err) { feedback.show(err.message, 'danger'); }
+            const feedback = createActionFeedback(button);
+            if (!(await feedback.confirm('상담 기록을 삭제하면 미마감 정산에서도 빠집니다. 삭제하시겠습니까?'))) return;
+            button.disabled = true;
+            try { await apiFetch(`/api/user/consultations/${button.closest('.consultation-item').dataset.consultationId}`, {method: 'DELETE'}); await reload(); }
+            catch (err) { feedback.show(err.message, 'danger'); button.disabled = false; }
         }));
     }
+
+    async function loadConsultationRates() {
+        const body = document.getElementById('consultation-rates-body');
+        body.innerHTML = '<tr><td colspan="2">상담 단가를 불러오는 중입니다.</td></tr>';
+        try {
+            const data = await apiFetch('/api/user/consultation-pay-rates');
+            body.innerHTML = data.rates.length ? data.rates.map(rate => `<tr><td>${escapeHtml(rate.EffectiveFrom)}</td><td>${Number(rate.UnitAmount).toLocaleString()}원 / 건</td></tr>`).join('') : '<tr><td colspan="2">설정된 상담 단가가 없습니다.</td></tr>';
+        } catch (err) { body.innerHTML = `<tr><td colspan="2">${escapeHtml(err.message)}</td></tr>`; }
+    }
+    document.getElementById('consultation-rate-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = event.target.querySelector('[type="submit"]');
+        if (button.disabled) return;
+        const message = document.getElementById('consultation-rate-message');
+        button.disabled = true;
+        try {
+            const data = await apiFetch('/api/user/consultation-pay-rates', {method: 'POST', body: JSON.stringify({ EffectiveFrom: document.getElementById('consultation-rate-date').value, UnitAmount: Number(document.getElementById('consultation-rate-amount').value) })});
+            message.className = 'alert alert-success'; message.textContent = data.message || '상담 단가를 저장했습니다.';
+            await loadConsultationRates();
+        } catch (err) { message.className = 'alert alert-danger'; message.textContent = err.message; }
+        finally { button.disabled = false; }
+    });
+
+    const payrollConsultationRows = new Map();
+    function renderPayrollConsultations(included, excluded) {
+        payrollConsultationRows.clear();
+        const rows = [...included, ...excluded];
+        rows.forEach(row => payrollConsultationRows.set(Number(row.ConsultationId), row));
+        document.getElementById('payroll-consultation-count').textContent = `포함 ${included.length}건 · 제외 ${excluded.length}건`;
+        document.getElementById('payroll-consultation-total').textContent = `${included.reduce((sum, row) => sum + Number(row.Amount || 0), 0).toLocaleString()}원`;
+        document.getElementById('payroll-consultation-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${escapeHtml(userName(row.TeacherUsername))}</td><td>${escapeHtml(row.ConsultationDate)}</td><td>${escapeHtml(row.StudentName || '학생 정보 없음')}</td><td>${Number(row.DurationMinutes)}분</td><td>${row.IsRateConfigured ? `${Number(row.UnitAmount).toLocaleString()}원` : '<span class="badge badge-warning">단가 미설정</span>'}</td><td>${row.IsExcluded ? '<span class="badge badge-warning">정산 제외</span>' : '정산 포함'}${row.IsPayrollClosed ? ' · 마감' : ''}</td><td><button type="button" class="btn btn-xs btn-outline payroll-consultation-open" data-id="${Number(row.ConsultationId)}">상담 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">해당 월의 정산 가능한 상담 기록이 없습니다.</td></tr>';
+    }
+    function openPayrollConsultationDetail(row) {
+        const dialog = document.getElementById('payroll-consultation-dialog');
+        const content = document.getElementById('payroll-consultation-detail');
+        content.innerHTML = `<div class="consultation-detail-meta"><strong>${escapeHtml(row.StudentName || '학생 정보 없음')}</strong><span>${escapeHtml(row.ConsultationDate)} · ${Number(row.DurationMinutes)}분</span><span>상담 선생님: ${escapeHtml(userName(row.TeacherUsername))}</span><span>건당 단가: ${row.IsRateConfigured ? `${Number(row.UnitAmount).toLocaleString()}원` : '미설정'}</span><span>정산 상태: ${row.IsExcluded ? '제외' : '포함'}${row.IsPayrollClosed ? ' · 마감 완료' : ''}</span></div><h4>상담 내용</h4><div class="consultation-content">${escapeHtml(row.Content || '')}</div>${row.IsExcluded ? `<p>제외 사유: ${escapeHtml(row.ExclusionReason || '정산에서만 제외')}</p>` : ''}${row.IsPayrollClosed ? '<p class="text-muted">마감 당시 상담 내역과 금액입니다. 마감된 정산은 변경할 수 없습니다.</p>' : isStaff() ? `<form id="payroll-consultation-exclusion-form"><div class="form-group">${row.IsExcluded ? '<input id="consultation-exclusion-reason" type="hidden" value="">' : '<label for="consultation-exclusion-reason">제외 사유 (선택)</label><input id="consultation-exclusion-reason" class="form-control" maxlength="1000">'}</div><p class="text-muted">상담 기록은 삭제하지 않고 이번 상담의 정산 포함 여부만 변경합니다.</p><button type="submit" class="btn ${row.IsExcluded ? 'btn-primary' : 'btn-danger'}">${row.IsExcluded ? '정산에 다시 포함' : '정산에서 제외'}</button><div id="consultation-exclusion-message" class="hidden" role="status"></div></form>` : ''}`;
+        if (!dialog.open) dialog.showModal();
+        document.getElementById('payroll-consultation-exclusion-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const button = event.target.querySelector('[type="submit"]');
+            if (button.disabled) return;
+            button.disabled = true;
+            try {
+                await apiFetch(`/api/user/payroll/consultations/${row.ConsultationId}/exclusion`, {method: 'POST', body: JSON.stringify({ Excluded: !row.IsExcluded, Reason: document.getElementById('consultation-exclusion-reason').value.trim(), PayrollMonth: row.ConsultationDate.slice(0, 7), TeacherUsername: row.TeacherUsername })});
+                await loadTeacherPayroll();
+                const updated = payrollConsultationRows.get(Number(row.ConsultationId));
+                if (updated) openPayrollConsultationDetail(updated); else dialog.close();
+            } catch (err) {
+                const message = document.getElementById('consultation-exclusion-message');
+                message.className = 'alert alert-danger'; message.textContent = err.message;
+            } finally { button.disabled = false; }
+        });
+    }
+    document.getElementById('payroll-consultation-body')?.addEventListener('click', event => {
+        const button = event.target.closest('.payroll-consultation-open');
+        if (!button) return;
+        const row = payrollConsultationRows.get(Number(button.dataset.id));
+        if (row) openPayrollConsultationDetail(row);
+    });
+    document.getElementById('close-payroll-consultation-dialog')?.addEventListener('click', () => document.getElementById('payroll-consultation-dialog').close());
 
     function getDifficultyWeight(targetStr) {
         const t = String(targetStr || '').trim();
@@ -8413,6 +8520,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPayrollExcludedLines(excludedLines, canTransfer);
         renderPayrollClaims(data.claims || []);
         renderPayrollMaterials(data.material_requests || []);
+        renderPayrollConsultations(data.consultation_lines || [], data.excluded_consultations || []);
         const claimCard = document.getElementById('payroll-claim-card');
         claimCard.classList.toggle('hidden', Boolean(isStaff() && !teacher && !document.getElementById('payroll-claim-id').value));
         const total = Object.values(data.totals).reduce((a,b) => a + Number(b), 0);
