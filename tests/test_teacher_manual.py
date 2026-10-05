@@ -13,6 +13,7 @@ class ManualParser(HTMLParser):
         self.anchors = []
         self.assets = []
         self.chapters = []
+        self.images = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -20,6 +21,8 @@ class ManualParser(HTMLParser):
             self.ids.append(attrs["id"])
         if tag == "a":
             self.anchors.append(attrs.get("href", ""))
+        if tag == "img" and attrs.get("src"):
+            self.images.append(attrs)
         if tag == "link" and attrs.get("rel") == "stylesheet":
             self.assets.append(attrs["href"])
         if tag == "script" and "src" in attrs:
@@ -60,6 +63,25 @@ class TeacherManualTests(unittest.TestCase):
         self.assertIn('name="teacher_manual.html"', source)
         index = (ROOT / "templates/index.html").read_text(encoding="utf-8")
         self.assertIn('href="/manual" target="_blank" rel="noopener"', index)
+
+    def test_screenshots_have_files_alt_text_and_dimensions(self):
+        self.assertEqual(len(self.parsed.images), 33)
+        self.assertEqual(len({image['src'] for image in self.parsed.images}), 32)
+        for image in self.parsed.images:
+            self.assertTrue((ROOT / image['src'].lstrip('/')).is_file(), image['src'])
+            self.assertTrue(image.get('alt'))
+            self.assertGreater(int(image['width']), 100)
+            self.assertGreater(int(image['height']), 80)
+        self.assertIn('사진 속 학생·선생님·도서·금액은 설명용 예시', self.html)
+        self.assertIn('id="manual-image-dialog"', self.html)
+        self.assertIn('글로 된 설명·주의사항 보기', self.html)
+
+    def test_demo_server_is_separate_from_real_data(self):
+        demo = (ROOT / 'tests/manual_capture_app.py').read_text(encoding='utf-8')
+        self.assertIn("os.environ['SQLITE_DB_PATH'] = str(DEMO_DB)", demo)
+        self.assertIn("if not os.environ.get('MANUAL_DEMO_DIR')", demo)
+        self.assertIn("database.create_user('manual_teacher', password, 'teacher'", demo)
+        self.assertNotIn('shutil.copy', demo)
 
     def test_manual_has_no_student_data_requests(self):
         script = (ROOT / "static/js/teacher_manual.js").read_text(encoding="utf-8")
