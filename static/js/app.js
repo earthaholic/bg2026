@@ -7649,10 +7649,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadMonthlyReportStudentOptions(selectedStudentId) {
         const select = document.getElementById('monthly-report-student-select');
         if (!select) return;
+        const selectedOption = Array.from(select.options).find(option => option.value === String(selectedStudentId));
         try {
-            const data = await apiFetch('/api/user/students-options');
+            const data = await apiFetch('/api/user/students-options?monthly_report_order=true');
             const students = data.students || [];
-            if (students.length === 0) {
+            if (students.length === 0 && !selectedOption) {
                 select.innerHTML = '<option value="">등록된 학생이 없습니다</option>';
                 return;
             }
@@ -7665,6 +7666,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             select.innerHTML = html;
             if (selectedStudentId) {
+                // 상세에서 선택한 종료 학생도 저장 후 선택 상태를 유지한다.
+                if (selectedOption && !students.some(s => String(s.row_id || s.Id) === String(selectedStudentId))) {
+                    select.appendChild(selectedOption);
+                }
                 select.value = selectedStudentId;
             }
         } catch (err) {
@@ -7778,6 +7783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setMonthlyReportSaveState(data.report);
             feedback.show(status === 'completed' ? '월말보고를 저장 완료했습니다.' : '월말보고를 임시 저장했습니다.', 'success');
             await loadSavedMonthlyReports();
+            await loadMonthlyReportStudentOptions(studentId);
         } catch (err) {
             feedback.show(`월말보고 저장 실패: ${err.message}`, 'error');
         } finally {

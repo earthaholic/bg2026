@@ -240,3 +240,9 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `/students/{id}/cases`로 가짜 안내 없이 건을 시작한다. `/cases/{id}/complete`는 기존 결제 필드 또는 같은 학생의 기존 결제 번호와 version을 받아 결제 생성·완료·감사를 한 트랜잭션에 저장한다. 중복 결제·다른 학생 결제 연결·다른 관리 건에 이미 연결된 결제·동시 변경을 차단한다.
 - 프런트는 `static/js/tuition_collection.js`에 분리되며 `app.js`에서 초기화한다. 저장 실패 시 입력을 유지하고 오래된 조회 응답과 중복 클릭을 방지한다. 일정은 현재값을 미리 채워 저장하며 지우면 해제된다.
 - 검증: `tests/test_tuition_collection.py`, `tests/test_tuition_collection_routes.py`, `tests/test_tuition_collection_ui.js` 및 기존 `test_tuition_payment_progress` 회귀 테스트.
+
+
+## 월말보고 학생 선택 정렬
+- 월말보고 문자 양식 생성의 학생 드롭다운만 `/api/user/students-options?monthly_report_order=true`를 사용한다. 학생별 저장 보고의 마지막 `UpdatedAt`(빈 값은 `CreatedAt`)이 오래된 순서, 이름순, rowid순으로 정렬한다. 저장 기록 없는 학생은 맨 위이며 임시·완료 저장 모두 포함한다.
+- 보고 월이나 학습 일자가 아닌 실제 저장 시각 기준이다. 저장 성공 후 선택 학생을 유지하며 목록 순서를 갱신한다. 다른 화면의 이름순·종료 학생 제외·일반 선생님 조회 범위는 유지한다.
+- 검증: `tests/test_monthly_report_student_order.py`, `tests/test_monthly_report_student_order_ui.js`.

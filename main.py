@@ -1334,6 +1334,7 @@ def user_update_student_classes(student_id: int, payload: StudentClassesRequest,
 @app.get("/api/user/students-options")
 def user_get_students_options(
     include_ended: bool = Query(False),
+    monthly_report_order: bool = Query(False),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     advance_student_grades()
@@ -1354,8 +1355,15 @@ def user_get_students_options(
         )''')
         params.append(current_user["username"])
     where_clause = f' WHERE {" AND ".join(conditions)}' if conditions else ''
+    # 월말보고에서만 학생별 마지막 저장 시각을 우선한다. 미저장 학생은 맨 위다.
+    report_column = ''
+    order_by = '"Name" ASC, rowid ASC'
+    if monthly_report_order:
+        report_column = ''', (SELECT MAX(COALESCE(NULLIF(mr."UpdatedAt", ''), mr."CreatedAt"))
+            FROM "MonthlyReports" mr WHERE mr."StudentId" = "Students".rowid) AS LastMonthlyReportAt'''
+        order_by = 'LastMonthlyReportAt ASC, "Name" ASC, rowid ASC'
     cursor.execute(
-        f'SELECT rowid as row_id, * FROM "Students"{where_clause} ORDER BY "Name" ASC',
+        f'SELECT rowid as row_id, *{report_column} FROM "Students"{where_clause} ORDER BY {order_by}',
         params
     )
     rows = cursor.fetchall()
