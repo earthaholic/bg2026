@@ -231,3 +231,12 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `POST /api/user/payroll/consultations/{id}/exclusion`은 `{Excluded, Reason, PayrollMonth, TeacherUsername}`을 받고 기존 월·담당자를 재검증한다. 상담 변경·단가 설정·제외와 감사 로그는 각각 동일한 쓰기 트랜잭션으로 처리한다.
 - 월급 마감 트랜잭션에서 `TeacherPayrollConsultationLines`에 포함·제외 상담의 내용·학생명·날짜·분·선생님·금액을 확정 보존한다. 포함된 단가 미설정 상담은 마감을 막는다. 마감된 상담의 수정·삭제·제외·복원과 마감 월로의 등록·이동은 차단하며 기존 마감 월에 상담 금액을 소급 추가하지 않는다.
 - 검증: `tests/test_consultation_payroll.py`, `tests/test_consultation_ui.js`.
+
+
+## 수업료 납입 관리
+- staff 전용 `tuition-collection` 화면은 학생별 긴급도·이번 납입 건의 안내/독촉/결제창 발송/결제 확인 이력을 관리한다. 실제 메시지 발송·자동 입금 확인은 하지 않는다. 기존 결제 차시 계산은 재사용하며 결제 정보 없음은 미납으로 단정하지 않는다.
+- `tuition_collection.py`의 `/api/user/tuition-collection` 라우터와 시작 함수 `init_tuition_collection_tables()`를 사용한다. `TuitionCollectionCases`는 학생별 활성 1건, `TuitionCollectionEvents`는 요청 번호별 유일한 이력을 보관한다. 취소 후 재등록으로 정정하고 취소 사유·처리자·감사를 남긴다.
+- 기본 목록은 진행 학생의 관리 대상이며 종료 학생 미완료 건수를 별도 안내한다. 초과·소진·1~4회 순으로 정렬하고 확인 완료 건은 독촉에서 보호한다. 미래 결제 등록 여부를 표시한다. 완료 이력은 보존하되 다음 납입 주기의 독촉 횟수는 새 건에서 시작한다.
+- `/students/{id}/cases`로 가짜 안내 없이 건을 시작한다. `/cases/{id}/complete`는 기존 결제 필드 또는 같은 학생의 기존 결제 번호와 version을 받아 결제 생성·완료·감사를 한 트랜잭션에 저장한다. 중복 결제·다른 학생 결제 연결·다른 관리 건에 이미 연결된 결제·동시 변경을 차단한다.
+- 프런트는 `static/js/tuition_collection.js`에 분리되며 `app.js`에서 초기화한다. 저장 실패 시 입력을 유지하고 오래된 조회 응답과 중복 클릭을 방지한다. 일정은 현재값을 미리 채워 저장하며 지우면 해제된다.
+- 검증: `tests/test_tuition_collection.py`, `tests/test_tuition_collection_routes.py`, `tests/test_tuition_collection_ui.js` 및 기존 `test_tuition_payment_progress` 회귀 테스트.

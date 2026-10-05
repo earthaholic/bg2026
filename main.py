@@ -65,6 +65,7 @@ from teacher_assignment import MAX_ASSIGNMENT_ROWS
 from activity import router as activity_router, activity_middleware, init_activity_tables
 from csv_class_links import router as csv_class_links_router
 from studylog_completion import router as studylog_completion_router
+from tuition_collection import router as tuition_collection_router, init_tuition_collection_tables
 from consultation_payroll import router as consultation_router, payroll_consultation_rows, freeze_payroll_consultations
 from jose import jwt
 
@@ -78,6 +79,7 @@ app.include_router(consultation_router)
 app.include_router(activity_router)
 app.include_router(csv_class_links_router)
 app.include_router(studylog_completion_router)
+app.include_router(tuition_collection_router)
 
 # Mount static & template files
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -97,6 +99,7 @@ templates = Jinja2Templates(directory=templates_dir)
 def on_startup():
     init_system_tables()
     init_activity_tables()
+    init_tuition_collection_tables()
     advance_student_grades()
 
 # Pydantic Schemas

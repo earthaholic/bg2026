@@ -5041,3 +5041,34 @@ button.class-student-badge { cursor: pointer; }
     .consultation-fields, .consultation-detail-meta { grid-template-columns: 1fr; }
     .consultation-item-header { align-items: flex-start; flex-direction: column; gap: .75rem; }
 }
+
+/* 납입 관리 */
+#view-tuition-collection { overflow-y:auto; }
+#view-tuition-collection .book-search-layout { overflow:visible; }
+#view-tuition-collection .tc-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.6rem; }
+#view-tuition-collection .tc-summary button { text-align:left; padding:.8rem; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-card); color:var(--text-main); cursor:pointer; }
+#view-tuition-collection .tc-summary strong { display:block; font-size:1.5rem; }
+#view-tuition-collection .tc-filter-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; }
+#view-tuition-collection .form-group { margin:0; }
+#view-tuition-collection .tc-filter-actions, #view-tuition-collection .tc-filter-footer { display:flex; gap:.8rem; align-items:center; flex-wrap:wrap; }
+#view-tuition-collection .tc-filter-footer { margin-top:.7rem; }
+#view-tuition-collection .table-card { min-height:280px; flex:none; }
+#view-tuition-collection .table-responsive { overflow:auto; }
+#view-tuition-collection .modern-table { min-width:840px; }
+#view-tuition-collection .tc-muted { display:block; font-size:.8rem; color:var(--text-muted); }
+#view-tuition-collection .tc-danger { color:#dc5252; font-weight:700; }
+#view-tuition-collection .tc-warning { color:#bb791d; font-weight:700; }
+#view-tuition-collection .tc-dialog { width:min(850px,94vw); max-height:90vh; padding:1.3rem; border:1px solid var(--border-color); border-radius:14px; color:var(--text-main); background:var(--bg-dark); overflow:auto; }
+#view-tuition-collection .tc-dialog::backdrop { background:rgba(0,0,0,.5); }
+#view-tuition-collection .tc-dialog-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+#view-tuition-collection .tc-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin:.8rem 0; }
+#view-tuition-collection .tc-wide { grid-column:1/-1; }
+#view-tuition-collection .tc-history { list-style:none; padding:0; }
+#view-tuition-collection .tc-history li { border-bottom:1px solid var(--border-color); padding:.7rem 0; }
+#view-tuition-collection .tc-history p { white-space:pre-wrap; overflow-wrap:anywhere; }
+#view-tuition-collection details { margin:.8rem 0; }
+#view-tuition-collection summary { cursor:pointer; font-weight:600; }
+#view-tuition-collection .tc-note { color:var(--text-muted); line-height:1.6; }
+#view-tuition-collection .tc-cancelled { opacity:.55; text-decoration:line-through; }
+@media(max-width:1100px) { #view-tuition-collection .tc-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:600px) { #view-tuition-collection .tc-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } #view-tuition-collection .tc-filter-grid, #view-tuition-collection .tc-form-grid { grid-template-columns:1fr; } }

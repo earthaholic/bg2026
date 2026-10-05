@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const tuitionCollection = initTuitionCollection({ apiFetch, escapeHtml });
+
     // App State
     let token = localStorage.getItem('token');
     let currentUser = null;
@@ -650,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'consultation-rate-settings', 'utilities', 'audit-log'];
+    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-collection', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'consultation-rate-settings', 'utilities', 'audit-log'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'activity-log'];
 
     function isAdmin() {
@@ -771,6 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(targetView, { replace = false } = {}) {
         if (!currentUser) return;
+        if (targetView !== 'tuition-collection' && document.getElementById('view-tuition-collection').classList.contains('active') && !tuitionCollection.canLeave()) return false;
         if (targetView !== 'studylog-completion' && document.getElementById('view-studylog-completion').classList.contains('active') && !confirmCompletionLeave()) {
             if (completionState.url && location.href !== completionState.url) history.pushState(null, '', completionState.url);
             return false;
@@ -846,6 +849,8 @@ document.addEventListener('DOMContentLoaded', () => {
             initMonthlyReportView();
         } else if (targetView === 'teacher-payroll') {
             initTeacherPayrollView();
+        } else if (targetView === 'tuition-collection') {
+            tuitionCollection.load();
         } else if (targetView === 'tuition-payment') {
             loadTuitionPaymentView();
         } else if (targetView === 'tuition-payment-search') {
@@ -876,6 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLogout() {
+        tuitionCollection.reset();
         completionState.version++;
         completionState.searchVersion++;
         completionState.drafts.clear();

@@ -21,9 +21,9 @@ function rule(selector) {
 }
 
 const compactViews = ['book-search', 'student-search', 'studylog-search', 'class-list',
-    'activity-log', 'audit-log', 'tuition-payment-search', 'teacher-payroll'];
+    'activity-log', 'audit-log', 'tuition-payment-search', 'teacher-payroll', 'tuition-collection'];
 
-test('압축 스타일은 지정된 조회 화면 8곳에만 적용하고 등록·설정 폼은 제외한다', () => {
+test('압축 스타일은 지정된 조회 화면 9곳에만 적용하고 등록·설정 폼은 제외한다', () => {
     const actual = [...template.matchAll(/<section\b[^>]*id="view-([^"]+)"[^>]*class="([^"]+)"[^>]*>/g)]
         .filter(match => match[2].split(/\s+/).includes('compact-search-view'))
         .map(match => match[1]).sort();

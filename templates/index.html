@@ -247,6 +247,7 @@
                     </div>
 
                     <div class="menu-section-label staff-only hidden">수업료 관리</div>
+                    <div class="menu-nav-item staff-only hidden" data-view="tuition-collection"><i class="fa-solid fa-list-check nav-icon"></i><span>수업료 납입 관리</span></div>
                     <div class="menu-nav-item staff-only hidden" data-view="tuition-payment">
                         <i class="fa-solid fa-won-sign nav-icon"></i>
                         <span>수업료 결제 관리</span>
@@ -1871,6 +1872,30 @@
                     </div>
                 </section>
 
+
+                <section id="view-tuition-collection" class="workspace-view compact-search-view">
+                  <div class="book-search-layout">
+                    <div class="page-title-box"><h2>수업료 납입 관리</h2><p>차시가 급한 학생부터 확인하고 안내, 독촉, 결제 등록까지 관리합니다.</p></div>
+                    <div id="tc-summary" class="tc-summary" aria-label="납입 관리 요약"></div>
+                    <form id="tc-filters" class="card search-filter-card">
+                      <div class="tc-filter-grid">
+                        <div class="form-group"><label for="tc-q">학생명</label><input id="tc-q" name="q" class="form-control" placeholder="학생 이름"></div>
+                        <div class="form-group"><label for="tc-class">수업</label><select id="tc-class" name="class_id" class="form-control"><option value="">전체 수업</option></select></div>
+                        <div class="form-group"><label for="tc-teacher">담당 선생님</label><select id="tc-teacher" name="teacher" class="form-control"><option value="">전체 선생님</option></select></div>
+                        <div class="form-group"><label for="tc-urgency">잔여 차시</label><select id="tc-urgency" name="urgency" class="form-control"><option value="">전체</option><option value="urgent">초과·소진</option><option value="overdue">차시 초과</option><option value="exhausted">차시 소진</option><option value="low">1~4회 남음</option><option value="normal">5회 이상</option><option value="unknown">결제 정보 없음</option></select></div>
+                        <div class="form-group"><label for="tc-status">진행 상태</label><select id="tc-status" name="status" class="form-control"><option value="">미완료 전체</option><option value="pending">안내 전</option><option value="waiting">결제 대기</option><option value="confirmed">결제 확인·등록 대기</option><option value="completed">등록 완료</option></select></div>
+                        <div class="form-group"><label for="tc-reminders">독촉 횟수</label><select id="tc-reminders" name="reminder_count" class="form-control"><option value="">전체</option><option value="1">1회 이상</option><option value="2">2회 이상</option><option value="3">3회 이상</option></select></div>
+                        <div class="tc-filter-actions"><button class="btn btn-primary" type="submit">검색</button><button class="btn btn-secondary" type="reset">초기화</button></div>
+                      </div>
+                      <div class="tc-filter-footer"><label><input type="checkbox" name="unsent" id="tc-unsent"> 결제창 미발송</label><label><input type="checkbox" name="followup_due" id="tc-due"> 오늘 재확인</label><label><input type="checkbox" name="include_ended" id="tc-ended"> 수업 종료 학생 포함</label></div>
+                    </form>
+                    <div id="tc-message" role="status" aria-live="polite"></div><div id="tc-ended-notice"></div>
+                    <div class="results-bar"><span id="tc-count">불러오는 중</span><span>차시 긴급도순 · 결제 정보 없음은 미납 확정이 아닙니다.</span></div>
+                    <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>학생·수업</th><th>잔여 차시</th><th>진행 상태</th><th>독촉</th><th>결제창 발송</th><th>다음 확인</th><th>처리</th></tr></thead><tbody id="tc-body"></tbody></table></div></div>
+                    <div class="search-pagination-bar"><button id="tc-prev" class="btn btn-secondary" type="button">이전</button><span id="tc-page"></span><button id="tc-next" class="btn btn-secondary" type="button">다음</button></div>
+                  </div>
+                  <dialog id="tc-dialog" class="tc-dialog"><div class="tc-dialog-header"><h2 id="tc-detail-title">납입 처리</h2><button id="tc-close" type="button" class="btn btn-secondary">닫기</button></div><div id="tc-detail"></div></dialog>
+                </section>
                 <section id="view-tuition-payment" class="workspace-view">
                     <div class="book-search-layout">
                         <div class="card search-filter-card">
@@ -2655,6 +2680,7 @@
         <dl id="activity-detail-body"></dl>
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
-    <script src="/static/js/app.js?v=20261003-consultation-payroll"></script>
+    <script src="/static/js/tuition_collection.js?v=20261005"></script>
+    <script src="/static/js/app.js?v=20261005-tuition-collection"></script>
 </body>
 </html>
