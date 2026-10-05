@@ -421,6 +421,12 @@ def index_page(request: Request):
 
 
 
+@app.get("/manual", response_class=HTMLResponse)
+def teacher_manual_page(request: Request):
+    # 개인정보를 포함하지 않는 일반 선생님 안내 문서이다.
+    return templates.TemplateResponse(request=request, name="teacher_manual.html")
+
+
 # --- Authentication APIs ---
 @app.post("/api/auth/login")
 def login(payload: LoginRequest, request: Request):
