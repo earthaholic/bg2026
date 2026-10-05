@@ -5072,3 +5072,15 @@ button.class-student-badge { cursor: pointer; }
 #view-tuition-collection .tc-cancelled { opacity:.55; text-decoration:line-through; }
 @media(max-width:1100px) { #view-tuition-collection .tc-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:600px) { #view-tuition-collection .tc-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } #view-tuition-collection .tc-filter-grid, #view-tuition-collection .tc-form-grid { grid-template-columns:1fr; } }
+
+/* 사용 권한에 따른 메뉴 영역 구분: 선택 상태는 기존 강조색 유지 */
+.sidebar-menu-nav .menu-workspace { display: flex; flex-direction: column; gap: 0.25rem; flex-shrink: 0; }
+.sidebar-menu-nav .menu-workspace.hidden { display: none; }
+.menu-workspace + .menu-workspace { border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem; }
+.menu-workspace-heading { padding: 0.6rem 0.75rem; border-radius: var(--radius-md); font-size: 0.8rem; font-weight: 700; color: var(--primary); background: rgba(59, 130, 246, 0.08); }
+.menu-workspace-operations { --menu-area-color: #c4a5dc; }
+.menu-workspace-system { --menu-area-color: #a5b4c8; }
+.menu-workspace-operations .menu-workspace-heading, .menu-workspace-system .menu-workspace-heading { color: var(--menu-area-color); background: rgba(148, 120, 175, 0.09); }
+.menu-workspace-operations .menu-nav-item:not(.active) .nav-icon, .menu-workspace-system .menu-nav-item:not(.active) .nav-icon { color: var(--menu-area-color); }
+[data-theme="light"] .menu-workspace-operations { --menu-area-color: #795397; }
+[data-theme="light"] .menu-workspace-system { --menu-area-color: #566781; }

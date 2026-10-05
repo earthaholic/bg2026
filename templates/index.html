@@ -206,118 +206,119 @@
                 </div>
 
                 <nav id="sidebar-main-menu" class="sidebar-menu-nav">
-                    <div class="menu-section-label">수업 관리</div>
-                    <div class="menu-nav-item" data-view="class-list">
+                    <div class="menu-workspace menu-workspace-common" role="group" aria-labelledby="menu-heading-common">
+                        <div id="menu-heading-common" class="menu-workspace-heading">공통 업무</div>
+                        <div class="menu-section-label">수업·학습 기록</div>
+                        <div class="menu-nav-item" data-view="class-list">
                         <i class="fa-solid fa-chalkboard-user nav-icon"></i>
                         <span>수업 목록 & 상세</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="class-reg">
-                        <i class="fa-solid fa-calendar-plus nav-icon"></i>
-                        <span>새 수업 등록</span>
-                    </div>
-                    <div class="menu-nav-item" data-view="class-studylog-reg">
+                        <div class="menu-nav-item" data-view="class-studylog-reg">
                         <i class="fa-solid fa-users-viewfinder nav-icon"></i>
                         <span>학습 이력 일괄 등록</span>
                     </div>
-                    <div class="menu-nav-item" data-view="monthly-report">
-                        <i class="fa-solid fa-comment-sms nav-icon"></i>
-                        <span>월말보고 문자 양식 생성</span>
-                    </div>
-
-                    <div class="menu-section-label">학습 기록 관리</div>
-                    <div class="menu-nav-item active" data-view="studylog-search">
-                        <i class="fa-solid fa-book-bookmark nav-icon"></i>
-                        <span>학습 기록 검색 & 상세 조회</span>
-                    </div>
-                    <div class="menu-nav-item" data-view="studylog-completion"><i class="fa-solid fa-pen-to-square nav-icon"></i><span>학습 기록 보완</span></div>
-                    <div class="menu-nav-item" data-view="studylog-reg">
+                        <div class="menu-nav-item" data-view="studylog-reg">
                         <i class="fa-solid fa-square-plus nav-icon"></i>
                         <span>새 학습 기록 등록</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="consultation-rate-settings">
-                        <i class="fa-solid fa-comments nav-icon"></i><span>상담 단가 설정</span>
+                        <div class="menu-nav-item active" data-view="studylog-search">
+                        <i class="fa-solid fa-book-bookmark nav-icon"></i>
+                        <span>학습 기록 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="class-rate-settings">
-                        <i class="fa-solid fa-coins nav-icon"></i>
-                        <span>수업 단가 설정</span>
+                        <div class="menu-nav-item" data-view="studylog-completion"><i class="fa-solid fa-pen-to-square nav-icon"></i><span>학습 기록 보완</span></div>
+                        <div class="menu-nav-item" data-view="monthly-report">
+                        <i class="fa-solid fa-comment-sms nav-icon"></i>
+                        <span>월말보고 문자 양식 생성</span>
                     </div>
-                    <div class="menu-nav-item" data-view="teacher-payroll">
-                        <i class="fa-solid fa-money-check-dollar nav-icon"></i>
-                        <span>월급 정산</span>
-                    </div>
-
-                    <div class="menu-section-label staff-only hidden">수업료 관리</div>
-                    <div class="menu-nav-item staff-only hidden" data-view="tuition-collection"><i class="fa-solid fa-list-check nav-icon"></i><span>수업료 납입 관리</span></div>
-                    <div class="menu-nav-item staff-only hidden" data-view="tuition-payment">
-                        <i class="fa-solid fa-won-sign nav-icon"></i>
-                        <span>수업료 결제 관리</span>
-                    </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="tuition-payment-search">
-                        <i class="fa-solid fa-magnifying-glass nav-icon"></i>
-                        <span>수업료 결제 이력 조회</span>
-                    </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="tuition-fee-settings">
-                        <i class="fa-solid fa-sliders nav-icon"></i>
-                        <span>기본 수업료 설정</span>
-                    </div>
-
-                    <div class="menu-section-label">학생 관리</div>
-                    <div class="menu-nav-item" data-view="student-search">
+                        <div class="menu-section-label">학생·도서</div>
+                        <div class="menu-nav-item" data-view="student-search">
                         <i class="fa-solid fa-users-viewfinder nav-icon"></i>
                         <span>학생 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="student-reg">
-                        <i class="fa-solid fa-user-plus nav-icon"></i>
-                        <span>새 학생 등록</span>
-                    </div>
-
-                    <div class="menu-section-label">도서 관리</div>
-                    <div class="menu-nav-item" data-view="book-search">
+                        <div class="menu-nav-item" data-view="book-search">
                         <i class="fa-solid fa-magnifying-glass nav-icon"></i>
                         <span>도서 검색 & 상세 조회</span>
                     </div>
-                    <div class="menu-nav-item" data-view="book-material-request">
+                        <div class="menu-nav-item" data-view="book-material-request">
                         <i class="fa-solid fa-file-circle-plus nav-icon"></i><span>도서·자료 등록 요청</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="book-material-review">
-                        <i class="fa-solid fa-list-check nav-icon"></i><span>도서·자료 요청 승인</span>
+                        <div class="menu-section-label">정산</div>
+                        <div class="menu-nav-item" data-view="teacher-payroll">
+                        <i class="fa-solid fa-money-check-dollar nav-icon"></i>
+                        <span>월급 정산</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="book-material-rates">
-                        <i class="fa-solid fa-won-sign nav-icon"></i><span>자료 제작 단가 설정</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="book-reg">
+                    <div class="menu-workspace menu-workspace-operations staff-only hidden" role="group" aria-labelledby="menu-heading-operations">
+                        <div id="menu-heading-operations" class="menu-workspace-heading">운영 관리</div>
+                        <div class="menu-section-label">등록·승인</div>
+                        <div class="menu-nav-item staff-only hidden" data-view="class-reg">
+                        <i class="fa-solid fa-calendar-plus nav-icon"></i>
+                        <span>새 수업 등록</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="student-reg">
+                        <i class="fa-solid fa-user-plus nav-icon"></i>
+                        <span>새 학생 등록</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="book-reg">
                         <i class="fa-solid fa-book-medical nav-icon"></i>
                         <span>새 도서 등록</span>
                     </div>
-
-                    <div class="menu-section-label staff-only hidden">관리 도구</div>
-                    <div class="menu-nav-item staff-only hidden" data-view="utilities">
+                        <div class="menu-nav-item staff-only hidden" data-view="book-material-review">
+                        <i class="fa-solid fa-list-check nav-icon"></i><span>도서·자료 요청 승인</span>
+                    </div>
+                        <div class="menu-section-label">수업료</div>
+                        <div class="menu-nav-item staff-only hidden" data-view="tuition-collection"><i class="fa-solid fa-list-check nav-icon"></i><span>수업료 납입 관리</span></div>
+                        <div class="menu-nav-item staff-only hidden" data-view="tuition-payment">
+                        <i class="fa-solid fa-won-sign nav-icon"></i>
+                        <span>수업료 결제 관리</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="tuition-payment-search">
+                        <i class="fa-solid fa-magnifying-glass nav-icon"></i>
+                        <span>수업료 결제 이력 조회</span>
+                    </div>
+                        <div class="menu-section-label">단가·설정</div>
+                        <div class="menu-nav-item staff-only hidden" data-view="tuition-fee-settings">
+                        <i class="fa-solid fa-sliders nav-icon"></i>
+                        <span>기본 수업료 설정</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="class-rate-settings">
+                        <i class="fa-solid fa-coins nav-icon"></i>
+                        <span>수업 단가 설정</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="consultation-rate-settings">
+                        <i class="fa-solid fa-comments nav-icon"></i><span>상담 단가 설정</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="book-material-rates">
+                        <i class="fa-solid fa-won-sign nav-icon"></i><span>자료 제작 단가 설정</span>
+                    </div>
+                        <div class="menu-section-label">관리 도구</div>
+                        <div class="menu-nav-item staff-only hidden" data-view="utilities">
                         <i class="fa-solid fa-screwdriver-wrench nav-icon"></i>
                         <span>유틸리티</span>
                     </div>
-                    <div class="menu-nav-item staff-only hidden" data-view="audit-log">
+                        <div class="menu-nav-item staff-only hidden" data-view="audit-log">
                         <i class="fa-solid fa-clock-rotate-left nav-icon"></i>
                         <span>변경 이력 조회</span>
                     </div>
-
-                    <div class="menu-nav-item admin-only hidden" data-view="activity-log">
+                    </div>
+                    <div class="menu-workspace menu-workspace-system admin-only hidden" role="group" aria-labelledby="menu-heading-system">
+                        <div id="menu-heading-system" class="menu-workspace-heading">시스템 관리</div>
+                        <div class="menu-section-label">관리자 전용</div>
+                        <div class="menu-nav-item admin-only hidden" data-view="activity-log">
                         <i class="fa-solid fa-user-clock nav-icon"></i><span>사용자 활동 이력</span>
                     </div>
-
-                    <div class="menu-section-label admin-only hidden">시스템 데이터 Studio</div>
-                    <div class="menu-nav-item admin-only hidden" data-view="data-view">
+                        <div class="menu-nav-item admin-only hidden" data-view="user-manage">
+                        <i class="fa-solid fa-user-gear nav-icon"></i>
+                        <span>선생님 계정 관리</span>
+                    </div>
+                        <div class="menu-nav-item admin-only hidden" data-view="data-view">
                         <i class="fa-solid fa-table-cells nav-icon"></i>
                         <span>데이터 그리드 Studio</span>
                     </div>
-                    <div class="menu-nav-item admin-only hidden" data-view="sql-console">
+                        <div class="menu-nav-item admin-only hidden" data-view="sql-console">
                         <i class="fa-solid fa-terminal nav-icon"></i>
                         <span>SQL 콘솔 & CSV</span>
                     </div>
-
-                    <div class="menu-section-label admin-only hidden">계정 관리</div>
-                    <div class="menu-nav-item admin-only hidden" data-view="user-manage">
-                        <i class="fa-solid fa-user-gear nav-icon"></i>
-                        <span>선생님 계정 관리</span>
                     </div>
                 </nav>
 
