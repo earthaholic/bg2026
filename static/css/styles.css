@@ -5058,7 +5058,7 @@ button.class-student-badge { cursor: pointer; }
 #view-tuition-collection .tc-muted { display:block; font-size:.8rem; color:var(--text-muted); }
 #view-tuition-collection .tc-danger { color:#dc5252; font-weight:700; }
 #view-tuition-collection .tc-warning { color:#bb791d; font-weight:700; }
-#view-tuition-collection .tc-dialog { width:min(850px,94vw); max-height:90vh; padding:1.3rem; border:1px solid var(--border-color); border-radius:14px; color:var(--text-main); background:var(--bg-dark); overflow:auto; }
+#view-tuition-collection .tc-dialog { position:fixed; inset:0; margin:auto; width:min(850px,94vw); max-height:90vh; padding:1.3rem; border:1px solid var(--border-color); border-radius:14px; color:var(--text-main); background:var(--bg-dark); overflow:auto; }
 #view-tuition-collection .tc-dialog::backdrop { background:rgba(0,0,0,.5); }
 #view-tuition-collection .tc-dialog-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
 #view-tuition-collection .tc-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin:.8rem 0; }

@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, StrictInt
+from pydantic import BaseModel, Field, StrictInt, StrictStr
 from auth import get_current_staff
 from database import get_db_connection, write_audit_log
 
@@ -50,7 +50,6 @@ class EventRequest(BaseModel):
     channel: str = Field('', max_length=100)
     memo: str = Field('', max_length=4000)
     next_followup: str = ''
-    promise_date: str = ''
     paid_date: str = ''
     amount: Optional[StrictInt] = Field(None, ge=0)
     counts_as_reminder: bool = False
@@ -62,6 +61,15 @@ class EventRequest(BaseModel):
 
 class CancelRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
+    class Config:
+        extra = 'forbid'
+
+
+class DeleteEventRequest(BaseModel):
+    confirmation: StrictStr
+    version: StrictInt = Field(..., gt=0)
+    student_id: StrictInt = Field(..., gt=0)
+
     class Config:
         extra = 'forbid'
 
@@ -117,9 +125,10 @@ def _audit(conn, table, rid, user, old=None):
 def _case(conn, row):
     c = dict(row)
     events = [dict(x) for x in conn.execute('SELECT * FROM TuitionCollectionEvents WHERE case_id=? ORDER BY id', (c['id'],))]
-    c.update(reminder_count=0, last_reminded_at=None, last_sent_at=None, last_contact_at=None, next_followup='', promise_date='', confirmed_paid_date='', confirmed_amount=None)
+    c.update(reminder_count=0, last_reminded_at=None, last_sent_at=None, last_contact_at=None, next_followup='', confirmed_paid_date='', confirmed_amount=None)
     status = 'pending'
     for e in events:
+        e.pop('promise_date', None)  # 과거 저장값은 보존하되 업무 응답에는 노출하지 않는다.
         if e['cancelled_at']:
             continue
         if e['kind'] in ('notice', 'link_sent', 'reminder'):
@@ -132,7 +141,6 @@ def _case(conn, row):
         if e['kind'] == 'link_sent':
             c['last_sent_at'] = max(c['last_sent_at'] or '', e['occurred_on'])
         c['next_followup'] = e['next_followup']
-        c['promise_date'] = e['promise_date']
         if e['kind'] == 'confirmed':
             status = 'confirmed'
             c['confirmed_paid_date'], c['confirmed_amount'] = e['paid_date'], e['amount']
@@ -201,7 +209,7 @@ def list_collection(q: str = '', class_id: Optional[int] = None, teacher: str = 
             remaining = p.get('remaining_lessons')
             u = 'unknown' if not p['has_payment'] else ('overdue' if remaining < 0 else 'exhausted' if remaining == 0 else 'low' if remaining <= 4 else 'normal')
             st = c['status'] if c else 'pending'
-            due = bool(c and st not in ('completed', 'confirmed') and ((c['next_followup'] and c['next_followup'] <= today) or (c['promise_date'] and c['promise_date'] < today)))
+            due = bool(c and st not in ('completed', 'confirmed') and (c['next_followup'] and c['next_followup'] <= today))
             if st not in ('confirmed', 'completed'):
                 summary['urgent'] += int(u in ('overdue', 'exhausted'))
                 summary['low'] += int(u == 'low')
@@ -237,7 +245,7 @@ def collection_detail(student_id: int, current_user=Depends(get_current_staff)):
 
 @router.post('/students/{student_id}/events')
 def add_event(student_id: int, payload: EventRequest, current_user=Depends(get_current_staff)):
-    for field in ('occurred_on', 'next_followup', 'promise_date', 'paid_date'):
+    for field in ('occurred_on', 'next_followup', 'paid_date'):
         _day(getattr(payload, field), field == 'occurred_on')
     if payload.kind == 'confirmed' and (not payload.paid_date or payload.amount is None):
         raise HTTPException(400, '결제 확인에는 납부일과 금액이 필요합니다.')
@@ -262,7 +270,14 @@ def add_event(student_id: int, payload: EventRequest, current_user=Depends(get_c
         if row['status'] == 'confirmed' and payload.kind in ('notice', 'link_sent', 'reminder'):
             raise HTTPException(409, '결제가 확인된 건은 독촉하지 않습니다. 잘못된 확인 기록을 취소해 주세요.')
         values = payload.dict()
-        eid = conn.execute('INSERT INTO TuitionCollectionEvents(case_id,kind,occurred_on,channel,memo,next_followup,promise_date,paid_date,amount,counts_as_reminder,request_id,actor,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', (cid,values['kind'],values['occurred_on'],values['channel'],values['memo'],values['next_followup'],values['promise_date'],values['paid_date'],values['amount'],values['counts_as_reminder'],values['request_id'],current_user['username'],now)).lastrowid
+        # 완전삭제 후 번호를 재사용하지 않아 오래된 화면이 다른 기록을 변경하지 않게 한다.
+        eid = conn.execute('''SELECT MAX(value) + 1 FROM (
+            SELECT COALESCE(MAX(id), 0) AS value FROM TuitionCollectionEvents
+            UNION ALL
+            SELECT COALESCE(MAX(CAST(record_id AS INTEGER)), 0) AS value
+            FROM _app_audit_logs WHERE table_name='TuitionCollectionEvents'
+        )''').fetchone()[0]
+        conn.execute('INSERT INTO TuitionCollectionEvents(id,case_id,kind,occurred_on,channel,memo,next_followup,paid_date,amount,counts_as_reminder,request_id,actor,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', (eid,cid,values['kind'],values['occurred_on'],values['channel'],values['memo'],values['next_followup'],values['paid_date'],values['amount'],values['counts_as_reminder'],values['request_id'],current_user['username'],now))
         _audit(conn, 'TuitionCollectionEvents', eid, current_user)
         c = _sync(conn, cid)
         _audit(conn, 'TuitionCollectionCases', cid, current_user, dict(row))
@@ -295,6 +310,38 @@ def cancel_event(event_id: int, payload: CancelRequest, current_user=Depends(get
             _audit(conn, 'TuitionCollectionCases', c['id'], current_user, dict(c))
         conn.commit()
         return {'case': _case(conn, conn.execute('SELECT * FROM TuitionCollectionCases WHERE id=?', (c['id'],)).fetchone())}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@router.delete('/events/{event_id}')
+def delete_event(event_id: int, payload: DeleteEventRequest, current_user=Depends(get_current_staff)):
+    """처리 이력만 삭제하며 결제 원본과 완료 상태는 보존한다."""
+    if payload.confirmation != '처리 이력 삭제':
+        raise HTTPException(400, '확인 문구를 정확히 입력해 주세요: 처리 이력 삭제')
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        event = conn.execute('SELECT * FROM TuitionCollectionEvents WHERE id=?', (event_id,)).fetchone()
+        if not event:
+            raise HTTPException(404, '처리 기록을 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.')
+        case = conn.execute('SELECT * FROM TuitionCollectionCases WHERE id=?', (event['case_id'],)).fetchone()
+        if not case or case['student_id'] != payload.student_id:
+            raise HTTPException(409, '선택한 학생의 처리 기록이 아닙니다. 새로고침 후 확인해 주세요.')
+        _student(conn, payload.student_id)
+        if case['version'] != payload.version:
+            raise HTTPException(409, '다른 담당자가 처리 내용을 변경했습니다. 새로고침 후 확인해 주세요.')
+        old_event, old_case = dict(event), dict(case)
+        conn.execute('DELETE FROM TuitionCollectionEvents WHERE id=?', (event_id,))
+        result = _sync(conn, case['id'])
+        write_audit_log('TuitionCollectionEvents', event_id, 'DELETE', old_event, None, None,
+                        current_user['username'], current_user['role'], connection=conn)
+        _audit(conn, 'TuitionCollectionCases', case['id'], current_user, old_case)
+        conn.commit()
+        return {'status': 'success', 'case': result, 'message': '처리 이력이 삭제되었습니다. 결제 내역은 유지됩니다.'}
     except Exception:
         conn.rollback()
         raise

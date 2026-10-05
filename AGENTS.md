@@ -246,3 +246,7 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 월말보고 문자 양식 생성의 학생 드롭다운만 `/api/user/students-options?monthly_report_order=true`를 사용한다. 학생별 저장 보고의 마지막 `UpdatedAt`(빈 값은 `CreatedAt`)이 오래된 순서, 이름순, rowid순으로 정렬한다. 저장 기록 없는 학생은 맨 위이며 임시·완료 저장 모두 포함한다.
 - 보고 월이나 학습 일자가 아닌 실제 저장 시각 기준이다. 저장 성공 후 선택 학생을 유지하며 목록 순서를 갱신한다. 다른 화면의 이름순·종료 학생 제외·일반 선생님 조회 범위는 유지한다.
 - 검증: `tests/test_monthly_report_student_order.py`, `tests/test_monthly_report_student_order_ui.js`.
+
+- 납입 관리의 납부 약속일은 사용하지 않는다. 입력·표시·API 응답 및 재확인 대상 판정에서 제외하고 다음 확인일만 유지한다. 기존 DB의 `promise_date` 컬럼과 과거 원본은 호환·감사 보존용으로만 남기며 신규 입력은 받지 않는다.
+
+- 처리 이력의 `완전 삭제`는 staff가 학생·처리 종류·날짜·메모·기록 번호를 확인하고 `처리 이력 삭제`를 직접 입력한 뒤 실행한다. DELETE `/api/user/tuition-collection/events/{event_id}`는 확인 문구·학생 rowid·관리 건 version을 검증한다. 처리 행을 실제 삭제하고 독촉 횟수·미완료 진행 상태·다음 확인일을 재집계하며 DELETE/UPDATE 감사를 같은 트랜잭션에 남긴다. 취소 기록과 완료 건의 처리 기록도 삭제할 수 있으나 결제 원본·결제 연결·등록 완료 상태는 유지한다. 감사 원본은 삭제하지 않으며 화면 확인 단계에서도 이를 알린다.
