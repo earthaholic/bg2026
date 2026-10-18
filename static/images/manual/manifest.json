@@ -295,6 +295,20 @@
       "annotations": [
         1
       ]
+    },
+    {
+      "file": "33-consultation-form.png",
+      "width": 856,
+      "height": 447,
+      "annotations": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "captured_at": "2026-10-18"
     }
-  ]
+  ],
+  "updated_at": "2026-10-18"
 }

@@ -45,7 +45,7 @@ class TeacherManualTests(unittest.TestCase):
                 self.assertIn(href[1:], self.parsed.ids)
 
     def test_chapters_and_assets(self):
-        self.assertEqual(len(self.parsed.chapters), 11)
+        self.assertEqual(len(self.parsed.chapters), 12)
         for url in self.parsed.assets:
             self.assertTrue((ROOT / url.split("?")[0].lstrip("/")).is_file(), url)
         self.assertIn('<html lang="ko">', self.html)
@@ -57,6 +57,13 @@ class TeacherManualTests(unittest.TestCase):
                      "본인 정산을 조회할 수 있습니다", "즉시 포함됩니다", "마감된 월"]:
             self.assertIn(text, self.html)
 
+    def test_october_18_guidance(self):
+        for text in ["버전 2.1", "2026년 10월 18일", "Esc 키", "기존 행의 상대 순서",
+                     "현재 본인 담당 수업에 배정된 학생", "상담 기록 추가", "본인으로 고정",
+                     "저장한 상담의 수정·삭제는 관리 선생님에게 요청", "단가 미설정"]:
+            self.assertIn(text, self.html)
+        self.assertIn("consultation", self.parsed.chapters)
+
     def test_route_and_new_tab_entry(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn('@app.get("/manual", response_class=HTMLResponse)', source)
@@ -65,8 +72,8 @@ class TeacherManualTests(unittest.TestCase):
         self.assertIn('href="/manual" target="_blank" rel="noopener"', index)
 
     def test_screenshots_have_files_alt_text_and_dimensions(self):
-        self.assertEqual(len(self.parsed.images), 33)
-        self.assertEqual(len({image['src'] for image in self.parsed.images}), 32)
+        self.assertEqual(len(self.parsed.images), 34)
+        self.assertEqual(len({image['src'] for image in self.parsed.images}), 33)
         for image in self.parsed.images:
             self.assertTrue((ROOT / image['src'].lstrip('/')).is_file(), image['src'])
             self.assertTrue(image.get('alt'))
