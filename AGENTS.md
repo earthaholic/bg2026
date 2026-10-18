@@ -271,3 +271,5 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 검증: `node --test tests/test_dialog_escape_ui.js`.
 
 - 수업료 결제 이력 조회의 `결제/서비스` 열은 현재 결제의 `TuitionProgress.remaining_lessons` 숫자로 정렬한다. 초과 사용은 음수로 비교하고 이전 결제·시작 예정·확인 불가는 양방향 모두 맨 뒤에 둔다. 공통 정렬은 명시적인 빈 `data-sort-value`를 빈 값으로 처리한다. 검증: `tests/test_tuition_payment_progress_ui.js`, `tests/test_list_order_ui.js`.
+
+- 수업료 납입 관리의 `잔여 차시` 열도 숫자 정렬값을 사용한다. 초과 사용은 음수, 소진은 0이며 결제 정보 없음·학생 정보 확인 필요·유효한 잔여 숫자가 없는 항목은 양방향 모두 뒤에 둔다. 현재 페이지 내 정렬이며 기존 납입 관리 대상 선정·서버 기본 긴급도 정렬은 유지한다. 검증: `tests/test_tuition_collection_ui.js`.

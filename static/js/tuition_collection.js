@@ -6,6 +6,13 @@ function tuitionCollectionRecentEvents(events) {
         Number(b.id || 0) - Number(a.id || 0));
 }
 
+// 잔여 차시는 숫자로 비교하고 확인 불가는 양방향 모두 뒤에 둔다.
+function tuitionCollectionRemainingSortValue(row) {
+    const progress = row.progress || {};
+    return !row.blocked_reason && progress.has_payment && Number.isFinite(progress.remaining_lessons)
+        ? progress.remaining_lessons : '';
+}
+
 function initTuitionCollection({ apiFetch, escapeHtml }) {
     const el = key => document.getElementById(`tc-${key}`);
     const esc = value => escapeHtml(value == null ? '' : String(value));
@@ -44,7 +51,7 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
                 const remaining = p.remaining_lessons;
                 const label = row.blocked_reason ? '학생 정보 확인 필요' : !p.has_payment ? '결제 정보 없음' : remaining < 0 ? `${Math.abs(remaining)}회 초과` : remaining === 0 ? '차시 소진' : `${remaining}회 남음`;
                 const severity = ['overdue', 'exhausted'].includes(row.urgency) ? 'tc-danger' : row.urgency === 'low' ? 'tc-warning' : '';
-                return `<tr><td><strong>${esc(row.name)}</strong>${row.is_ended ? ' · 수업 종료' : ''}<span class="tc-muted">${(row.classes || []).map(c => esc(c.name)).join(', ') || '연결 수업 없음'}</span></td><td class="${severity}">${label}${row.upcoming_payment ? '<span class="tc-muted">다음 결제 등록됨</span>' : ''}${row.blocked_reason ? `<span class="tc-muted">${esc(row.blocked_reason)}</span>` : ''}</td><td>${statuses[c.status || 'pending'] || '확인 필요'}</td><td>${Number(c.reminder_count || 0)}회<span class="tc-muted">${date(c.last_reminded_at)}</span></td><td>${c.last_sent_at ? date(c.last_sent_at) : '미발송'}</td><td>${date(c.next_followup)}</td><td><button class="btn btn-secondary" type="button" data-student="${esc(row.student_id)}">처리·이력</button></td></tr>`;
+                return `<tr><td><strong>${esc(row.name)}</strong>${row.is_ended ? ' · 수업 종료' : ''}<span class="tc-muted">${(row.classes || []).map(c => esc(c.name)).join(', ') || '연결 수업 없음'}</span></td><td class="${severity}" data-sort-value="${tuitionCollectionRemainingSortValue(row)}">${label}${row.upcoming_payment ? '<span class="tc-muted">다음 결제 등록됨</span>' : ''}${row.blocked_reason ? `<span class="tc-muted">${esc(row.blocked_reason)}</span>` : ''}</td><td>${statuses[c.status || 'pending'] || '확인 필요'}</td><td>${Number(c.reminder_count || 0)}회<span class="tc-muted">${date(c.last_reminded_at)}</span></td><td>${c.last_sent_at ? date(c.last_sent_at) : '미발송'}</td><td>${date(c.next_followup)}</td><td><button class="btn btn-secondary" type="button" data-student="${esc(row.student_id)}">처리·이력</button></td></tr>`;
             }).join('') : '<tr><td colspan="7">조건에 맞는 학생이 없습니다.</td></tr>';
             const summary = data.summary || {};
             el('summary').innerHTML = [['urgent','초과·소진'],['low','잔여 1~4회'],['followup_due','오늘 재확인'],['confirmed','확인·등록 대기'],['unknown','결제 정보 없음']].map(([key,label]) => `<button type="button" data-summary="${key}">${label}<strong>${Number(summary[key] || 0)}</strong></button>`).join('');

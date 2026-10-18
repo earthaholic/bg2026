@@ -91,3 +91,17 @@ test('완전 삭제는 대상 정보·확인 문구·학생·버전을 검증하
     assert.equal(messages.length, 1);
 });
 assert.match(js, /data-delete-event="\$\{esc\(event.id\)\}"/);
+
+test('잔여 차시는 초과 사용을 음수로 정렬하고 확인 불가는 항상 뒤에 둔다', () => {
+    const rows = [4, -3, 0, 12, -10, 1].map(remaining => ({ progress: { has_payment: true, remaining_lessons: remaining } }));
+    rows.push({ progress: { has_payment: false, remaining_lessons: 0 } }, { blocked_reason: '확인 필요', progress: { has_payment: true, remaining_lessons: -99 } }, {}, { progress: { has_payment: true, remaining_lessons: null } });
+    const values = rows.map(row => sortContext.tuitionCollectionRemainingSortValue(row));
+    assert.deepEqual(values, [4, -3, 0, 12, -10, 1, '', '', '', '']);
+    assert.match(js, /data-sort-value="\$\{tuitionCollectionRemainingSortValue\(row\)\}"/);
+    vm.runInContext(app.slice(app.indexOf('    function getSortableCellValue('), app.indexOf('    function sortTableByHeader(')) + app.slice(app.indexOf('    function applyTableSort('), app.indexOf('    // 표시 중인 행의 식별자')), sortContext);
+    const body = { rows: values.map((value, index) => ({ index, cells: [{ dataset: { sortValue: String(value) }, textContent: '차시 소진 다음 결제 등록됨' }] })), appendChild(row) { this.rows.splice(this.rows.indexOf(row), 1); this.rows.push(row); } };
+    sortContext.applyTableSort({ tBodies: [body] }, 0, 'asc');
+    assert.deepEqual(body.rows.map(row => row.index), [4, 1, 2, 5, 0, 3, 6, 7, 8, 9]);
+    sortContext.applyTableSort({ tBodies: [body] }, 0, 'desc');
+    assert.deepEqual(body.rows.map(row => row.index), [3, 0, 5, 2, 1, 4, 6, 7, 8, 9]);
+});
