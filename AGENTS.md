@@ -263,3 +263,9 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 필터·검색·페이지·열 정렬을 직접 바꾸면 순서 기억을 해제한다. 화면 내 정렬은 기존 열·방향을 새 결과에 적용하고 서버 정렬은 서버의 새 결과 순서를 따른다. 서버 페이지에 포함되는 행 자체를 고정하는 기능은 아니다.
 - `static/js/app.js`의 `listRowKey`, `preserveTableOrder`, `resetViewRowOrder`를 공유한다. 신규 조회 표에는 안정적인 `data-list-key`를 제공하며, 행 인덱스나 변경 가능한 이름은 식별자로 사용하지 않는다. 변경 없는 DOM 재배치는 생략해 관찰자 반복 호출을 막는다.
 - 검증: `node --test tests/test_list_order_ui.js`.
+
+
+## 대화상자 Esc 닫기
+- `static/js/dialog_escape.js`가 사용자 정의 `.modal-backdrop`의 Esc를 공통 처리한다. 표시 중인 최상위 창의 기존 닫기 버튼을 실행하며, 비활성 버튼과 닫기 핸들러의 저장 중 보호를 우회하지 않는다. 닫기 버튼 없는 필수 로그인 창은 유지한다.
+- 기본 `<dialog>`의 `showModal()`은 브라우저의 최상위 계층·`cancel` 처리를 그대로 사용하여 납입 관리 미저장 확인과 보완 저장 중 닫기 차단을 유지한다. 길게 누른 Esc로 뒤쪽 창까지 닫히지 않도록 반복 키를 차단하고 한글 조합 중 Esc는 무시한다.
+- 검증: `node --test tests/test_dialog_escape_ui.js`.
