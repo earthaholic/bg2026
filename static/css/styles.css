@@ -5084,3 +5084,16 @@ button.class-student-badge { cursor: pointer; }
 .menu-workspace-operations .menu-nav-item:not(.active) .nav-icon, .menu-workspace-system .menu-nav-item:not(.active) .nav-icon { color: var(--menu-area-color); }
 [data-theme="light"] .menu-workspace-operations { --menu-area-color: #795397; }
 [data-theme="light"] .menu-workspace-system { --menu-area-color: #566781; }
+
+/* 목록 선택형 빠른 수정: 기본은 읽기 전용 */
+#view-book-search .list-quick-choice,
+#view-student-search .list-quick-choice { width: auto; max-width: 100%; font-family: inherit; font-size: .85rem; font-weight: 600; padding: .35rem .7rem; border: 1px solid transparent; border-radius: 999px; color: inherit; cursor: pointer; }
+#view-book-search .list-quick-choice:disabled,
+#view-student-search .list-quick-choice:disabled { appearance: none; opacity: 1; background: transparent; border-color: transparent; color: inherit; cursor: default; }
+#view-book-search.quick-edit-active .list-quick-choice,
+#view-student-search.quick-edit-active .list-quick-choice { border-color: #b7c9f4; background: #edf3ff; color: #2854a2; }
+.quick-edit-active .list-quick-choice:not(:disabled):hover { background: #dbe7ff; border-color: #5b83d2; }
+.list-quick-choice:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.quick-choice-picker { display: flex; flex-wrap: wrap; gap: .4rem; max-width: 18rem; padding: .6rem; border: 1px solid var(--border-color); border-radius: .5rem; margin-top: .5rem; background: var(--bg-surface, #fff); }
+.list-quick-edit-switch { display: inline-flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.list-quick-edit-switch small { color: var(--text-muted); }

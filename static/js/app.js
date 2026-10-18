@@ -790,6 +790,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = new URL(location.href);
         const previousView = url.searchParams.get('view');
+        ['book', 'student'].forEach(kind => {
+            const toggle = document.getElementById(kind + '-quick-edit');
+            if (toggle && targetView !== kind + '-search') { toggle.checked = false; syncListQuickEdit(kind); }
+        });
         if (targetView === 'studylog-completion' && previousView !== targetView) completionState.origin = captureCompletionOrigin();
         if (previousView !== targetView) {
             if (previousView || targetView !== 'audit-log') url.search = '';
@@ -1665,7 +1669,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/recent-books');
             const books = data.books;
 
-            if (books.length === 0) {
+            bindListQuickEdit('book', bookCardsGrid);
+        if (books.length === 0) {
                 recentBooksList.innerHTML = '<div class="empty-state" style="padding: 1.5rem 0.5rem;"><p>등록된 도서가 없습니다.</p></div>';
                 return;
             }
@@ -2753,6 +2758,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     async function toggleBookField(bookId, field, newVal, chkEl) {
+        if (!isStaff()) return;
         const feedback = createActionFeedback(chkEl);
         try {
             const payload = { data: {} };
@@ -2769,6 +2775,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function toggleStudentEnded(studentId, newVal, btnEl) {
+        if (!isStaff()) return;
         const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/students/${studentId}`, {
@@ -2790,6 +2797,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function toggleStudentSex(studentId, newSex, btnEl) {
+        if (!isStaff()) return;
         const feedback = createActionFeedback(btnEl);
         try {
             await apiFetch(`/api/user/students/${studentId}`, {
@@ -3621,6 +3629,128 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // 목록의 빠른 수정은 화면을 벗어나면 해제하며 선택형 필드만 저장한다.
+    function listQuickEditEnabled(kind) {
+        return isStaff() && Boolean(document.getElementById(kind + '-quick-edit')?.checked);
+    }
+
+    function quickChoice(kind, id, field, value, choices, label) {
+        const current = String(value ?? '');
+        const options = choices.map(([value, text]) => [String(value), text]);
+        const text = options.find(([value]) => value === current)?.[1] || current || '미입력';
+        return `<button type="button" class="list-quick-choice" data-kind="${kind}" data-id="${id}" data-field="${field}" data-saved="${escapeHtml(current)}" data-options="${escapeHtml(JSON.stringify(options))}" aria-label="${escapeHtml(label + ': ' + text + '. 클릭하면 다음 값, Shift와 함께 클릭하면 이전 값')}" title="클릭: 다음 값 · Shift+클릭: 이전 값" ${listQuickEditEnabled(kind) ? '' : 'disabled'}>${escapeHtml(text)}</button>`;
+    }
+
+    function syncListQuickEdit(kind) {
+        const view = document.getElementById('view-' + kind + '-search');
+        const enabled = listQuickEditEnabled(kind);
+        view.classList.toggle('quick-edit-active', enabled);
+        view.querySelectorAll('.list-quick-choice').forEach(input => { input.disabled = !enabled || input.dataset.saving === 'true'; });
+        if (!enabled) view.querySelectorAll('.quick-choice-picker, .quick-edit-undo').forEach(item => item.remove());
+    }
+
+    function bindListQuickEdit(kind, grid) {
+        const view = document.getElementById('view-' + kind + '-search');
+        let toggle = document.getElementById(kind + '-quick-edit');
+        if (!toggle && isStaff()) {
+            const label = document.createElement('label');
+            label.className = 'checkbox-pill list-quick-edit-switch';
+            label.innerHTML = `<input type="checkbox" role="switch" id="${kind}-quick-edit"><span>빠른 수정</span><small>클릭: 다음 · Shift+클릭: 이전</small>`;
+            view.querySelector('.results-bar').appendChild(label);
+            toggle = label.querySelector('input');
+            toggle.addEventListener('change', () => syncListQuickEdit(kind));
+        }
+        grid.querySelectorAll('.list-quick-choice').forEach(input => {
+            const cell = input.closest('td');
+            if (cell) cell.dataset.sortValue = input.textContent;
+            input.addEventListener('click', event => cycleListQuickChoice(input, event.shiftKey));
+        });
+        syncListQuickEdit(kind);
+    }
+
+    function cycleListQuickChoice(input, reverse = false) {
+        if (!listQuickEditEnabled(input.dataset.kind) || input.dataset.saving === 'true') return;
+        const options = JSON.parse(input.dataset.options);
+        const index = options.findIndex(([value]) => value === input.dataset.saved);
+        if (index < 0) {
+            const cell = input.closest('td');
+            if (cell.querySelector('.quick-choice-picker')) return;
+            const picker = document.createElement('div');
+            picker.className = 'quick-choice-picker';
+            picker.setAttribute('role', 'group');
+            picker.setAttribute('aria-label', '현재 값은 유지됩니다. 변경할 값을 선택하세요');
+            options.forEach(([value, text]) => {
+                const button = document.createElement('button');
+                button.type = 'button'; button.className = 'btn btn-xs btn-outline'; button.textContent = text;
+                button.addEventListener('click', () => { picker.remove(); saveListQuickChoice(input, value); });
+                picker.appendChild(button);
+            });
+            const cancel = document.createElement('button');
+            cancel.type = 'button'; cancel.className = 'btn btn-xs btn-outline'; cancel.textContent = '취소';
+            cancel.addEventListener('click', () => { picker.remove(); input.focus(); });
+            picker.appendChild(cancel);
+            picker.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); picker.remove(); input.focus(); } });
+            cell.appendChild(picker);
+            picker.querySelector('button').focus();
+            return;
+        }
+        const next = options[(index + (reverse ? -1 : 1) + options.length) % options.length][0];
+        return saveListQuickChoice(input, next);
+    }
+
+    function showListQuickUndo(input, previous, next) {
+        const view = document.getElementById('view-' + input.dataset.kind + '-search');
+        view.querySelectorAll('.quick-edit-undo').forEach(item => item.remove());
+        if (!listQuickEditEnabled(input.dataset.kind)) return;
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'btn btn-sm btn-outline quick-edit-undo';
+        button.textContent = '방금 변경 되돌리기 (10초)';
+        const timer = setTimeout(() => button.remove(), 10000);
+        button.addEventListener('click', async () => {
+            if (!listQuickEditEnabled(input.dataset.kind)) return;
+            button.disabled = true;
+            clearTimeout(timer);
+            try {
+                const data = await apiFetch(`/api/user/${input.dataset.kind}s/${input.dataset.id}`);
+                const record = data[input.dataset.kind];
+                if (String(record[input.dataset.field] ?? '') !== next) throw new Error('값이 다시 변경되어 되돌릴 수 없습니다. 목록을 새로 조회해 주세요.');
+                const current = Array.from(view.querySelectorAll('.list-quick-choice')).find(item => item.dataset.id === input.dataset.id && item.dataset.field === input.dataset.field) || input;
+                current.dataset.saved = next;
+                await saveListQuickChoice(current, previous, false);
+            } catch (err) { createActionFeedback().show(err.message, 'error'); }
+            finally { button.remove(); }
+        });
+        view.querySelector('.results-bar').appendChild(button);
+    }
+
+    async function saveListQuickChoice(input, next, offerUndo = true) {
+        const kind = input.dataset.kind;
+        const allowed = kind === 'student' ? ['Sex', 'Grade', 'IsClassEnded'] : ['Target', 'BookLength', 'HasReadingQuestion', 'IsPdfExist'];
+        if (!listQuickEditEnabled(kind) || input.dataset.saving === 'true' || !allowed.includes(input.dataset.field)) return;
+        const previous = input.dataset.saved;
+        next = String(next);
+        if (next === previous) return;
+        const numeric = ['IsClassEnded', 'BookLength', 'HasReadingQuestion', 'IsPdfExist'].includes(input.dataset.field);
+        const feedback = createActionFeedback();
+        input.dataset.saving = 'true'; input.disabled = true;
+        input.setAttribute('aria-busy', 'true');
+        try {
+            await apiFetch(`/api/user/${kind}s/${input.dataset.id}`, { method: 'PUT', body: JSON.stringify({ data: { [input.dataset.field]: numeric ? Number(next) : next } }) });
+            input.dataset.saved = next;
+            input.textContent = JSON.parse(input.dataset.options).find(([value]) => value === next)?.[1] || next || '미입력';
+            feedback.show(offerUndo ? '변경 내용을 저장했습니다.' : '이전 값으로 되돌렸습니다.', 'success');
+            if (kind === 'student') await loadStudentSearchResults();
+            else await loadBookSearchResults();
+            if (offerUndo) showListQuickUndo(input, previous, next);
+        } catch (err) {
+            feedback.show('저장하지 못했습니다. 기존 값을 유지합니다: ' + err.message, 'error');
+        } finally {
+            delete input.dataset.saving;
+            input.removeAttribute('aria-busy');
+            input.disabled = !listQuickEditEnabled(kind);
+        }
+    }
+
     function renderBookCards(books) {
         selectableBooks = books;
         selectedBookIds.clear();
@@ -3648,17 +3778,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="fw-semibold text-primary cell-clickable btn-open-book-detail" data-book-id="${bookId}">${title}</td>
                     <td>${author}</td>
                     <td>${publisher}</td>
-                    <td><span class="tag-badge primary">${target}</span></td>
-                    <td>${length}</td>
+                    <td>${quickChoice('book', bookId, 'Target', b.Target, [['', '선택안함'], ['초등부', '초등부'], ['중등부', '중등부'], ['심화반', '심화반'], ['독서모임', '독서모임']], '난이도')}</td>
+                    <td>${quickChoice('book', bookId, 'BookLength', b.BookLength ?? 0, Array.from({length: 11}, (_, i) => [i, i ? i + '단계' : '미입력']), '분량')}</td>
                     <td class="text-center">${Number(b.StudyStudentCount) || 0}명</td>
                     <td class="text-center">
-                        <label class="form-switch sm" title="독서문제 보유 여부 변경">
-                            <input type="checkbox" class="chk-toggle-book-field" data-book-id="${bookId}" data-field="HasReadingQuestion" ${hasReading ? 'checked' : ''}>
-                            <span class="switch-slider"></span>
-                        </label>
+                        ${quickChoice('book', bookId, 'HasReadingQuestion', b.HasReadingQuestion || 0, [[0, '미보유'], [1, '보유']], '독서 문제 보유 여부')}
                     </td>
                     <td class="text-center">
-                        <div class="pdf-state-toggle book-pdf-toggle" role="group" data-book-id="${bookId}" data-value="${Number(b.IsPdfExist || 0)}" aria-label="${title} PDF 상태">${pdfToggleButtons(b.IsPdfExist, !isStaff())}</div>
+                        ${quickChoice('book', bookId, 'IsPdfExist', b.IsPdfExist || 0, [[0, '미보유'], [1, '보유(저작권 있음)'], [2, '보유(저작권 없음)']], 'PDF 상태')}
                     </td>
                     <td>
                         <button type="button" class="btn btn-xs btn-outline btn-open-book-detail" data-book-id="${bookId}">
@@ -3670,6 +3797,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         bookCardsGrid.innerHTML = html;
+        bindListQuickEdit('book', bookCardsGrid);
+
 
         document.querySelectorAll('.btn-open-book-detail').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -3679,40 +3808,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        bookCardsGrid.querySelectorAll('.book-pdf-toggle').forEach(group => {
-            group.addEventListener('click', async (event) => {
-                const button = event.target.closest('button[data-value]');
-                if (!button || !isStaff() || group.dataset.saving === 'true' || button.getAttribute('aria-pressed') === 'true') return;
-                const feedback = createActionFeedback(button);
-                group.dataset.saving = 'true';
-                group.setAttribute('aria-busy', 'true');
-                group.querySelectorAll('button').forEach(item => { item.disabled = true; });
-                try {
-                    await apiFetch(`/api/user/books/${group.dataset.bookId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify({ data: { IsPdfExist: Number(button.dataset.value) } })
-                    });
-                    setPdfToggleValue(group, button.dataset.value);
-                    feedback.show('PDF 상태가 변경되었습니다.', 'success');
-                } catch (err) {
-                    feedback.show('PDF 상태 변경 실패: ' + err.message, 'error');
-                } finally {
-                    delete group.dataset.saving;
-                    group.removeAttribute('aria-busy');
-                    group.querySelectorAll('button').forEach(item => { item.disabled = !isStaff(); });
-                }
-            });
-        });
-
-        document.querySelectorAll('.chk-toggle-book-field').forEach(chk => {
-            chk.addEventListener('change', async (e) => {
-                e.stopPropagation();
-                const bookId = chk.getAttribute('data-book-id');
-                const field = chk.getAttribute('data-field');
-                const val = chk.checked ? 1 : 0;
-                await toggleBookField(bookId, field, val, chk);
-            });
-        });
     }
 
     function buildStudentSearchParams() {
@@ -3763,6 +3858,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderStudentCards(students) {
+        bindListQuickEdit('student', studentCardsGrid);
         if (students.length === 0) {
             studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-users-slash fa-2x"></i><p>검색 조건에 일치하는 학생이 없습니다.</p></div></td></tr>';
             return;
@@ -3784,15 +3880,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>#${studentId}</strong></td>
                     <td>${renderStudentSearchName(s)}</td>
                     <td>
-                        <button type="button" class="badge btn-toggle-student-sex ${sex === '남' ? 'badge-info' : sex === '여' ? 'badge-danger' : 'badge-secondary'}" data-student-id="${studentId}" data-current-sex="${rawSex}" title="클릭하여 성별 변경: 미지정 → 여 → 남 → 여">${sex}</button>
+                        ${quickChoice('student', studentId, 'Sex', s.Sex, [['', '미지정'], ['여', '여'], ['남', '남']], '성별')}
                     </td>
-                    <td>${grade}</td>
+                    <td>${quickChoice('student', studentId, 'Grade', s.Grade, [['', '미입력'], ...['초1','초2','초3','초4','초5','초6','중1','중2','중3','고1','고2','고3'].map(value => [value, value])], '학년')}</td>
                     <td>${referrer}</td>
                     <td class="text-muted text-truncate-cell" title="${desc}">${desc}</td>
                     <td class="text-center">
-                        <button type="button" class="btn-toggle-status ${isEnded ? 'is-ended' : 'is-active'} btn-toggle-student-ended" data-student-id="${studentId}" data-current="${isEnded ? 1 : 0}">
-                            ${isEnded ? '<i class="fa-solid fa-graduation-cap"></i> 수업 종료' : '<i class="fa-solid fa-circle-play"></i> 진행 중'}
-                        </button>
+                        ${quickChoice('student', studentId, 'IsClassEnded', s.IsClassEnded ? 1 : 0, [[0, '진행 중'], [1, '수업 종료']], '수업 상태')}
                     </td>
                     <td>
                         <button type="button" class="btn btn-xs btn-outline btn-open-student-detail" data-student-id="${studentId}">
@@ -3804,6 +3898,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         studentCardsGrid.innerHTML = html;
+        bindListQuickEdit('student', studentCardsGrid);
+
         bindRecordCoverageTooltips(studentCardsGrid);
 
         document.querySelectorAll('.btn-open-student-detail').forEach(btn => {
@@ -3814,24 +3910,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        document.querySelectorAll('.btn-toggle-student-ended').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const studentId = btn.getAttribute('data-student-id');
-                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
-                const newVal = currentVal === 1 ? 0 : 1;
-                await toggleStudentEnded(studentId, newVal, btn);
-            });
-        });
-
-        document.querySelectorAll('.btn-toggle-student-sex').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const currentSex = formatSex(btn.getAttribute('data-current-sex'));
-                const newSex = currentSex === '여' ? '남' : '여';
-                await toggleStudentSex(btn.getAttribute('data-student-id'), newSex, btn);
-            });
-        });
     }
 
     // Open Book Detail Modal (View Mode)
@@ -3889,6 +3967,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await fetchDetail(`/api/user/books/${bookId}`);
             const b = data.book;
             currentDetailBook = b;
+
 
             if (isStaff()) {
                 modalBookDetailActions.innerHTML = `
@@ -4038,6 +4117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await fetchDetail(`/api/user/students/${studentId}`);
             const s = data.student;
+
 
             let actionsHtml = `
                 <button id="btn-modal-student-consultations" class="btn btn-sm btn-outline">
