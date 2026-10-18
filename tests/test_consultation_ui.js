@@ -114,11 +114,11 @@ test('staff는 제외된 미마감 상담을 상세에서 복원하고 정확한
 });
 
 test('상담 입력 폼은 날짜·소요 시간·상담 선생님을 필수로 요구하고 실제 렌더러를 연결한다', () => {
-    assert.match(appSource, /async function renderStudentConsultations\(studentId, studentName, consultations\)/);
+    assert.match(appSource, /async function renderStudentConsultations\(studentId, studentName, consultations, canCreate = isStaff\(\)\)/);
     assert.match(appSource, /id="student-consultation-date" type="date"[^>]*required/);
     assert.match(appSource, /id="student-consultation-duration" type="number" min="1" max="1440"[^>]*required/);
     assert.match(appSource, /id="student-consultation-teacher" class="form-control" required/);
-    assert.match(appSource, /await renderStudentConsultations\(studentId, studentName, data\.consultations \|\| \[\]\)/);
+    assert.match(appSource, /await renderStudentConsultations\(studentId, studentName, data\.consultations \|\| \[\], data\.CanCreate === true\)/);
     assert.match(appSource, /getElementById\('btn-modal-student-consultations'\)\.addEventListener\('click', \(\) => \{\s*openStudentConsultationsModal\(studentId, s\.Name \|\| '학생'\)/);
 });
 
@@ -150,3 +150,28 @@ test('일반 선생님의 상담 정산 상세에는 제외 도구가 없다', (
     assert.match(get('payroll-consultation-detail').innerHTML, /조회만 허용/);
     assert.doesNotMatch(get('payroll-consultation-detail').innerHTML, /payroll-consultation-exclusion-form/);
 });
+
+ test('일반 선생님은 서버가 허용한 학생만 본인 명의 상담 입력 폼을 표시한다', async () => {
+    const start = appSource.indexOf('    async function renderStudentConsultations(');
+    const end = appSource.indexOf('    async function loadConsultationRates()', start);
+    for (const allowed of [true, false]) {
+        const body = makeElement();
+        const elements = new Map();
+        const get = id => {
+            if (id === 'student-consultation-form' && !body.innerHTML.includes('id="student-consultation-form"')) return null;
+            if (!elements.has(id)) elements.set(id, makeElement());
+            return elements.get(id);
+        };
+        const context = vm.createContext({document: {getElementById: get}, modalStudentConsultationsBody: body,
+            isStaff: () => false, currentUser: {username: 'demo_teacher'}, escapeHtml, userName: value => value,
+            apiFetch: async () => { throw Error('선생님 목록 호출 금지'); }});
+        vm.runInContext(appSource.slice(start,end),context);
+        await context.renderStudentConsultations(1,'예시 학생',[],allowed);
+        assert.equal(body.innerHTML.includes('id="student-consultation-form"'),allowed);
+        assert.doesNotMatch(body.innerHTML,/btn-edit-consultation|btn-delete-consultation/);
+        if (allowed) {
+            assert.equal(get('student-consultation-teacher').value,'demo_teacher');
+            assert.equal(get('student-consultation-teacher').disabled,true);
+        }
+    }
+ });

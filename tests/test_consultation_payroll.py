@@ -85,6 +85,40 @@ class ConsultationPayrollTests(unittest.TestCase):
             conn.execute('INSERT INTO TeacherPayrollClosures(PayrollMonth,TeacherUsername,ClosedBy) VALUES(?,?,?)',(month,teacher,'mgr'))
             conn.commit()
 
+    def assign_student(self, student_id=201):
+        self.sql("INSERT INTO Classes(Id,ClassName,TeacherUsername,DayOfWeek,StartTime) VALUES(91,?,?,1,'14:00')", ('검증 수업','t1'))
+        self.sql('INSERT INTO ClassStudents(ClassId,StudentId) VALUES(91,?)', (student_id,))
+
+    def test_teacher_can_add_only_own_student_as_self(self):
+        self.assign_student()
+        self.rate()
+        self.assertTrue(self.request('GET','students/201/consultations',actor='t1').json()['CanCreate'])
+        self.assertFalse(self.request('GET','students/201/consultations',actor='t2').json()['CanCreate'])
+        response = self.request('POST','students/201/consultations',self.payload(),actor='t1')
+        self.assertEqual(response.status_code,200,response.text)
+        key = response.json()['id']
+        record = self.sql('SELECT * FROM StudentConsultations WHERE Id=?',(key,))[0]
+        self.assertEqual(record['CreatedBy'],'t1')
+        self.assertEqual(record['PayUnitAmount'],12000)
+        self.assertTrue(self.sql("SELECT * FROM _app_audit_logs WHERE table_name='StudentConsultations' AND record_id=?",(str(key),)))
+        self.assertEqual(self.request('POST','students/201/consultations',self.payload(TeacherUsername='t2'),actor='t1').status_code,403)
+        self.assertEqual(self.request('POST','students/201/consultations',self.payload(TeacherUsername='t2'),actor='t2').status_code,403)
+        self.assertEqual(self.request('PUT',f'consultations/{key}',self.payload(),actor='t1').status_code,403)
+        self.assertEqual(self.request('DELETE',f'consultations/{key}',actor='t1').status_code,403)
+
+    def test_teacher_creation_rechecks_membership_and_closed_month(self):
+        self.assign_student(1)
+        self.close(freeze=False)
+        response = self.request('POST','students/201/consultations',self.payload(),actor='t1')
+        self.assertEqual(response.status_code,400,response.text)
+        self.sql('DELETE FROM ClassStudents')
+        self.assertEqual(self.request('POST','students/201/consultations',self.payload(ConsultationDate='2026-10-01'),actor='t1').status_code,403)
+
+    def test_teacher_creation_rejects_ambiguous_membership(self):
+        self.assign_student(201)
+        self.sql('INSERT INTO Students(rowid,Id,Name) VALUES(201,999,?)',('다른 학생',))
+        self.assertEqual(self.request('POST','students/1/consultations',self.payload(),actor='t1').status_code,403)
+
     def test_excluded_consultation_keeps_status_after_date_and_teacher_correction(self):
         self.rate()
         key = self.create()

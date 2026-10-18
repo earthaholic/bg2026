@@ -4303,13 +4303,13 @@ document.addEventListener('DOMContentLoaded', () => {
         modalStudentConsultations.classList.remove('hidden');
         try {
             const data = await fetchDetail(`/api/user/students/${studentId}/consultations`);
-            await renderStudentConsultations(studentId, studentName, data.consultations || []);
+            await renderStudentConsultations(studentId, studentName, data.consultations || [], data.CanCreate === true);
         } catch (err) {
             modalStudentConsultationsBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
         }
     }
 
-    async function renderStudentConsultations(studentId, studentName, consultations) {
+    async function renderStudentConsultations(studentId, studentName, consultations, canCreate = isStaff()) {
         let teachers = [];
         if (isStaff()) {
             try { teachers = (await apiFetch('/api/user/teachers-options')).teachers || []; }
@@ -4317,7 +4317,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const minutes = consultations.reduce((sum, item) => sum + Number(item.DurationMinutes || 0), 0);
         const incomplete = consultations.filter(item => !item.ConsultationDate || !item.DurationMinutes || !item.TeacherUsername).length;
-        const formHtml = isStaff() ? `<form id="student-consultation-form" class="consultation-form">
+        if (!isStaff() && canCreate) teachers = [{username: currentUser.username}];
+        const formHtml = canCreate ? `<form id="student-consultation-form" class="consultation-form">
             <h4 id="consultation-form-heading">새 상담 기록</h4>
             <div class="consultation-fields">
                 <div class="form-group"><label for="student-consultation-date">상담 날짜</label><input id="student-consultation-date" type="date" class="form-control" required></div>
@@ -4355,6 +4356,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selected && !options.some(t => t.username === selected)) options.push({username: selected});
             teacher.innerHTML = '<option value="">상담 선생님 선택</option>' + options.map(t => `<option value="${escapeHtml(t.username)}">${escapeHtml(userName(t.username))} (${escapeHtml(t.username)})</option>`).join('');
             teacher.value = selected || '';
+            teacher.disabled = !isStaff();
         };
         const reset = () => {
             editingId = null;

@@ -133,6 +133,21 @@ def _student(conn, student_id):
     return dict(rows[0])
 
 
+def _can_create_consultation(conn, student, user):
+    if user["role"] in ("admin", "subadmin", "manager"):
+        return True
+    if user["role"] != "teacher":
+        return False
+    # 식별자가 다른 학생과 겹치는 배정은 권한 근거로 사용하지 않는다.
+    return bool(conn.execute('''SELECT 1 FROM "ClassStudents" cs
+        JOIN "Classes" c ON c."Id"=cs."ClassId"
+        WHERE c."TeacherUsername"=? AND (cs."StudentId"=? OR cs."StudentId"=?)
+        AND NOT EXISTS (SELECT 1 FROM "Students" other
+            WHERE (other.rowid=cs."StudentId" OR other."Id"=cs."StudentId")
+            AND other.rowid<>?) LIMIT 1''',
+        (user["username"], student["row_id"], student["Id"], student["row_id"])).fetchone())
+
+
 def _record(conn, record_id):
     row = conn.execute('SELECT rowid AS row_id, * FROM "StudentConsultations" WHERE rowid=?', (record_id,)).fetchone()
     if row is None:
@@ -270,7 +285,8 @@ def get_student_consultations(student_id: int, current_user=Depends(get_current_
     with _connection() as conn:
         student = _student(conn, student_id)
         rows = conn.execute('SELECT rowid AS row_id,* FROM "StudentConsultations" WHERE "StudentId"=? ORDER BY "CreatedAt" DESC,rowid DESC', (student["row_id"],)).fetchall()
-        return {"consultations": [_view_record(conn, dict(r), current_user) for r in rows]}
+        return {"consultations": [_view_record(conn, dict(r), current_user) for r in rows],
+                "CanCreate": _can_create_consultation(conn, student, current_user)}
 
 
 @router.get("/api/user/consultations/{consultation_id}")
@@ -285,9 +301,13 @@ def get_consultation(consultation_id: int, current_user=Depends(get_current_user
 
 
 @router.post("/api/user/students/{student_id}/consultations")
-def create_consultation(student_id: int, payload: StudentConsultationRequest, current_user=Depends(get_current_staff)):
+def create_consultation(student_id: int, payload: StudentConsultationRequest, current_user=Depends(get_current_user)):
     with _connection(True) as conn:
         student = _student(conn, student_id)
+        if not _can_create_consultation(conn, student, current_user):
+            raise HTTPException(403, "본인 담당 수업의 학생에게만 상담을 추가할 수 있습니다.")
+        if current_user["role"] == "teacher" and payload.TeacherUsername != current_user["username"]:
+            raise HTTPException(403, "상담 선생님은 본인으로만 지정할 수 있습니다.")
         _teacher(conn, payload.TeacherUsername)
         _protected(conn, consultation_date=payload.ConsultationDate, teacher=payload.TeacherUsername)
         amount, effective = _basis(conn, payload.ConsultationDate)
