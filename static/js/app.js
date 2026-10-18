@@ -1545,7 +1545,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const deleteButton = isStaff() || (item.RequestedBy === currentUser.username && item.Status !== 'approved') ? ` <button type="button" class="btn btn-xs btn-danger btn-material-delete" data-id="${Number(item.Id)}">삭제</button>` : '';
                 const dateEditor = forReview && isStaff() && item.Status !== 'pending' ? `<div class="material-review-date-editor"><label for="material-review-date-${Number(item.Id)}">처리 날짜</label><input id="material-review-date-${Number(item.Id)}" class="form-control" type="date" value="${escapeHtml((item.ReviewedAt || '').slice(0, 10))}" required><button type="button" class="btn btn-xs btn-outline btn-material-date-save" data-id="${Number(item.Id)}">날짜 저장</button></div>` : '';
                 const review = (item.Status === 'pending' ? `<button class="btn btn-xs btn-success btn-material-approve" data-id="${item.Id}">승인</button> <button class="btn btn-xs btn-danger btn-material-reject" data-id="${item.Id}">반려</button>` : escapeHtml(details)) + dateEditor + deleteButton;
-                return forReview ? `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(userName(item.RequestedBy))}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
+                return forReview ? `<tr data-list-key="${item.Id}"><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(userName(item.RequestedBy))}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${review}</td></tr>` : `<tr data-list-key="${item.Id}"><td>${escapeHtml(item.CreatedAt || '')}</td><td>${escapeHtml(requestBookTitle(item))}</td><td>${escapeHtml(item.BookCategoryLabel)}</td><td>${escapeHtml(fields)}</td><td>${status}</td><td>${escapeHtml(details)}${deleteButton}</td></tr>`;
             }).join('');
             body.querySelectorAll('.btn-material-delete').forEach(btn => btn.addEventListener('click', () => deleteBookMaterialRequest(btn.dataset.id, () => loadBookMaterialRequests(forReview))));
             if (forReview) {
@@ -5264,7 +5264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pkVal = row[pkCol];
             const isRowSelected = selectedPkValues.has(pkVal);
 
-            bodyHtml += `<tr class="${isRowSelected ? 'row-selected' : ''}">`;
+            bodyHtml += `<tr data-list-key="${escapeHtml(String(currentTable))}:${escapeHtml(String(pkVal))}" class="${isRowSelected ? 'row-selected' : ''}">`;
 
             if (isAdmin()) {
                 bodyHtml += `<td style="text-align: center;"><input type="checkbox" class="chk-row" data-pk="${escapeHtml(String(pkVal))}" ${isRowSelected ? 'checked' : ''}></td>`;
@@ -9385,7 +9385,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 header.tabIndex = 0;
                 header.setAttribute('role', 'button');
                 header.setAttribute('title', '클릭하여 정렬');
-                if (!header.hasAttribute('aria-sort')) header.setAttribute('aria-sort', 'none');
+                const active = table.dataset.sortColumn != null && Number(table.dataset.sortColumn) === header.cellIndex;
+                header.classList.toggle('sort-asc', active && table.dataset.sortDirection === 'asc');
+                header.classList.toggle('sort-desc', active && table.dataset.sortDirection === 'desc');
+                header.setAttribute('aria-sort', active ? (table.dataset.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
             } else {
                 header.removeAttribute('tabindex');
                 header.removeAttribute('role');
@@ -9411,6 +9414,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isSortableTableHeader(header)) return;
         const table = header.closest('table');
         const columnIndex = Array.from(header.parentElement.children).indexOf(header);
+        Array.from(table.tBodies).forEach(body => { listRowOrders.delete(body); listOrderResets.delete(body); });
+        table.dataset.sortMode = 'client';
         const previousColumn = Number(table.dataset.sortColumn);
         const direction = previousColumn === columnIndex && table.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
 
@@ -9424,6 +9429,8 @@ document.addEventListener('DOMContentLoaded', () => {
         table.dataset.sortDirection = direction;
 
         if (table.querySelector('#book-cards-grid') && (columnIndex === 7 || columnIndex === 1)) {
+            Array.from(table.tBodies).forEach(body => { if (body.rows.length) listOrderResets.set(body, body.rows[0]); });
+            table.dataset.sortMode = 'server';
             bookSortBy = columnIndex === 7 ? 'StudyStudentCount' : 'row_id';
             bookSortDirection = direction;
             searchPage = 1;
@@ -9432,6 +9439,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (table.querySelector('#studylog-cards-grid')) {
+            Array.from(table.tBodies).forEach(body => { if (body.rows.length) listOrderResets.set(body, body.rows[0]); });
+            table.dataset.sortMode = 'server';
             const studylogSortColumns = [null, 'row_id', 'StudiedDay', 'StudentName', 'TeacherName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'];
             if (!studylogSortColumns[columnIndex]) return;
             studylogSortBy = studylogSortColumns[columnIndex];
@@ -9441,6 +9450,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        applyTableSort(table, columnIndex, direction);
+        preserveTableOrder(table);
+    }
+
+    function applyTableSort(table, columnIndex, direction) {
         Array.from(table.tBodies).forEach(body => {
             const rows = Array.from(body.rows);
             if (rows.length < 2 || rows.some(row => row.cells.length <= columnIndex || row.cells[0]?.colSpan > 1)) return;
@@ -9454,11 +9468,70 @@ document.addEventListener('DOMContentLoaded', () => {
                     : String(left.value).localeCompare(String(right.value), 'ko', { numeric: true, sensitivity: 'base' });
                 return direction === 'asc' ? result : -result;
             });
-            rows.forEach(row => body.appendChild(row));
+            if (rows.some((row, index) => row !== body.rows[index])) rows.forEach(row => body.appendChild(row));
         });
     }
 
-    document.querySelectorAll('table.modern-table').forEach(enhanceSortableTable);
+    // 표시 중인 행의 식별자만 기억한다. 로딩/오류 안내 행은 기존 순서를 지우지 않는다.
+    const listRowOrders = new WeakMap();
+    const listOrderResets = new WeakMap();
+    function listRowKey(row) {
+        for (const name of ['listKey', 'logId', 'bookId', 'studentId', 'classId', 'completionRow']) {
+            if (row.dataset[name] != null) return name + ':' + row.dataset[name];
+        }
+        const control = row.querySelector('[data-id], [data-student], [data-row-id], [data-run-id], [data-user-id]');
+        if (!control) return null;
+        for (const name of ['id', 'student', 'rowId', 'runId', 'userId']) {
+            if (control.dataset[name] != null) return name + ':' + control.dataset[name];
+        }
+        return null;
+    }
+
+    function preserveTableOrder(table) {
+        Array.from(table.tBodies).forEach(body => {
+            const rows = Array.from(body.rows);
+            if (!rows.length || rows.some(row => row.cells[0]?.colSpan > 1)) return;
+            if (listOrderResets.has(body)) {
+                if (rows.includes(listOrderResets.get(body))) return;
+                listOrderResets.delete(body);
+            }
+            const keys = rows.map(listRowKey);
+            const previous = listRowOrders.get(body);
+            if (previous && keys.every(Boolean) && new Set(keys).size === keys.length) {
+                const rank = new Map(previous.map((key, index) => [key, index]));
+                const ordered = rows.map((row, index) => ({ row, index, rank: rank.get(keys[index]) ?? Infinity }))
+                    .sort((a, b) => a.rank - b.rank || a.index - b.index).map(item => item.row);
+                // 불필요한 DOM 변경과 MutationObserver 재호출을 막는다.
+                if (ordered.some((row, index) => row !== rows[index])) ordered.forEach(row => body.appendChild(row));
+            } else if (table.dataset.sortMode === 'client' && table.dataset.sortColumn != null) {
+                applyTableSort(table, Number(table.dataset.sortColumn), table.dataset.sortDirection);
+            }
+            const currentKeys = Array.from(body.rows).map(listRowKey);
+            if (currentKeys.every(Boolean) && new Set(currentKeys).size === currentKeys.length) listRowOrders.set(body, currentKeys);
+        });
+    }
+
+    // 검색 조건·페이지를 직접 바꾸면 새 결과 집합을 사용하되 선택한 정렬은 유지한다.
+    function resetViewRowOrder(event) {
+        const target = event.target;
+        const studioFilter = target.matches?.('#select-active-table, #input-search');
+        const view = target.closest?.('.workspace-view') || (studioFilter ? document.getElementById('data-table')?.closest('.workspace-view') : null);
+        if (!view || target.closest('table, .modal, dialog')) return;
+        if (!target.closest('.search-filter-card, .search-pagination-bar, .pagination-controls, .pagination, #tc-filters, #tc-summary') &&
+            !studioFilter && !target.matches('#tc-prev, #tc-next')) return;
+        if (event.type === 'click' && !target.closest('button, a, input[type="checkbox"], input[type="radio"]')) return;
+        view.querySelectorAll('table.modern-table tbody').forEach(body => {
+            listRowOrders.delete(body);
+            if (body.rows.length) listOrderResets.set(body, body.rows[0]);
+        });
+    }
+    ['change', 'submit', 'click'].forEach(type => document.addEventListener(type, resetViewRowOrder, true));
+    document.getElementById('input-search')?.addEventListener('input', resetViewRowOrder);
+
+    document.querySelectorAll('table.modern-table').forEach(table => {
+        enhanceSortableTable(table);
+        preserveTableOrder(table);
+    });
     const sortableTableObserver = new MutationObserver(mutations => {
         const tables = new Set();
         mutations.forEach(mutation => {
@@ -9472,7 +9545,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 node.querySelectorAll?.('table.modern-table').forEach(item => tables.add(item));
             });
         });
-        tables.forEach(enhanceSortableTable);
+        tables.forEach(table => {
+            enhanceSortableTable(table);
+            preserveTableOrder(table);
+        });
     });
     sortableTableObserver.observe(document.querySelector('main'), { childList: true, subtree: true });
 
