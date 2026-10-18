@@ -234,3 +234,23 @@ test('결제 필터의 레이아웃은 화면 범위를 한정하고 좁은 화�
     assert.match(css, /@media \(max-width: 600px\)\s*\{\s*#view-tuition-payment-search \.tuition-filter-fields\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
     assert.match(css, /\.tuition-filter-help summary:focus-visible/);
 });
+
+// 실제 셀 렌더링과 공통 정렬을 함께 검증한다.
+test('잔여 차시 숫자로 양방향 정렬하고 비현재·미확인 결제는 항상 뒤에 둔다', async () => {
+    const payments = [payment(4), payment(99, 'previous'), payment(-3), payment(0), payment(12), payment(1), payment(50, 'upcoming'), payment(0, 'unknown'), payment(null)];
+    const f = fixture(async () => ({ payments }));
+    await f.load();
+    const values = Array.from(f.body.innerHTML.matchAll(/<td data-sort-value="([^"]*)">/g), m => m[1]);
+    assert.deepEqual(values, ['4', '', '-3', '0', '12', '1', '', '', '']);
+    const ctx = vm.createContext({});
+    vm.runInContext(source.slice(source.indexOf('    function getSortableCellValue('), source.indexOf('    function sortTableByHeader(')) + source.slice(source.indexOf('    function applyTableSort('), source.indexOf('    // 표시 중인 행의 식별자')) + '\nglobalThis.sort = applyTableSort; globalThis.value = getSortableCellValue;', ctx);
+    const rows = values.map((value, index) => ({ index, cells: [{ dataset: { sortValue: value }, textContent: '10회 / 2회 잔여 안내' }] }));
+    const body = { rows: [...rows], appendChild(row) { this.rows.splice(this.rows.indexOf(row), 1); this.rows.push(row); } };
+    const table = { tBodies: [body] };
+    ctx.sort(table, 0, 'asc');
+    assert.deepEqual(body.rows.map(r => r.index), [2, 3, 5, 0, 4, 1, 6, 7, 8]);
+    ctx.sort(table, 0, 'desc');
+    assert.deepEqual(body.rows.map(r => r.index), [4, 0, 5, 3, 2, 1, 6, 7, 8]);
+    assert.equal(ctx.value({ dataset: {}, textContent: '10회' }).value, 10);
+    assert.equal(ctx.value({ dataset: { sortValue: '' }, textContent: '이전 결제' }).type, 'empty');
+});

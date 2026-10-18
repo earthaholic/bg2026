@@ -8302,7 +8302,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true&include_ended=${includeEnded}${progressQuery}`);
             if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
         } catch (err) {
             if (version !== tuitionPaymentSearchVersion) return;
@@ -9399,7 +9399,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getSortableCellValue(cell) {
-        const raw = (cell?.dataset.sortValue || cell?.textContent || '').replace(/\s+/g, ' ').trim();
+        const raw = (cell?.dataset.sortValue ?? cell?.textContent ?? '').replace(/\s+/g, ' ').trim();
         if (!raw || raw === '-') return { type: 'empty', value: '' };
         const dateMatch = raw.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
         if (dateMatch) {

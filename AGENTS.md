@@ -269,3 +269,5 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `static/js/dialog_escape.js`가 사용자 정의 `.modal-backdrop`의 Esc를 공통 처리한다. 표시 중인 최상위 창의 기존 닫기 버튼을 실행하며, 비활성 버튼과 닫기 핸들러의 저장 중 보호를 우회하지 않는다. 닫기 버튼 없는 필수 로그인 창은 유지한다.
 - 기본 `<dialog>`의 `showModal()`은 브라우저의 최상위 계층·`cancel` 처리를 그대로 사용하여 납입 관리 미저장 확인과 보완 저장 중 닫기 차단을 유지한다. 길게 누른 Esc로 뒤쪽 창까지 닫히지 않도록 반복 키를 차단하고 한글 조합 중 Esc는 무시한다.
 - 검증: `node --test tests/test_dialog_escape_ui.js`.
+
+- 수업료 결제 이력 조회의 `결제/서비스` 열은 현재 결제의 `TuitionProgress.remaining_lessons` 숫자로 정렬한다. 초과 사용은 음수로 비교하고 이전 결제·시작 예정·확인 불가는 양방향 모두 맨 뒤에 둔다. 공통 정렬은 명시적인 빈 `data-sort-value`를 빈 값으로 처리한다. 검증: `tests/test_tuition_payment_progress_ui.js`, `tests/test_list_order_ui.js`.
