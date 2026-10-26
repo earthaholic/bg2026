@@ -5125,3 +5125,6 @@ button.class-student-badge { cursor: pointer; }
 .mcp-connection-help, #mcp-connection-state { color: var(--text-secondary); }
 .mcp-connection-warning { padding: 0.5rem; border-left: 3px solid #d97706; background: rgba(217, 119, 6, 0.09); }
 #mcp-connection-message:empty { display: none; }
+
+.mcp-connection-actions + .mcp-connection-actions { margin-top: 0.5rem; }
+#mcp-connection-state { white-space: pre-line; }

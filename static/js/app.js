@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // App State
     let token = localStorage.getItem('token');
     let currentUser = null;
-    const mcpConnection = initMcpConnection({ getToken: () => currentUser && token === localStorage.getItem('token') ? token : null });
+    const mcpConnection = initMcpConnection({ apiFetch });
     let currentTable = null;
     let tableSchema = [];
     let currentPage = 1;

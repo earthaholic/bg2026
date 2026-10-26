@@ -79,12 +79,13 @@ def install_mcp_http(app):
     from starlette.concurrency import run_in_threadpool
     from starlette.requests import Request, ClientDisconnect
     from auth import get_current_user
+    from mcp_tokens import authenticate_mcp_token, InternalReadApp
     from mcp_gateway import ReadGateway
     from mcp_protocol import ReadProtocol, ProtocolError, validate_message, validate_version, MODERN, META_PREFIX, SERVER_INFO
 
     hosts = _configured_list('BG_MCP_ALLOWED_HOSTS', '127.0.0.1,127.0.0.1:*,localhost,localhost:*,[::1],[::1]:*')
     origins = _configured_list('BG_MCP_ALLOWED_ORIGINS', 'http://127.0.0.1:*,http://localhost:*')
-    prototype = ReadGateway('http://127.0.0.1', '요청별 인증 필수', transport=httpx.ASGITransport(app=app))
+    prototype = ReadGateway('http://127.0.0.1', '요청별 인증 필수', transport=httpx.ASGITransport(app=InternalReadApp(app)))
     protocol = ReadProtocol(prototype)
 
     def error_response(error, request_id=None):
@@ -121,7 +122,10 @@ def install_mcp_http(app):
                 return JSONResponse({'detail': '로그인 Bearer 토큰이 필요합니다.'}, status_code=401,
                                     headers={'WWW-Authenticate': 'Bearer'})
             try:
-                await run_in_threadpool(get_current_user, request, token)
+                if token.startswith('bgmcp_'):
+                    await run_in_threadpool(authenticate_mcp_token, token)
+                else:
+                    await run_in_threadpool(get_current_user, request, token)
             except HTTPException:
                 return JSONResponse({'detail': '로그인 토큰이 만료되었거나 유효하지 않습니다.'}, status_code=401,
                                     headers={'WWW-Authenticate': 'Bearer'})

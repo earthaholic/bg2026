@@ -26,6 +26,14 @@ def get_current_user(request: Request, token: str = Depends(oauth2_scheme)) -> D
         detail="유효하지 않은 인증 토큰이거나 토큰이 만료되었습니다.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if token.startswith('bgmcp_'):
+        from mcp_tokens import authenticate_mcp_token, internal_read_allowed
+        if not internal_read_allowed(request.scope):
+            raise credentials_exception
+        user = authenticate_mcp_token(token)
+        request.state.activity_user = {"id": user["id"], "username": user["username"], "role": user["role"]}
+        request.state.activity_session_id = ""
+        return user
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")

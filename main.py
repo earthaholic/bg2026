@@ -78,6 +78,9 @@ app = FastAPI(
 
 app.middleware("http")(activity_middleware)
 app.add_middleware(ReadOnlyContextMiddleware)
+from mcp_tokens import router as mcp_token_router, init_mcp_token_tables, TokenNoStoreMiddleware
+app.add_middleware(TokenNoStoreMiddleware)
+app.include_router(mcp_token_router)
 app.include_router(mcp_read_router)
 app.include_router(consultation_router)
 app.include_router(activity_router)
@@ -102,6 +105,7 @@ templates = Jinja2Templates(directory=templates_dir)
 @app.on_event("startup")
 def on_startup():
     init_system_tables()
+    init_mcp_token_tables()
     init_activity_tables()
     init_tuition_collection_tables()
     advance_student_grades()
