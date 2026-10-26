@@ -526,7 +526,8 @@ document.addEventListener('DOMContentLoaded', () => {
             options.headers['Content-Type'] = 'application/json';
         }
 
-        const res = await fetch(url, options);
+        const res = await (globalThis.BgSearch ? BgSearch.fetch(url, options) : fetch(url, options));
+        if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
         if (res.status === 401) {
             handleLogout();
             throw new Error('인증이 필요합니다.');
@@ -792,6 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = new URL(location.href);
         const previousView = url.searchParams.get('view');
+        globalThis.BgSearch?.cancelAll();
         ['book', 'student'].forEach(kind => {
             const toggle = document.getElementById(kind + '-quick-edit');
             if (toggle && targetView !== kind + '-search') { toggle.checked = false; syncListQuickEdit(kind); }
@@ -888,6 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleLogout() {
         mcpConnection.reset();
+        globalThis.BgSearch?.cancelAll();
         tuitionCollection.reset();
         completionState.version++;
         completionState.searchVersion++;
@@ -2712,6 +2715,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load StudyLog Search Results Grid
     async function loadStudyLogSearchResults(directSearch = false) {
+        if (!token) return;
+        const lookup = globalThis.BgSearch?.begin('studylog-search', () => loadStudyLogSearchResults(directSearch));
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         if (!token) return;
         const requestId = ++studylogSearchRequestId;
@@ -2719,7 +2725,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isStudylogBulkDeleting) closeStudylogBulkDeleteModal();
         closeStudylogBulkTransferModal();
         try {
-            studylogCardsGrid.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학습 기록 검색 중...</p></div></td></tr>';
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
             updateStudylogBulkSelectionUI();
 
             const q = studylogSearchQ.value.trim();
@@ -2734,7 +2740,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (q) queryParams.append('q', q);
             if (date) queryParams.append('studied_day', date);
 
-            const data = await apiFetch(`/api/user/studylogs/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            const data = await apiFetch(`/api/user/studylogs/search?${queryParams.toString()}`, {signal: lookup?.signal, headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             if (requestId !== studylogSearchRequestId) return;
             studylogSearchTotalPages = data.total_pages;
             studylogSearchTotalCountValue = data.total_count;
@@ -2751,6 +2759,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudyLogCards(data.studylogs);
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             if (requestId !== studylogSearchRequestId) return;
             feedback.show(err.message, 'error');
             studylogCardsGrid.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p class="alert alert-danger">${escapeHtml(err.message)}</p></div></td></tr>`;
@@ -3564,13 +3573,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Book Search Handler
     async function loadBookSearchResults(directSearch = false) {
+        if (!token) return;
+        const lookup = globalThis.BgSearch?.begin('book-search', () => loadBookSearchResults(directSearch));
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         if (!token) return;
         try {
-            selectableBooks = [];
             selectedBookIds.clear();
             updateBookSelection();
-            bookCardsGrid.innerHTML = '<tr><td colspan="11" class="text-center p-4">도서 검색 중...</td></tr>';
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
 
             const q = bookSearchQ.value.trim();
             const target = getSelectedTargetCheckboxes();
@@ -3616,7 +3627,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasMillie) queryParams.append('has_millie', 1);
             if (bookUnstudiedStudents.size) queryParams.append('unstudied_student_ids', Array.from(bookUnstudiedStudents.keys()).join(','));
 
-            const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            const data = await apiFetch(`/api/user/books/search?${queryParams.toString()}`, {signal: lookup?.signal, headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             searchTotalPages = data.total_pages;
 
             searchTotalCount.textContent = `총 ${data.total_count} 건의 도서`;
@@ -3627,6 +3640,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderBookCards(data.books);
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             feedback.show(err.message, 'error');
             bookCardsGrid.innerHTML = `<tr><td colspan="11" class="text-center p-4 alert alert-danger">${escapeHtml(err.message)}</td></tr>`;
         }
@@ -3834,15 +3848,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 학생 검색 조건을 바꾸면 늦게 도착한 이전 결과는 무시한다.
     async function loadStudentSearchResults(directSearch = false) {
+        if (!token) return;
+        const lookup = globalThis.BgSearch?.begin('student-search', () => loadStudentSearchResults(directSearch));
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         if (!token) return;
         const requestVersion = ++studentSearchRequestVersion;
         hideRecordCoverageTooltip();
         try {
-            studentCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>학생 검색 중...</p></div></td></tr>';
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
 
             const queryParams = buildStudentSearchParams();
-            const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            const data = await apiFetch(`/api/user/students/search?${queryParams.toString()}`, {signal: lookup?.signal, headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             if (requestVersion !== studentSearchRequestVersion) return;
             studentSearchTotalPages = data.total_pages;
 
@@ -3854,6 +3873,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudentCards(data.students);
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             if (requestVersion !== studentSearchRequestVersion) return;
             feedback.show(err.message, 'error');
             studentCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
@@ -6171,14 +6191,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 수업 목록 검색
     async function loadClassSearchResults(directSearch = false) {
+        if (!token) return;
+        const lookup = globalThis.BgSearch?.begin('class-list', () => loadClassSearchResults(directSearch));
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         if (!token || !classCardsGrid) return;
         try {
-            classCardsGrid.innerHTML = '<div class="empty-state" style="grid-column: span 10;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>수업 검색 중...</p></div>';
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
             const q = classSearchQ ? classSearchQ.value.trim() : '';
             const params = new URLSearchParams({ page: classSearchPage, limit: classSearchLimit });
             if (q) params.append('q', q);
-            const data = await apiFetch(`/api/user/classes?${params.toString()}`, {headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            const data = await apiFetch(`/api/user/classes?${params.toString()}`, {signal: lookup?.signal, headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             classSearchTotalPages = data.total_pages;
             if (classSearchTotalCount) classSearchTotalCount.textContent = `총 ${data.total_count} 건의 수업`;
             if (classSearchPaginationInfo) classSearchPaginationInfo.textContent = `${classSearchPage} / ${classSearchTotalPages} 페이지 (총 ${data.total_count}건)`;
@@ -6187,6 +6212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnClassSearchNext) btnClassSearchNext.disabled = (classSearchPage >= classSearchTotalPages);
             renderClassCards(data.classes);
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             feedback.show(err.message, 'error');
             classCardsGrid.innerHTML = `<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><p class="alert alert-danger">${err.message}</p></div></td></tr>`;
         }
@@ -8072,6 +8098,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadAuditLogs() {
+        const lookup = globalThis.BgSearch?.begin('audit-log', () => loadAuditLogs());
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         const params = new URLSearchParams();
         params.set('page', auditLogPage);
@@ -8088,10 +8116,13 @@ document.addEventListener('DOMContentLoaded', () => {
         history.replaceState(null, '', `${location.pathname}?${urlParams.toString()}`);
 
         try {
-            auditLogBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>변경 이력 로딩 중...</p></td></tr>';
-            const data = await apiFetch(`/api/admin/audit-logs?${params.toString()}`);
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
+            const data = await apiFetch(`/api/admin/audit-logs?${params.toString()}`, {signal: lookup?.signal});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             renderAuditLogs(data);
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             feedback.show(err.message, 'error');
             auditLogBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p class="alert alert-danger">${err.message}</p></td></tr>`;
         }
@@ -8371,6 +8402,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let tuitionPaymentSearchVersion = 0;
     async function loadTuitionPaymentSearch() {
+        const lookup = globalThis.BgSearch?.begin('tuition-payment-search', () => loadTuitionPaymentSearch());
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         const body = document.getElementById('tuition-search-body');
         if (!body) return;
@@ -8379,15 +8412,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const progressState = document.getElementById('tuition-search-progress').value;
         const includeEnded = document.getElementById('tuition-search-include-ended').checked;
         const version = ++tuitionPaymentSearchVersion;
-        body.innerHTML = '<tr><td colspan="7" class="text-center">결제 이력을 불러오는 중입니다.</td></tr>';
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
         try {
             const progressQuery = progressState ? `&progress_state=${encodeURIComponent(progressState)}` : '';
-            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true&include_ended=${includeEnded}${progressQuery}`);
+            const data = await apiFetch(`/api/user/tuition-payments?q=${encodeURIComponent(q)}&class_type=${encodeURIComponent(classType)}&include_progress=true&include_ended=${includeEnded}${progressQuery}`, {signal: lookup?.signal});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
             body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             if (version !== tuitionPaymentSearchVersion) return;
             feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
@@ -9703,6 +9739,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadActivityLogs(page = 1) {
+        if (!isAdmin()) return;
+        const lookup = globalThis.BgSearch?.begin('activity-log', () => loadActivityLogs(page));
+        if (lookup && !await lookup.ready) return;
         const feedback = createActionFeedback();
         if (!isAdmin()) return;
         const version = ++activityVersion;
@@ -9710,11 +9749,13 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const [id, key] of [['username','username'], ['date-from','date_from'], ['date-to','date_to'], ['event','event'], ['area','area'], ['result','result']]) {
             if (activityEl(id).value) params.set(key, activityEl(id).value);
         }
-        activityEl('summary').textContent = '활동 이력을 조회하고 있습니다.';
-        activityEl('prev').disabled = activityEl('next').disabled = true;
-        activityEl('body').innerHTML = '<tr><td colspan="7" class="empty-state">조회 중입니다.</td></tr>';
+        // 조회 중에도 기존 요약과 페이지 이동 상태를 유지한다.
+        // 페이지 이동은 새 조회가 성공한 뒤 갱신한다.
+            // 새 결과가 도착할 때까지 기존 목록을 유지한다.
         try {
-            const data = await apiFetch(`/api/admin/activity-logs?${params}`);
+            const data = await apiFetch(`/api/admin/activity-logs?${params}`, {signal: lookup?.signal});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             if (version !== activityVersion || !isAdmin()) return;
             activityPage = data.page;
             activityTotalPages = data.total_pages;
@@ -9731,6 +9772,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activityEl('prev').disabled = activityPage <= 1;
             activityEl('next').disabled = activityPage >= activityTotalPages;
         } catch (err) {
+            if (lookup) { lookup.fail(err); return; }
             if (version !== activityVersion) return;
             feedback.show(err.message, 'error');
             activityItems = [];

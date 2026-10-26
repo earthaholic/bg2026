@@ -25,8 +25,13 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
     const date = value => value ? esc(String(value).replace('T', ' ').slice(0, 16)) : '없음';
     const message = (text, error = false) => { el('message').textContent = text; el('message').className = error ? 'alert alert-danger' : ''; };
     function detailMessage(text, error = false) { const target = el('detail-message'); if (target) { target.textContent = text; target.className = error ? 'alert alert-danger' : 'alert alert-success'; } }
-    async function options() {
-        if (optionsLoaded) return;
+    let optionsPromise = null;
+    function options() {
+        if (optionsLoaded) return Promise.resolve();
+        if (!optionsPromise) optionsPromise = loadOptions().finally(() => { optionsPromise = null; });
+        return optionsPromise;
+    }
+    async function loadOptions() {
         const [teachers, classes] = await Promise.all([apiFetch('/api/user/teachers-options'), apiFetch('/api/user/classes?page=1&limit=100')]);
         const teacherRows = teachers.teachers || teachers.options || [];
         el('teacher').innerHTML = '<option value="">전체 선생님</option>' + teacherRows.map(t => `<option value="${esc(t.username || t.Username)}">${esc(t.name || t.Name || t.username)}</option>`).join('');
@@ -36,13 +41,17 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
         optionsLoaded = true;
     }
     async function load() {
+        const lookup = globalThis.BgSearch?.begin('tuition-collection', load);
+        if (lookup && !await lookup.ready) return;
         const version = ++listVersion;
         const query = new URLSearchParams();
         for (const [key, value] of new FormData(el('filters'))) if (value) query.set(key, value === 'on' ? 'true' : value);
         query.set('page', page); query.set('limit', 30);
-        message('불러오는 중…'); el('prev').disabled = el('next').disabled = true;
+        message('불러오는 중…');
         try {
-            const data = await apiFetch(`${base}?${query}`);
+            const data = await apiFetch(`${base}?${query}`, {signal: lookup?.signal});
+            if (lookup && !lookup.current()) return;
+            lookup?.success();
             if (version !== listVersion) return;
             const rows = data.students || [];
             el('count').textContent = `학생 ${data.total || 0}명`;
@@ -59,8 +68,8 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
             el('page').textContent = `${page} / ${Math.max(1, Math.ceil(data.total / 30))} 페이지`;
             el('prev').disabled = page <= 1; el('next').disabled = page * 30 >= data.total;
             message('');
-            options().catch(error => message(`선택 목록 조회 실패: ${error.message}`, true));
-        } catch (error) { if (version === listVersion) { message(error.message, true); el('body').innerHTML = '<tr><td colspan="7">목록을 불러오지 못했습니다. 검색으로 다시 시도하세요.</td></tr>'; } }
+            options().catch(error => { if (version === listVersion && (!lookup || lookup.current())) { if (lookup) lookup.fail(error); else message(`선택 목록 조회 실패: ${error.message}`, true); } });
+        } catch (error) { if (lookup) { if (lookup.current()) message('', false); lookup.fail(error); return; } if (version === listVersion) message(error.message, true); }
     }
     const input = (name, label, type = 'text', value = '', attrs = '') => `<div class="form-group"><label for="tc-field-${name}">${label}</label><input id="tc-field-${name}" name="${name}" type="${type}" class="form-control" value="${esc(value)}" ${attrs}></div>`;
     async function openDetail(id) {

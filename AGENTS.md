@@ -299,6 +299,15 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - HTTP는 요청별 Bearer 토큰을 기존 인증으로 검증하고 요청 컨텍스트에서만 도구 호출에 전달한다. 고정 관리자 토큰이나 브라우저 쿠키를 사용하지 않는다. 내부 조회는 ASGITransport로 동일 앱의 기존 API를 호출하여 권한을 재확인한다. OAuth 자동 로그인 서버는 구현하지 않았다.
 - Python 3.9의 SDK 없는 검증은 `tests/test_mcp_http_config.py`, `tests/test_mcp_protocol.py` 및 기존 MCP SQL·집계·목록 테스트를 사용한다. 공식 최신 클라이언트 상호운용 검증은 별도 3.11+의 `tests_mcp/test_mcp_http.py`, `tests_mcp/test_mcp_python39_process.py`(BG_MCP_TEST_PYTHON39로 3.9 실행 파일 지정)를 사용한다. 운영 안내는 `docs/MCP_웹서버통합.md`이며 Windows 테스트를 Linux Gunicorn 실제 구동 검증으로 표현하지 않는다.
 
+
+## 검색 조회 통신 안정화
+- `static/js/search_requests.js`의 `BgSearch`가 도서·학생·학습 기록·수업·결제 이력·납입 관리·변경 이력·활동 이력 조회를 300ms로 묶고 이전 조회를 취소한다. 최신 응답과 오류만 반영하며 취소는 무음이다. 화면 이동은 기존 미저장 확인을 통과한 뒤, 로그아웃은 즉시 조회를 취소한다.
+- 조회 중 기존 결과를 유지하고 결과 영역을 일시 비활성화한다. 실패하면 필터·목록을 유지하며 이전 결과임을 안내하고 `다시 조회`를 제공한다. 저장·삭제에는 조회 취소나 자동 재시도를 적용하지 않는다.
+- 공통 API의 비민감 진단은 브라우저 메모리 최근 100건이며 `BgSearch.diagnostics()`로 확인한다. 발생 시각·허용 목록의 요청 경로·응답 헤더까지의 소요 시간·HTTP 상태·형식 검증한 요청 번호만 보관하고 쿼리·토큰·본문·개인 식별 경로는 기록하지 않는다. 허용 목록 밖 경로는 `/api/기타`로 표시한다. 실패 및 3초 초과 응답은 콘솔에도 남기며 서버에 자동 전송하지 않는다.
+- 취소는 브라우저의 이전 결과 수신을 중단할 뿐 서버에서 이미 시작한 SQL 실행 중단을 보장하지 않는다. 운영 쿼리 최적화는 실제 지연 진단 후 별도로 수행한다.
+- 검증: `node --test tests/test_search_requests_ui.js tests/test_student_record_filters_ui.js tests/test_tuition_payment_progress_ui.js tests/test_tuition_collection_ui.js tests/test_list_order_ui.js`.
+
+
 ## 좌측 하단 MCP 연결 정보
 - 로그인 검증 후 좌측 하단 `MCP 연결 정보`를 표시하며 기본 접힘이다. `static/js/mcp_connection.js`는 주소·토큰·인증 헤더 값 복사를 담당한다. 실제 토큰은 화면·DOM 속성·로그·오류 문구에 넣지 않고 클립보드에만 전달한다.
 - 이 토큰은 기존 웹 로그인 토큰이며 MCP 전용 읽기 권한 키가 아니다. 계정의 수정·삭제 권한도 사용할 수 있다는 경고를 표시한다. 서버 인증·권한 및 토큰 발급 방식은 변경하지 않는다.

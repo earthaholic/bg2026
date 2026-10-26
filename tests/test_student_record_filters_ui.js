@@ -71,6 +71,7 @@ function fixture(apiFetch = async () => result()) {
         escapeHtml: value => String(value), formatSex: value => value || '-',
         formatGrade: value => value || '-', formatReferrer: value => value,
         renderStudentSearchName: student => student.Name,
+        bindListQuickEdit() {}, quickChoice: () => '',
         hideRecordCoverageTooltip() {}, bindRecordCoverageTooltips() {},
         createActionFeedback: () => ({ show: (message, type) => feedback.push({ message, type }) }),
         apiFetch: (url, options) => {
