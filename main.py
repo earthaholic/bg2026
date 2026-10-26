@@ -68,6 +68,8 @@ from studylog_completion import router as studylog_completion_router
 from tuition_collection import router as tuition_collection_router, init_tuition_collection_tables
 from consultation_payroll import router as consultation_router, payroll_consultation_rows, freeze_payroll_consultations
 from jose import jwt
+from mcp_read_api import router as mcp_read_router
+from read_only_context import ReadOnlyContextMiddleware
 
 app = FastAPI(
     title="한국토론교육연구협회 - 꿈꾸는봄결 데이터 관리 시스템",
@@ -75,6 +77,8 @@ app = FastAPI(
 )
 
 app.middleware("http")(activity_middleware)
+app.add_middleware(ReadOnlyContextMiddleware)
+app.include_router(mcp_read_router)
 app.include_router(consultation_router)
 app.include_router(activity_router)
 app.include_router(csv_class_links_router)
@@ -5115,6 +5119,11 @@ def admin_list_audit_logs(
         "total_count": total_count,
         "total_pages": total_pages
     }
+
+
+# Python 3.9.13에서도 최신 SDK 없이 웹 서버와 같은 포트로 MCP를 제공한다.
+from mcp_http import install_mcp_http
+install_mcp_http(app)
 
 
 if __name__ == "__main__":

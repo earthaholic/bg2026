@@ -284,3 +284,17 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 
 - 빠른 수정 셀은 콤보박스 대신 현재 값 배지 버튼이다. 클릭은 다음 값, Shift+클릭은 이전 값으로 순환하며 마지막 값 다음은 처음 값이다. 기존 자유 입력 등 선택지 밖 값은 첫 클릭 때 버튼 선택 목록을 열고, 명시적으로 선택하기 전까지 변경하지 않는다.
 - 저장 후 10초간 가장 최근 변경의 `되돌리기`를 제공한다. 되돌리기 직전에 상세를 다시 조회해 값이 달라졌으면 중단한다. 빠른 수정 해제·화면 이동 시 선택 목록과 되돌리기 버튼도 제거한다.
+
+
+## 읽기 전용 MCP 서버
+- `mcp_server.py`는 공식 SDK 2.3.0 기반 stdio 서버로 MCP 2026-07-28 및 이전 규격을 지원한다. Python 3.11+ `.venv-mcp`와 `requirements-mcp.txt`로 웹 환경과 분리한다. `mcp_http.py`를 통해 같은 웹 앱의 `/mcp` Streamable HTTP도 지원한다.
+- `mcp_catalog.json`은 검토된 조회 도구 66개(사이트 API GET 61개 + 읽기 목적 POST 5개)와 입력 스키마를 고정한다. `generate_mcp_catalog.py`로 재생성 후 새 조회의 부작용을 검토한다. 실행 중 임의 URL이나 신규 엔드포인트를 자동 노출하지 않는다.
+- 기존 사용자 토큰으로 사이트 API를 호출하여 권한·교사 범위를 유지하며 쓰기용 미리보기 토큰·비밀번호 키를 응답에서 제거한다. 토큰은 `BG_MCP_TOKEN` 또는 `BG_MCP_TOKEN_FILE`로 설정한다. `mcp_login.py`는 비밀번호 숨김 입력 후 기존 로그인 토큰만 저장한다. 토큰·암호를 출력하거나 커밋하지 않는다.
+- `ReadOnlyContextMiddleware`는 `X-BG-Read-Only: 1` 요청에 ContextVar를 적용한다. 자동 진급을 생략하고 도서 학생 수를 연결별 TEMP 테이블로 집계하여 영구 캐시를 바꾸지 않는다. 기존 활동 로그는 유지한다. 이 헤더 자체는 인증이나 쓰기 API 차단 수단이 아니다.
+- SQL은 기존 범용 실행 API를 사용하지 않고 `mcp_read_api.py`의 관리자 전용 `/api/admin/mcp/sql/query|export-csv`를 사용한다. 읽기 전용 연결·authorizer·함수 허용목록으로 쓰기와 내부 테이블 읽기를 차단하며 행수·시간·연산수·크기를 제한한다.
+- 검증: `.venv\Scripts\python.exe -m unittest discover -s tests -p test_mcp_*.py`, `.venv-mcp\Scripts\python.exe -m unittest discover -s tests_mcp -p test_*.py`. 설치·연결 안내는 `docs/MCP_사용안내.md`.
+
+- 사용자 운영 환경은 변경할 수 없는 Python 3.9.13이다. 웹 통합은 `requirements-web-mcp.txt`의 httpx 0.28.1/jsonschema 4.23.0만 추가하며 최신 SDK를 import하지 않는다. `mcp_gateway.py`는 조회 경계, `mcp_protocol.py`는 2026-07-28/2025-11-25 JSON-RPC, `mcp_http.py`는 HTTP·인증·헤더·크기 검증을 담당한다. 별도 전송 관리자 없이 기존 웹 lifespan을 그대로 유지하며 세션 비저장이라 Gunicorn 다중 워커에 독립적이다.
+- `BG_MCP_HTTP=auto`(기본)는 httpx/jsonschema가 있으면 활성화, 없으면 `/mcp` 503으로 기존 웹을 유지한다. `1`은 필요한 패키지 누락 시 시작 실패, `0`은 경로 미등록이다. `BG_MCP_ALLOWED_HOSTS`·`BG_MCP_ALLOWED_ORIGINS`에 실제 배포 호스트·출처를 지정하며 외부 접속은 HTTPS를 사용한다.
+- HTTP는 요청별 Bearer 토큰을 기존 인증으로 검증하고 요청 컨텍스트에서만 도구 호출에 전달한다. 고정 관리자 토큰이나 브라우저 쿠키를 사용하지 않는다. 내부 조회는 ASGITransport로 동일 앱의 기존 API를 호출하여 권한을 재확인한다. OAuth 자동 로그인 서버는 구현하지 않았다.
+- Python 3.9의 SDK 없는 검증은 `tests/test_mcp_http_config.py`, `tests/test_mcp_protocol.py` 및 기존 MCP SQL·집계·목록 테스트를 사용한다. 공식 최신 클라이언트 상호운용 검증은 별도 3.11+의 `tests_mcp/test_mcp_http.py`, `tests_mcp/test_mcp_python39_process.py`(BG_MCP_TEST_PYTHON39로 3.9 실행 파일 지정)를 사용한다. 운영 안내는 `docs/MCP_웹서버통합.md`이며 Windows 테스트를 Linux Gunicorn 실제 구동 검증으로 표현하지 않는다.

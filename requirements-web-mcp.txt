@@ -1,0 +1,5 @@
+# Python 3.9.13 웹 서버와 MCP를 같은 Gunicorn 프로세스에서 실행한다.
+# 최신 SDK(mcp)는 서버에 설치하지 않는다.
+-r requirements.txt
+httpx==0.28.1
+jsonschema==4.23.0

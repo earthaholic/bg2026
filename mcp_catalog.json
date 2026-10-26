@@ -1,0 +1,2365 @@
+[
+  {
+    "name": "read_query",
+    "method": "POST",
+    "path": "/api/admin/mcp/sql/query",
+    "description": "조회 전용: /api/admin/mcp/sql/query. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "properties": {
+            "sql": {
+              "type": "string",
+              "maxLength": 50000,
+              "minLength": 1,
+              "title": "Sql"
+            },
+            "limit": {
+              "type": "integer",
+              "maximum": 1000.0,
+              "minimum": 1.0,
+              "title": "Limit",
+              "default": 1000
+            },
+            "parameters": {
+              "anyOf": [
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              ],
+              "title": "Parameters"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "sql"
+          ],
+          "title": "ReadQuery"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "body"
+      ]
+    },
+    "locations": {},
+    "encoding": "json"
+  },
+  {
+    "name": "read_export_csv",
+    "method": "POST",
+    "path": "/api/admin/mcp/sql/export-csv",
+    "description": "조회 전용: /api/admin/mcp/sql/export-csv. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "properties": {
+            "sql": {
+              "type": "string",
+              "maxLength": 50000,
+              "minLength": 1,
+              "title": "Sql"
+            },
+            "limit": {
+              "type": "integer",
+              "maximum": 1000.0,
+              "minimum": 1.0,
+              "title": "Limit",
+              "default": 1000
+            },
+            "parameters": {
+              "anyOf": [
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              ],
+              "title": "Parameters"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "sql"
+          ],
+          "title": "ReadQuery"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "body"
+      ]
+    },
+    "locations": {},
+    "encoding": "json"
+  },
+  {
+    "name": "read_get_consultation_pay_rates",
+    "method": "GET",
+    "path": "/api/user/consultation-pay-rates",
+    "description": "조회 전용: /api/user/consultation-pay-rates. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_student_consultations",
+    "method": "GET",
+    "path": "/api/user/students/{student_id}/consultations",
+    "description": "조회 전용: /api/user/students/{student_id}/consultations. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_consultation",
+    "method": "GET",
+    "path": "/api/user/consultations/{consultation_id}",
+    "description": "조회 전용: /api/user/consultations/{consultation_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "consultation_id": {
+          "type": "integer",
+          "title": "Consultation Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "consultation_id"
+      ]
+    },
+    "locations": {
+      "consultation_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_activity_options",
+    "method": "GET",
+    "path": "/api/admin/activity-logs/options",
+    "description": "조회 전용: /api/admin/activity-logs/options. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_list_activity_logs",
+    "method": "GET",
+    "path": "/api/admin/activity-logs",
+    "description": "조회 전용: /api/admin/activity-logs. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "maxLength": 200,
+          "default": "",
+          "title": "Username"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "title": "Date From"
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "title": "Date To"
+        },
+        "event": {
+          "type": "string",
+          "default": "",
+          "title": "Event"
+        },
+        "area": {
+          "type": "string",
+          "default": "",
+          "title": "Area"
+        },
+        "result": {
+          "type": "string",
+          "default": "",
+          "title": "Result"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "date_from",
+        "date_to"
+      ]
+    },
+    "locations": {
+      "username": "query",
+      "date_from": "query",
+      "date_to": "query",
+      "event": "query",
+      "area": "query",
+      "result": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_preview_csv_class_links",
+    "method": "GET",
+    "path": "/api/user/utilities/studylog-csv/runs/{run_id}/class-links",
+    "description": "조회 전용: /api/user/utilities/studylog-csv/runs/{run_id}/class-links. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "integer",
+          "title": "Run Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "run_id"
+      ]
+    },
+    "locations": {
+      "run_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_completion_records",
+    "method": "GET",
+    "path": "/api/user/studylog-completion",
+    "description": "조회 전용: /api/user/studylog-completion. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "title": "Student Id"
+        },
+        "field": {
+          "enum": [
+            "teacher",
+            "content"
+          ],
+          "type": "string",
+          "default": "content",
+          "title": "Field"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "query",
+      "field": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_list_collection",
+    "method": "GET",
+    "path": "/api/user/tuition-collection",
+    "description": "조회 전용: /api/user/tuition-collection. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "default": "",
+          "title": "Q"
+        },
+        "class_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Class Id"
+        },
+        "teacher": {
+          "type": "string",
+          "default": "",
+          "title": "Teacher"
+        },
+        "status": {
+          "type": "string",
+          "default": "",
+          "title": "Status"
+        },
+        "urgency": {
+          "type": "string",
+          "default": "",
+          "title": "Urgency"
+        },
+        "unsent": {
+          "type": "boolean",
+          "default": false,
+          "title": "Unsent"
+        },
+        "reminder_count": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "title": "Reminder Count"
+        },
+        "include_ended": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Ended"
+        },
+        "followup_due": {
+          "type": "boolean",
+          "default": false,
+          "title": "Followup Due"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "class_id": "query",
+      "teacher": "query",
+      "status": "query",
+      "urgency": "query",
+      "unsent": "query",
+      "reminder_count": "query",
+      "include_ended": "query",
+      "followup_due": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_collection_detail",
+    "method": "GET",
+    "path": "/api/user/tuition-collection/students/{student_id}",
+    "description": "조회 전용: /api/user/tuition-collection/students/{student_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_me",
+    "method": "GET",
+    "path": "/api/auth/me",
+    "description": "조회 전용: /api/auth/me. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_book_material_rates",
+    "method": "GET",
+    "path": "/api/user/book-material-rates",
+    "description": "조회 전용: /api/user/book-material-rates. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_list_book_material_requests",
+    "method": "GET",
+    "path": "/api/user/book-material-requests",
+    "description": "조회 전용: /api/user/book-material-requests. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "status": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_recent_books",
+    "method": "GET",
+    "path": "/api/user/recent-books",
+    "description": "조회 전용: /api/user/recent-books. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_search_books",
+    "method": "GET",
+    "path": "/api/user/books/search",
+    "description": "조회 전용: /api/user/books/search. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "voca_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Voca Min"
+        },
+        "voca_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Voca Max"
+        },
+        "length_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Length Min"
+        },
+        "length_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Length Max"
+        },
+        "has_quiz": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Quiz"
+        },
+        "has_reading": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Reading"
+        },
+        "has_writing": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Writing"
+        },
+        "has_pdf": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Pdf"
+        },
+        "pdf_status": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 2,
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pdf Status"
+        },
+        "has_advanced": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Advanced"
+        },
+        "has_debate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Debate"
+        },
+        "has_paperbook": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Paperbook"
+        },
+        "has_yes24": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Yes24"
+        },
+        "has_millie": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Has Millie"
+        },
+        "unstudied_student_ids": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unstudied Student Ids"
+        },
+        "sort_by": {
+          "type": "string",
+          "pattern": "^(row_id|StudyStudentCount)$",
+          "default": "row_id",
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "target": "query",
+      "voca_min": "query",
+      "voca_max": "query",
+      "length_min": "query",
+      "length_max": "query",
+      "has_quiz": "query",
+      "has_reading": "query",
+      "has_writing": "query",
+      "has_pdf": "query",
+      "pdf_status": "query",
+      "has_advanced": "query",
+      "has_debate": "query",
+      "has_paperbook": "query",
+      "has_yes24": "query",
+      "has_millie": "query",
+      "unstudied_student_ids": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_similar_books",
+    "method": "GET",
+    "path": "/api/user/books/similar",
+    "description": "조회 전용: /api/user/books/similar. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_book_detail",
+    "method": "GET",
+    "path": "/api/user/books/{book_id}",
+    "description": "조회 전용: /api/user/books/{book_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "book_id": {
+          "type": "integer",
+          "title": "Book Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "book_id"
+      ]
+    },
+    "locations": {
+      "book_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_book_students",
+    "method": "GET",
+    "path": "/api/user/books/{book_id}/students",
+    "description": "조회 전용: /api/user/books/{book_id}/students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "book_id": {
+          "type": "integer",
+          "title": "Book Id"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 10,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "book_id"
+      ]
+    },
+    "locations": {
+      "book_id": "path",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_recent_students",
+    "method": "GET",
+    "path": "/api/user/recent-students",
+    "description": "조회 전용: /api/user/recent-students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_search_students",
+    "method": "GET",
+    "path": "/api/user/students/search",
+    "description": "조회 전용: /api/user/students/search. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "sex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sex"
+        },
+        "teacher_record_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "none",
+                "low",
+                "partial",
+                "complete"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Teacher Record State"
+        },
+        "content_record_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "none",
+                "low",
+                "partial",
+                "complete"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content Record State"
+        },
+        "include_ended": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Ended"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "sex": "query",
+      "teacher_record_state": "query",
+      "content_record_state": "query",
+      "include_ended": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_similar_students",
+    "method": "GET",
+    "path": "/api/user/students/similar",
+    "description": "조회 전용: /api/user/students/similar. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_student_detail",
+    "method": "GET",
+    "path": "/api/user/students/{student_id}",
+    "description": "조회 전용: /api/user/students/{student_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_student_classes",
+    "method": "GET",
+    "path": "/api/user/students/{student_id}/classes",
+    "description": "조회 전용: /api/user/students/{student_id}/classes. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_students_options",
+    "method": "GET",
+    "path": "/api/user/students-options",
+    "description": "조회 전용: /api/user/students-options. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "include_ended": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Ended"
+        },
+        "monthly_report_order": {
+          "type": "boolean",
+          "default": false,
+          "title": "Monthly Report Order"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "include_ended": "query",
+      "monthly_report_order": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_books_options",
+    "method": "GET",
+    "path": "/api/user/books-options",
+    "description": "조회 전용: /api/user/books-options. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_picker_search_students",
+    "method": "GET",
+    "path": "/api/user/picker/students",
+    "description": "조회 전용: /api/user/picker/students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "maximum": 10000,
+          "minimum": 1,
+          "default": 25,
+          "title": "Limit"
+        },
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "include_ended": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Ended"
+        },
+        "class_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Class Id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "limit": "query",
+      "q": "query",
+      "include_ended": "query",
+      "class_id": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_monthly_recent_students",
+    "method": "GET",
+    "path": "/api/user/monthly-report/recent-students",
+    "description": "조회 전용: /api/user/monthly-report/recent-students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_picker_search_books",
+    "method": "GET",
+    "path": "/api/user/picker/books",
+    "description": "조회 전용: /api/user/picker/books. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "class_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Class Id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "class_id": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_tuition_fee_settings",
+    "method": "GET",
+    "path": "/api/user/tuition-fee-settings",
+    "description": "조회 전용: /api/user/tuition-fee-settings. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_tuition_payments",
+    "method": "GET",
+    "path": "/api/user/tuition-payments",
+    "description": "조회 전용: /api/user/tuition-payments. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "class_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Class Type"
+        },
+        "student_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Student Id"
+        },
+        "include_progress": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Progress"
+        },
+        "progress_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Progress State"
+        },
+        "include_ended": {
+          "type": "boolean",
+          "default": false,
+          "title": "Include Ended"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "class_type": "query",
+      "student_id": "query",
+      "include_progress": "query",
+      "progress_state": "query",
+      "include_ended": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_tuition_payment_detail",
+    "method": "GET",
+    "path": "/api/user/tuition-payments/{payment_id}",
+    "description": "조회 전용: /api/user/tuition-payments/{payment_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "payment_id": {
+          "type": "integer",
+          "title": "Payment Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "payment_id"
+      ]
+    },
+    "locations": {
+      "payment_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_student_tuition_progress",
+    "method": "GET",
+    "path": "/api/user/students/{student_id}/tuition-progress",
+    "description": "조회 전용: /api/user/students/{student_id}/tuition-progress. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        },
+        "studied_day": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Studied Day"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "path",
+      "studied_day": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_recent_studylogs",
+    "method": "GET",
+    "path": "/api/user/recent-studylogs",
+    "description": "조회 전용: /api/user/recent-studylogs. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_search_studylogs",
+    "method": "GET",
+    "path": "/api/user/studylogs/search",
+    "description": "조회 전용: /api/user/studylogs/search. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "studied_day": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Studied Day"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        },
+        "sort_by": {
+          "type": "string",
+          "pattern": "^(row_id|StudiedDay|StudentName|TeacherName|BookTitle|IsSpecial|LessonContent|Description)$",
+          "default": "row_id",
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "studied_day": "query",
+      "page": "query",
+      "limit": "query",
+      "sort_by": "query",
+      "sort_direction": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_studylog_detail",
+    "method": "GET",
+    "path": "/api/user/studylogs/{log_id}",
+    "description": "조회 전용: /api/user/studylogs/{log_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "integer",
+          "title": "Log Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "log_id"
+      ]
+    },
+    "locations": {
+      "log_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_monthly_report_default_period",
+    "method": "GET",
+    "path": "/api/user/monthly-report/default-period",
+    "description": "조회 전용: /api/user/monthly-report/default-period. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 서버 날짜에 따라 월말에는 이번 달, 그 외에는 지난달 기간을 반환한다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_monthly_report_studylogs",
+    "method": "GET",
+    "path": "/api/user/monthly-report/studylogs",
+    "description": "조회 전용: /api/user/monthly-report/studylogs. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        },
+        "date_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date From"
+        },
+        "date_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date To"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id"
+      ]
+    },
+    "locations": {
+      "student_id": "query",
+      "date_from": "query",
+      "date_to": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_generate_monthly_report_preview",
+    "method": "POST",
+    "path": "/api/user/monthly-report/preview",
+    "description": "조회 전용: /api/user/monthly-report/preview. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "properties": {
+            "student_name": {
+              "type": "string",
+              "title": "Student Name"
+            },
+            "period_label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Label",
+              "default": ""
+            },
+            "report_month": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Report Month",
+              "default": ""
+            },
+            "start_lecture_num": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Lecture Num",
+              "default": 1
+            },
+            "special_teacher_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Special Teacher Name",
+              "default": ""
+            },
+            "logs": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "title": "Logs",
+              "default": []
+            }
+          },
+          "type": "object",
+          "required": [
+            "student_name"
+          ],
+          "title": "MonthlyReportPreviewPayload"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "body"
+      ]
+    },
+    "locations": {},
+    "encoding": "json"
+  },
+  {
+    "name": "read_user_list_monthly_reports",
+    "method": "GET",
+    "path": "/api/user/monthly-reports",
+    "description": "조회 전용: /api/user/monthly-reports. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Student Id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "student_id": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_monthly_report",
+    "method": "GET",
+    "path": "/api/user/monthly-reports/{report_id}",
+    "description": "조회 전용: /api/user/monthly-reports/{report_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "report_id": {
+          "type": "integer",
+          "title": "Report Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "report_id"
+      ]
+    },
+    "locations": {
+      "report_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_list_classes",
+    "method": "GET",
+    "path": "/api/user/classes",
+    "description": "조회 전용: /api/user/classes. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "q": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_class_detail",
+    "method": "GET",
+    "path": "/api/user/classes/{class_id}",
+    "description": "조회 전용: /api/user/classes/{class_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "title": "Class Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "class_id"
+      ]
+    },
+    "locations": {
+      "class_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_teachers_options",
+    "method": "GET",
+    "path": "/api/user/teachers-options",
+    "description": "조회 전용: /api/user/teachers-options. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_class_batch_form",
+    "method": "GET",
+    "path": "/api/user/classes/{class_id}/batch-form",
+    "description": "조회 전용: /api/user/classes/{class_id}/batch-form. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "title": "Class Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "class_id"
+      ]
+    },
+    "locations": {
+      "class_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_recent_lesson_contents",
+    "method": "GET",
+    "path": "/api/user/recent-lesson-contents",
+    "description": "조회 전용: /api/user/recent-lesson-contents. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 선택한 도서별로 중복을 제외한 최근 수업 내용 5개를 반환한다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "book_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Book Ids"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "book_ids"
+      ]
+    },
+    "locations": {
+      "book_ids": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_class_studylog_calendar",
+    "method": "GET",
+    "path": "/api/user/classes/{class_id}/studylog-calendar",
+    "description": "조회 전용: /api/user/classes/{class_id}/studylog-calendar. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 수업 배정 학생의 월별 학습 이력을 일괄 등록 달력에 제공한다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "title": "Class Id"
+        },
+        "month": {
+          "type": "string",
+          "title": "Month"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "month"
+      ]
+    },
+    "locations": {
+      "class_id": "path",
+      "month": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_class_studylog_date_warning",
+    "method": "GET",
+    "path": "/api/user/classes/{class_id}/studylog-date-warning",
+    "description": "조회 전용: /api/user/classes/{class_id}/studylog-date-warning. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 일괄 등록일의 주차 오입력 가능성을 확인한다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "title": "Class Id"
+        },
+        "studied_day": {
+          "type": "string",
+          "title": "Studied Day"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "studied_day"
+      ]
+    },
+    "locations": {
+      "class_id": "path",
+      "studied_day": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_get_monthly_report_start_lecture",
+    "method": "GET",
+    "path": "/api/user/monthly-report/start-lecture",
+    "description": "조회 전용: /api/user/monthly-report/start-lecture. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "title": "Student Id"
+        },
+        "first_studied_day": {
+          "type": "string",
+          "title": "First Studied Day"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "student_id",
+        "first_studied_day"
+      ]
+    },
+    "locations": {
+      "student_id": "query",
+      "first_studied_day": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_payroll_categories",
+    "method": "GET",
+    "path": "/api/user/payroll/categories",
+    "description": "조회 전용: /api/user/payroll/categories. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_payroll_rates",
+    "method": "GET",
+    "path": "/api/user/payroll/rates",
+    "description": "조회 전용: /api/user/payroll/rates. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_special_pay_rates",
+    "method": "GET",
+    "path": "/api/user/payroll/special-rates",
+    "description": "조회 전용: /api/user/payroll/special-rates. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_payroll",
+    "method": "GET",
+    "path": "/api/user/payroll",
+    "description": "조회 전용: /api/user/payroll. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "month": {
+          "type": "string",
+          "title": "Month"
+        },
+        "teacher_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Teacher Username"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "month"
+      ]
+    },
+    "locations": {
+      "month": "query",
+      "teacher_username": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_preview_teacher_assignment",
+    "method": "POST",
+    "path": "/api/user/utilities/teacher-assignment/preview",
+    "description": "조회 전용: /api/user/utilities/teacher-assignment/preview. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "file_base64": {
+          "type": "string",
+          "maxLength": 6990508,
+          "description": "파일 내용의 Base64. 파일 경로는 받지 않습니다."
+        },
+        "filename": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "teacher_username": {
+          "type": "string",
+          "title": "Teacher Username"
+        },
+        "month": {
+          "type": "string",
+          "title": "Month",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file_base64",
+        "filename",
+        "teacher_username"
+      ]
+    },
+    "locations": {},
+    "encoding": "multipart"
+  },
+  {
+    "name": "read_preview_duplicate_books",
+    "method": "GET",
+    "path": "/api/user/utilities/duplicate-books",
+    "description": "조회 전용: /api/user/utilities/duplicate-books. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 병합 전에 중복 그룹과 이동될 참조 건수를 미리 보여준다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_preview_studylog_csv",
+    "method": "POST",
+    "path": "/api/user/utilities/studylog-csv/preview",
+    "description": "조회 전용: /api/user/utilities/studylog-csv/preview. 기존 로그인 계정 권한과 조회 범위를 적용합니다. CSV 행별 학생·도서 후보를 판정한다. 이 단계에서는 데이터를 변경하지 않는다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "properties": {
+            "source_file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source File",
+              "default": ""
+            },
+            "rows": {
+              "items": {
+                "properties": {
+                  "row_number": {
+                    "type": "integer",
+                    "title": "Row Number"
+                  },
+                  "student_name": {
+                    "type": "string",
+                    "title": "Student Name"
+                  },
+                  "book_title": {
+                    "type": "string",
+                    "title": "Book Title"
+                  },
+                  "studied_day": {
+                    "type": "string",
+                    "title": "Studied Day"
+                  },
+                  "lesson_content": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Lesson Content",
+                    "default": ""
+                  },
+                  "student_id": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Student Id"
+                  },
+                  "book_id": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Book Id"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "row_number",
+                  "student_name",
+                  "book_title",
+                  "studied_day"
+                ],
+                "title": "StudyLogCsvRow"
+              },
+              "type": "array",
+              "title": "Rows"
+            }
+          },
+          "type": "object",
+          "required": [
+            "rows"
+          ],
+          "title": "StudyLogCsvRequest"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "body"
+      ]
+    },
+    "locations": {},
+    "encoding": "json"
+  },
+  {
+    "name": "read_list_studylog_csv_runs",
+    "method": "GET",
+    "path": "/api/user/utilities/studylog-csv/runs",
+    "description": "조회 전용: /api/user/utilities/studylog-csv/runs. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "all_runs": {
+          "type": "boolean",
+          "default": false,
+          "title": "All Runs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "all_runs": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_get_studylog_csv_run",
+    "method": "GET",
+    "path": "/api/user/utilities/studylog-csv/runs/{run_id}",
+    "description": "조회 전용: /api/user/utilities/studylog-csv/runs/{run_id}. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "integer",
+          "title": "Run Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "run_id"
+      ]
+    },
+    "locations": {
+      "run_id": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_list_tables",
+    "method": "GET",
+    "path": "/api/tables",
+    "description": "조회 전용: /api/tables. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_table_schema",
+    "method": "GET",
+    "path": "/api/tables/{table_name}/schema",
+    "description": "조회 전용: /api/tables/{table_name}/schema. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "table_name": {
+          "type": "string",
+          "title": "Table Name"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "table_name"
+      ]
+    },
+    "locations": {
+      "table_name": "path"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_table_data",
+    "method": "GET",
+    "path": "/api/tables/{table_name}/data",
+    "description": "조회 전용: /api/tables/{table_name}/data. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "table_name": {
+          "type": "string",
+          "title": "Table Name"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        },
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "table_name"
+      ]
+    },
+    "locations": {
+      "table_name": "path",
+      "page": "query",
+      "limit": "query",
+      "q": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_export_table_csv",
+    "method": "GET",
+    "path": "/api/tables/{table_name}/export-csv",
+    "description": "조회 전용: /api/tables/{table_name}/export-csv. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "table_name": {
+          "type": "string",
+          "title": "Table Name"
+        },
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "table_name"
+      ]
+    },
+    "locations": {
+      "table_name": "path",
+      "q": "query"
+    },
+    "encoding": "none"
+  },
+  {
+    "name": "read_user_display_names",
+    "method": "GET",
+    "path": "/api/user/display-names",
+    "description": "조회 전용: /api/user/display-names. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_admin_list_users",
+    "method": "GET",
+    "path": "/api/admin/users",
+    "description": "조회 전용: /api/admin/users. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_admin_audit_username_options",
+    "method": "GET",
+    "path": "/api/admin/audit-logs/users",
+    "description": "조회 전용: /api/admin/audit-logs/users. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 감사 로그 필터용 계정 목록을 반환한다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "locations": {},
+    "encoding": "none"
+  },
+  {
+    "name": "read_admin_list_audit_logs",
+    "method": "GET",
+    "path": "/api/admin/audit-logs",
+    "description": "조회 전용: /api/admin/audit-logs. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 계정별 변경 이력을 필터링해 조회한다. (계정·기간 필수 조합 지원)",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Username"
+        },
+        "date_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date From"
+        },
+        "date_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date To"
+        },
+        "table_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Table Name"
+        },
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Action"
+        },
+        "record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Record Id"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "title": "Page"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "default": 30,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "username": "query",
+      "date_from": "query",
+      "date_to": "query",
+      "table_name": "query",
+      "action": "query",
+      "record_id": "query",
+      "page": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  }
+]

@@ -3,6 +3,7 @@ import hashlib
 import json
 from typing import List, Dict, Any, Optional, Tuple
 from config import settings
+from read_only_context import is_read_only_request
 
 def get_db_connection():
     conn = sqlite3.connect(settings.SQLITE_DB_PATH)
@@ -544,21 +545,8 @@ def init_system_tables():
     conn.close()
 
 
-def refresh_book_student_counts(conn):
-    """변경된 경우에만 전체 도서를 집계하고 검색용 읽기 스냅샷을 유지한다."""
-    conn.execute('BEGIN')
-    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
-    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
-    if saved and saved[0] == version:
-        return
-    conn.rollback()
-    # 동시 검색에서 과거 집계로 덮어쓰지 않도록 쓰기 잠금 후 다시 확인한다.
-    conn.execute('BEGIN IMMEDIATE')
-    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
-    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
-    if saved and saved[0] == version:
-        return
-    conn.execute('DELETE FROM _app_book_student_counts')
+def _populate_book_student_counts(conn):
+    """일반 조회와 MCP 조회에 동일한 학생 식별·중복 제거 기준을 적용한다."""
     conn.execute('''INSERT INTO _app_book_student_counts (book_rowid, student_count)
         WITH identities AS (
             SELECT CAST(rowid AS TEXT) AS identity, rowid AS student_rowid FROM Students
@@ -584,6 +572,36 @@ def refresh_book_student_counts(conn):
         )
         SELECT book_rowid, COUNT(*) FROM book_students GROUP BY book_rowid
     ''')
+
+
+def refresh_book_student_counts(conn):
+    """변경된 경우에만 전체 도서를 집계하고 검색용 읽기 스냅샷을 유지한다."""
+    if is_read_only_request():
+        # TEMP 테이블은 이 연결에서만 영구 캐시를 가리므로 원본을 변경하지 않는다.
+        # query_only는 TEMP 쓰기 및 허용된 활동 로그를 막으므로 적용하지 않는다.
+        if not conn.in_transaction:
+            conn.execute('BEGIN')
+        conn.execute('''CREATE TEMP TABLE IF NOT EXISTS _app_book_student_counts (
+            book_rowid INTEGER PRIMARY KEY, student_count INTEGER NOT NULL
+        )''')
+        conn.execute('DELETE FROM temp._app_book_student_counts')
+        _populate_book_student_counts(conn)
+        # 집계와 후속 검색이 동일한 읽기 스냅샷을 사용하게 유지한다.
+        return
+    conn.execute('BEGIN')
+    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
+    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
+    if saved and saved[0] == version:
+        return
+    conn.rollback()
+    # 동시 검색에서 과거 집계로 덮어쓰지 않도록 쓰기 잠금 후 다시 확인한다.
+    conn.execute('BEGIN IMMEDIATE')
+    version = conn.execute('SELECT version FROM _app_book_students_version WHERE id = 1').fetchone()[0]
+    saved = conn.execute('SELECT version FROM _app_book_student_counts_state WHERE id = 1').fetchone()
+    if saved and saved[0] == version:
+        return
+    conn.execute('DELETE FROM _app_book_student_counts')
+    _populate_book_student_counts(conn)
     conn.execute('INSERT OR REPLACE INTO _app_book_student_counts_state VALUES (1, ?)', (version,))
     conn.commit()
     refresh_book_student_counts(conn)
@@ -591,6 +609,8 @@ def refresh_book_student_counts(conn):
 
 def advance_student_grades() -> None:
     """등록 당시 학년을 기준으로 새해마다 학생 학년을 계산해 반영한다."""
+    if is_read_only_request():
+        return
     from datetime import datetime
     grade_order = ["초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3"]
     now_year = datetime.now().year

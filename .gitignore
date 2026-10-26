@@ -41,3 +41,11 @@ imports/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 읽기 전용 MCP 별도 환경 및 개인 인증 토큰
+.venv-mcp/
+.mcp-token
+.mcp-token.*
+
+# Python 3.9 호환성 검증 환경
+.venv-py39/
