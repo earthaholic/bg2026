@@ -298,3 +298,8 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - `BG_MCP_HTTP=auto`(기본)는 httpx/jsonschema가 있으면 활성화, 없으면 `/mcp` 503으로 기존 웹을 유지한다. `1`은 필요한 패키지 누락 시 시작 실패, `0`은 경로 미등록이다. `BG_MCP_ALLOWED_HOSTS`·`BG_MCP_ALLOWED_ORIGINS`에 실제 배포 호스트·출처를 지정하며 외부 접속은 HTTPS를 사용한다.
 - HTTP는 요청별 Bearer 토큰을 기존 인증으로 검증하고 요청 컨텍스트에서만 도구 호출에 전달한다. 고정 관리자 토큰이나 브라우저 쿠키를 사용하지 않는다. 내부 조회는 ASGITransport로 동일 앱의 기존 API를 호출하여 권한을 재확인한다. OAuth 자동 로그인 서버는 구현하지 않았다.
 - Python 3.9의 SDK 없는 검증은 `tests/test_mcp_http_config.py`, `tests/test_mcp_protocol.py` 및 기존 MCP SQL·집계·목록 테스트를 사용한다. 공식 최신 클라이언트 상호운용 검증은 별도 3.11+의 `tests_mcp/test_mcp_http.py`, `tests_mcp/test_mcp_python39_process.py`(BG_MCP_TEST_PYTHON39로 3.9 실행 파일 지정)를 사용한다. 운영 안내는 `docs/MCP_웹서버통합.md`이며 Windows 테스트를 Linux Gunicorn 실제 구동 검증으로 표현하지 않는다.
+
+## 좌측 하단 MCP 연결 정보
+- 로그인 검증 후 좌측 하단 `MCP 연결 정보`를 표시하며 기본 접힘이다. `static/js/mcp_connection.js`는 주소·토큰·인증 헤더 값 복사를 담당한다. 실제 토큰은 화면·DOM 속성·로그·오류 문구에 넣지 않고 클립보드에만 전달한다.
+- 이 토큰은 기존 웹 로그인 토큰이며 MCP 전용 읽기 권한 키가 아니다. 계정의 수정·삭제 권한도 사용할 수 있다는 경고를 표시한다. 서버 인증·권한 및 토큰 발급 방식은 변경하지 않는다.
+- 로그인 전·로그아웃·다른 탭의 토큰 변경 시 숨기고, 만료된 토큰은 복사하지 않는다. 클립보드 실패는 성공으로 표시하지 않으며 실패 원문이나 토큰을 노출하지 않는다. 회귀 검증: `node --test tests/test_mcp_connection_ui.js`.

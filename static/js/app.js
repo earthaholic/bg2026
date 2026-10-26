@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // App State
     let token = localStorage.getItem('token');
     let currentUser = null;
+    const mcpConnection = initMcpConnection({ getToken: () => currentUser && token === localStorage.getItem('token') ? token : null });
     let currentTable = null;
     let tableSchema = [];
     let currentPage = 1;
@@ -739,6 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateUserUI() {
         if (!currentUser) return;
+        mcpConnection.refresh();
         hideLoginModal();
 
         userProfileBadge.classList.remove('hidden');
@@ -885,6 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLogout() {
+        mcpConnection.reset();
         tuitionCollection.reset();
         completionState.version++;
         completionState.searchVersion++;

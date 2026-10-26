@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261005-collection-dialog-center">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261026-mcp-connection">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -326,6 +326,22 @@
                 </nav>
 
                 <div class="sidebar-footer">
+                    <details id="mcp-connection" class="mcp-connection" hidden>
+                        <summary><i class="fa-solid fa-plug" aria-hidden="true"></i> MCP 연결 정보</summary>
+                        <div class="mcp-connection-body">
+                            <span class="mcp-connection-label">연결 주소</span>
+                            <code id="mcp-connection-address"></code>
+                            <p id="mcp-connection-state"></p>
+                            <div class="mcp-connection-actions">
+                                <button type="button" class="btn btn-outline" data-mcp-copy="address">주소 복사</button>
+                                <button type="button" class="btn btn-outline" data-mcp-copy="token">토큰 복사</button>
+                                <button type="button" class="btn btn-outline" data-mcp-copy="header">인증 헤더 값 복사</button>
+                            </div>
+                            <p class="mcp-connection-help">토큰 입력란에는 토큰을, Authorization 헤더 값에는 인증 헤더 값을 붙여넣으세요.</p>
+                            <p class="mcp-connection-warning">현재 웹 로그인 토큰입니다. MCP 전용 읽기 권한 토큰이 아니며, 유출되면 이 계정의 수정·삭제 권한도 사용될 수 있습니다. 신뢰하는 프로그램에만 입력하세요.</p>
+                            <p id="mcp-connection-message" role="status" aria-live="polite"></p>
+                        </div>
+                    </details>
                     <div class="db-status-card">
                         <i class="fa-solid fa-database"></i>
                         <div>
@@ -2685,7 +2701,8 @@
     </dialog>
     <script src="/static/js/feedback.js?v=20260907-action-feedback"></script>
     <script src="/static/js/tuition_collection.js?v=20261005-delete-history"></script>
-    <script src="/static/js/app.js?v=20261005-tuition-collection"></script>
+    <script src="/static/js/mcp_connection.js?v=20261026-mcp-connection"></script>
+    <script src="/static/js/app.js?v=20261026-mcp-connection"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
 </body>
 </html>

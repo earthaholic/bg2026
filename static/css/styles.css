@@ -5097,3 +5097,31 @@ button.class-student-badge { cursor: pointer; }
 .quick-choice-picker { display: flex; flex-wrap: wrap; gap: .4rem; max-width: 18rem; padding: .6rem; border: 1px solid var(--border-color); border-radius: .5rem; margin-top: .5rem; background: var(--bg-surface, #fff); }
 .list-quick-edit-switch { display: inline-flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .list-quick-edit-switch small { color: var(--text-muted); }
+
+/* 로그인 후 좌측 하단의 MCP 연결 안내. 실제 토큰은 DOM에 표시하지 않는다. */
+.mcp-connection[hidden] { display: none !important; }
+.mcp-connection {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+.mcp-connection summary {
+    padding: 0.65rem 0.75rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+.mcp-connection summary:focus-visible { outline: 2px solid var(--primary-color, #818cf8); outline-offset: 2px; }
+.mcp-connection-body {
+    padding: 0 0.75rem 0.75rem;
+    max-height: 42vh;
+    overflow-y: auto;
+}
+.mcp-connection-label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+#mcp-connection-address { display: block; overflow-wrap: anywhere; font-size: 0.75rem; }
+.mcp-connection p { margin: 0.6rem 0; line-height: 1.5; }
+.mcp-connection-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.mcp-connection-actions .btn { flex: 1 1 auto; padding: 0.45rem 0.5rem; font-size: 0.75rem; white-space: normal; }
+.mcp-connection-help, #mcp-connection-state { color: var(--text-secondary); }
+.mcp-connection-warning { padding: 0.5rem; border-left: 3px solid #d97706; background: rgba(217, 119, 6, 0.09); }
+#mcp-connection-message:empty { display: none; }
