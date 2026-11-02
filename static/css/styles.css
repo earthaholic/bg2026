@@ -2860,7 +2860,7 @@ body {
     line-height: 1.5;
 }
 
-#view-class-studylog-reg .batch-previous-tools {
+#view-class-studylog-reg .batch-extra-tools {
     margin-top: 0.85rem;
     padding: 0.85rem;
     border: 1px dashed var(--border-color);
@@ -2868,24 +2868,24 @@ body {
     background: var(--bg-section);
 }
 
-#view-class-studylog-reg .batch-previous-search {
+#view-class-studylog-reg .batch-extra-search {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
 }
 
-#view-class-studylog-reg .batch-previous-search label {
+#view-class-studylog-reg .batch-extra-search label {
     font-weight: 600;
     white-space: nowrap;
 }
 
-#view-class-studylog-reg .batch-previous-search .form-control {
+#view-class-studylog-reg .batch-extra-search .form-control {
     flex: 1 1 260px;
     min-width: 200px;
 }
 
-#view-class-studylog-reg .batch-previous-results {
+#view-class-studylog-reg .batch-extra-results {
     display: grid;
     gap: 0.35rem;
     margin-top: 0.6rem;
@@ -2893,7 +2893,7 @@ body {
     overflow-y: auto;
 }
 
-#view-class-studylog-reg .batch-previous-result {
+#view-class-studylog-reg .batch-extra-result {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2908,30 +2908,30 @@ body {
     cursor: pointer;
 }
 
-#view-class-studylog-reg .batch-previous-result:hover,
-#view-class-studylog-reg .batch-previous-result:focus-visible {
+#view-class-studylog-reg .batch-extra-result:hover,
+#view-class-studylog-reg .batch-extra-result:focus-visible {
     border-color: var(--primary);
 }
 
-#view-class-studylog-reg .batch-previous-result-meta {
+#view-class-studylog-reg .batch-extra-result-meta {
     color: var(--text-muted);
     font-size: 0.78rem;
 }
 
-#view-class-studylog-reg .batch-previous-result-main {
+#view-class-studylog-reg .batch-extra-result-main {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
 }
 
-#view-class-studylog-reg .batch-previous-guide {
+#view-class-studylog-reg .batch-extra-guide {
     margin: 0.55rem 0 0;
     color: var(--text-muted);
     font-size: 0.75rem;
     line-height: 1.5;
 }
 
-#view-class-studylog-reg .batch-previous-badge {
+#view-class-studylog-reg .batch-extra-badge {
     display: inline-block;
     margin-left: 0.3rem;
     padding: 0.05rem 0.4rem;

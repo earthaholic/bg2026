@@ -269,7 +269,7 @@ class ClassStudyLogItem(BaseModel):
     is_special: bool = False
     Description: Optional[str] = ""
     AbsenceReason: Optional[str] = ""
-    # 반을 옮긴 학생의 누락 기록을 이전 수업으로 등록할 때만 staff가 명시적으로 지정한다.
+    # 이 수업에 배정되지 않은 학생을 함께 등록할 때만 staff가 명시적으로 지정한다.
     allow_not_assigned: bool = False
 
 class ClassStudyLogBatchRequest(BaseModel):
@@ -2850,14 +2850,14 @@ def user_get_class_batch_form(
     students = get_class_students(class_id)
     return {"class_": class_row, "students": students, "planned_books": _get_class_planned_books(class_id)}
 
-@app.get("/api/user/classes/{class_id}/previous-students")
-def user_search_previous_class_students(
+@app.get("/api/user/classes/{class_id}/student-candidates")
+def user_search_class_student_candidates(
     class_id: int,
     q: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_staff)
 ):
-    """현재 이 수업에 배정되지 않은 학생을 찾는다. 반 이동 후 누락 기록 등록용(staff 전용)."""
+    """현재 이 수업에 배정되지 않은 학생을 찾는다. 일괄 등록에 학생을 직접 추가할 때 사용한다(staff 전용)."""
     _get_accessible_class(class_id, current_user)
     keyword = (q or "").strip()
     params: List[Any] = [class_id, class_id, class_id]
@@ -2879,10 +2879,12 @@ def user_search_previous_class_students(
                        AND sl."ClassId" = ?) AS PastRecordCount,
                    (SELECT COUNT(*) FROM "StudyLogs" sl
                      WHERE (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
-                       AND sl."ClassId" = ? AND COALESCE(sl."IsSpecial", 0) = 1) AS PastSpecialCount
+                       AND sl."ClassId" = ? AND COALESCE(sl."IsSpecial", 0) = 1) AS PastSpecialCount,
+                   (SELECT MAX(sl.rowid) FROM "StudyLogs" sl
+                     WHERE sl."StudentId" = s.rowid OR sl."StudentId" = s."Id") AS RecentStudyLogId
             FROM "Students" s
             WHERE {" AND ".join(where)}
-            ORDER BY PastRecordCount DESC, s."Name" ASC
+            ORDER BY PastRecordCount DESC, RecentStudyLogId DESC, s."Name" ASC
             LIMIT ?
         ''', params).fetchall()
     finally:
@@ -3171,9 +3173,9 @@ def user_batch_register_class_studylogs(
     for item in payload.logs:
         sid = item.StudentId
         name = student_name(sid)
-        # 현재 배정되지 않은 학생도 staff가 명시적으로 요청한 경우에만 이전 반 누락 기록으로 등록한다.
-        previous_class_student = sid not in allowed_student_ids
-        if previous_class_student:
+        # 현재 배정되지 않은 학생도 staff가 명시적으로 요청한 경우에만 함께 등록한다.
+        unassigned_class_student = sid not in allowed_student_ids
+        if unassigned_class_student:
             if not item.allow_not_assigned or current_user["role"] not in ("admin", "subadmin", "manager"):
                 results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
                 continue
@@ -3181,7 +3183,7 @@ def user_batch_register_class_studylogs(
                 results.append({"StudentId": sid, "Name": name, "status": "error", "message": "학생 정보를 확인할 수 없습니다."})
                 continue
             if not item.include:
-                results.append({"StudentId": sid, "Name": name, "status": "error", "message": "이전 반 학생은 결석으로 등록할 수 없습니다. 참석으로 선택해 주세요."})
+                results.append({"StudentId": sid, "Name": name, "status": "error", "message": "수업에 배정되지 않은 학생은 결석으로 등록할 수 없습니다. 참석으로 선택해 주세요."})
                 continue
 
         conn = get_db_connection()
@@ -3238,7 +3240,7 @@ def user_batch_register_class_studylogs(
                                 current_user["username"], current_user["role"], connection=conn)
                 student_created += 1
                 student_results.append(dict(result, status="created",
-                                            message="등록 완료 (이전 반 학생)" if previous_class_student else "등록 완료"))
+                                            message="등록 완료 (수업 미배정 학생)" if unassigned_class_student else "등록 완료"))
             # 실제로 같은 수업에 참석 기록이 존재할 때만 결석을 해제한다.
             if old_absence and conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=? LIMIT 1',
                                             (sid, class_id, day)).fetchone():

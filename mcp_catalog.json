@@ -1716,10 +1716,10 @@
     "encoding": "none"
   },
   {
-    "name": "read_user_search_previous_class_students",
+    "name": "read_user_search_class_student_candidates",
     "method": "GET",
-    "path": "/api/user/classes/{class_id}/previous-students",
-    "description": "조회 전용: /api/user/classes/{class_id}/previous-students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 현재 이 수업에 배정되지 않은 학생을 찾는다. 반 이동 후 누락 기록 등록용(staff 전용).",
+    "path": "/api/user/classes/{class_id}/student-candidates",
+    "description": "조회 전용: /api/user/classes/{class_id}/student-candidates. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 현재 이 수업에 배정되지 않은 학생을 찾는다. 일괄 등록에 학생을 직접 추가할 때 사용한다(staff 전용).",
     "inputSchema": {
       "type": "object",
       "properties": {

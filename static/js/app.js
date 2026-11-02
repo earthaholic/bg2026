@@ -75,9 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let batchFormRequestSeq = 0;
     let batchRecentLessonsRequestSeq = 0;
     let batchAssignedStudents = []; // 현재 이 수업에 배정된 학생
-    let batchPreviousStudents = []; // 이전 반에서 추가한 학생(현재 소속 아님)
-    let batchPreviousStudentCandidates = [];
-    let batchPreviousStudentRequestSeq = 0;
+    let batchExtraStudents = []; // 검색으로 직접 추가한 학생(수업 배정 없음)
+    let batchExtraStudentCandidates = [];
+    let batchExtraStudentRequestSeq = 0;
     let activeStudentPickerTarget = 'studylog'; // 학생 picker 대상 ('studylog' | 'monthly')
     let selectedStudentsMap = new Map(); // 새 학습 기록 등록용 학생 다중 선택 Map (id -> studentObj)
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
@@ -488,8 +488,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchIsCancelled = document.getElementById('batch-is-cancelled');
     const batchCancellationSection = document.getElementById('batch-cancellation-section');
     const btnSubmitClassBatch = document.getElementById('btn-submit-class-batch');
-    const batchPreviousStudentQ = document.getElementById('batch-previous-student-q');
-    const batchPreviousStudentResults = document.getElementById('batch-previous-student-results');
+    const batchExtraStudentQ = document.getElementById('batch-extra-student-q');
+    const batchExtraStudentResults = document.getElementById('batch-extra-student-results');
 
     let pendingUserPwId = null;
     let pendingUserDeleteId = null;
@@ -1460,19 +1460,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (batchStudiedDay) {
             batchStudiedDay.addEventListener('change', handleBatchDateChange);
         }
-        if (batchPreviousStudentQ) {
-            let batchPreviousStudentTimer = null;
-            batchPreviousStudentQ.addEventListener('input', () => {
-                clearTimeout(batchPreviousStudentTimer);
-                batchPreviousStudentTimer = setTimeout(searchBatchPreviousStudents, 250);
+        if (batchExtraStudentQ) {
+            let batchExtraStudentTimer = null;
+            batchExtraStudentQ.addEventListener('input', () => {
+                clearTimeout(batchExtraStudentTimer);
+                batchExtraStudentTimer = setTimeout(searchBatchExtraStudents, 250);
+            });
+            batchExtraStudentQ.addEventListener('focus', () => {
+                if (!batchExtraStudentResults || batchExtraStudentResults.classList.contains('hidden')) searchBatchExtraStudents();
             });
         }
-        if (batchPreviousStudentResults) {
-            batchPreviousStudentResults.addEventListener('click', event => {
-                const button = event.target.closest('.batch-previous-result');
+        if (batchExtraStudentResults) {
+            batchExtraStudentResults.addEventListener('click', event => {
+                const button = event.target.closest('.batch-extra-result');
                 if (!button) return;
-                const student = batchPreviousStudentCandidates.find(item => Number(item.row_id || item.Id) === Number(button.dataset.rowId));
-                if (student) addBatchPreviousStudent(student);
+                const student = batchExtraStudentCandidates.find(item => Number(item.row_id || item.Id) === Number(button.dataset.rowId));
+                if (student) addBatchExtraStudent(student);
             });
         }
         if (btnBatchCalendarPrev) btnBatchCalendarPrev.addEventListener('click', () => changeBatchCalendarMonth(-1));
@@ -3356,7 +3359,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiFetch('/api/user/payroll/categories')
                 ]);
                 classes = classData.classes || [];
-                // 이전 반도 선택할 수 있도록 첫 100개 이후의 수업까지 조회한다.
+                // 등록된 수업이 많아도 모두 선택할 수 있도록 첫 100개 이후의 수업까지 조회한다.
                 for (let classPage = 2; classPage <= (classData.total_pages || 1); classPage++) {
                     const moreClasses = await apiFetch(`/api/user/classes?limit=100&page=${classPage}`);
                     classes.push(...(moreClasses.classes || []));
@@ -6975,18 +6978,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 학생 한 명의 참석·특강·메모 행 마크업. isPrevious=true면 이전 반에서 추가한 학생이다.
-    function batchStudentRowsHtml(s, isPrevious) {
+    // 학생 한 명의 참석·특강·메모 행 마크업. isExtra=true면 검색으로 직접 추가한 학생이다.
+    function batchStudentRowsHtml(s, isExtra) {
         const sId = Number(s.row_id || s.Id);
         const name = escapeHtml(s.Name || '이름 없음');
         const sex = formatSex(s.Sex);
         const specialChecked = s.IsSpecial ? 'checked' : '';
-        const previousBadge = isPrevious ? '<span class="batch-previous-badge">이전 반</span>' : '';
-        const attendInput = isPrevious
-            ? `<input type="checkbox" class="batch-attend" data-student-id="${sId}" data-previous-student="1" checked title="이전 반 학생은 참석 기록만 등록할 수 있습니다." style="width: 16px; height: 16px; accent-color: var(--success);">`
+        const extraBadge = isExtra ? '<span class="batch-extra-badge">직접 추가</span>' : '';
+        const attendInput = isExtra
+            ? `<input type="checkbox" class="batch-attend" data-student-id="${sId}" data-extra-student="1" checked title="수업에 배정되지 않은 학생은 참석 기록만 등록할 수 있습니다." style="width: 16px; height: 16px; accent-color: var(--success);">`
             : `<input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">`;
-        const removeButton = isPrevious
-            ? `<button type="button" class="btn btn-xs btn-outline btn-remove-batch-previous" data-student-id="${sId}" title="이전 반 학생 목록에서 제외"><i class="fa-solid fa-xmark"></i> 제외</button>`
+        const removeButton = isExtra
+            ? `<button type="button" class="btn btn-xs btn-outline btn-remove-batch-extra" data-student-id="${sId}" title="추가한 학생 목록에서 제외"><i class="fa-solid fa-xmark"></i> 제외</button>`
             : '';
         return `
             <tr data-batch-row="${sId}">
@@ -6996,7 +6999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="text-align: center;">
                     <input type="checkbox" class="batch-special" data-student-id="${sId}" ${specialChecked} title="특강 수업 여부" style="width: 16px; height: 16px; accent-color: var(--warning); cursor: pointer;">
                 </td>
-                <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} ${previousBadge} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
+                <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} ${extraBadge} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
                 <td id="batch-tuition-progress-${sId}" class="text-muted">조회 중...</td>
                 <td class="batch-memo-action-cell">
                     <button type="button" class="btn btn-xs btn-outline btn-toggle-batch-memo" data-student-id="${sId}" aria-expanded="false">
@@ -7026,10 +7029,10 @@ document.addEventListener('DOMContentLoaded', () => {
         root.querySelectorAll('.batch-attend').forEach(checkbox => {
             checkbox.addEventListener('change', () => {
                 const studentId = checkbox.dataset.studentId;
-                // 이전 반 학생은 참석 기록만 등록할 수 있으므로 해제를 되돌리고 이유를 안내한다.
-                if (checkbox.dataset.previousStudent === '1' && !checkbox.checked) {
+                // 수업에 배정되지 않은 학생은 참석 기록만 등록할 수 있으므로 해제를 되돌리고 이유를 안내한다.
+                if (checkbox.dataset.extraStudent === '1' && !checkbox.checked) {
                     checkbox.checked = true;
-                    showBatchNotice('이전 반 학생은 참석 기록만 등록할 수 있습니다. 결석은 현재 소속 수업에서 등록해 주세요.', 'warning');
+                    showBatchNotice('수업에 배정되지 않은 학생은 참석 기록만 등록할 수 있습니다. 결석은 그 학생의 수업에서 등록해 주세요.', 'warning');
                     return;
                 }
                 document.getElementById(`batch-absence-row-${studentId}`).classList.toggle('hidden', checkbox.checked);
@@ -7056,8 +7059,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     : '<i class="fa-solid fa-minus"></i> 닫기';
             });
         });
-        root.querySelectorAll('.btn-remove-batch-previous').forEach(button => {
-            button.addEventListener('click', () => removeBatchPreviousStudent(button.dataset.studentId));
+        root.querySelectorAll('.btn-remove-batch-extra').forEach(button => {
+            button.addEventListener('click', () => removeBatchExtraStudent(button.dataset.studentId));
         });
     }
 
@@ -7081,25 +7084,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateBatchStudentCount() {
         if (!batchClassStudentCount) return;
-        batchClassStudentCount.textContent = batchPreviousStudents.length
-            ? `${batchAssignedStudents.length + batchPreviousStudents.length}명 (현재 소속 ${batchAssignedStudents.length}명 + 이전 반 ${batchPreviousStudents.length}명)`
+        batchClassStudentCount.textContent = batchExtraStudents.length
+            ? `${batchAssignedStudents.length + batchExtraStudents.length}명 (배정 ${batchAssignedStudents.length}명 + 직접 추가 ${batchExtraStudents.length}명)`
             : `${batchAssignedStudents.length}명`;
     }
 
-    function clearBatchPreviousStudentSearch() {
-        batchPreviousStudentCandidates = [];
-        batchPreviousStudentRequestSeq++;
-        if (batchPreviousStudentQ) batchPreviousStudentQ.value = '';
-        if (batchPreviousStudentResults) {
-            batchPreviousStudentResults.innerHTML = '';
-            batchPreviousStudentResults.classList.add('hidden');
+    function clearBatchExtraStudentSearch() {
+        batchExtraStudentCandidates = [];
+        batchExtraStudentRequestSeq++;
+        if (batchExtraStudentQ) batchExtraStudentQ.value = '';
+        if (batchExtraStudentResults) {
+            batchExtraStudentResults.innerHTML = '';
+            batchExtraStudentResults.classList.add('hidden');
         }
     }
 
     function renderBatchStudentsTable(students) {
         batchAssignedStudents = Array.isArray(students) ? students : [];
-        batchPreviousStudents = [];
-        clearBatchPreviousStudentSearch();
+        batchExtraStudents = [];
+        clearBatchExtraStudentSearch();
         if (!classBatchStudentsBody) return;
         if (batchAssignedStudents.length === 0) {
             classBatchStudentsBody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
@@ -7112,12 +7115,12 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBatchStudentCount();
     }
 
-    function addBatchPreviousStudent(student) {
+    function addBatchExtraStudent(student) {
         const sId = Number(student.row_id || student.Id);
         if (!sId || !classBatchStudentsBody) return;
-        if (batchPreviousStudents.some(item => Number(item.row_id || item.Id) === sId)) return;
+        if (batchExtraStudents.some(item => Number(item.row_id || item.Id) === sId)) return;
         const entry = { ...student, row_id: sId, IsSpecial: student.SuggestedIsSpecial === true };
-        batchPreviousStudents.push(entry);
+        batchExtraStudents.push(entry);
         const emptyRow = classBatchStudentsBody.querySelector('.empty-state');
         if (emptyRow) classBatchStudentsBody.innerHTML = '';
         const holder = document.createElement('tbody');
@@ -7126,59 +7129,53 @@ document.addEventListener('DOMContentLoaded', () => {
         while (holder.firstElementChild) classBatchStudentsBody.appendChild(holder.firstElementChild);
         loadBatchTuitionProgress([entry]);
         updateBatchStudentCount();
-        clearBatchPreviousStudentSearch();
+        clearBatchExtraStudentSearch();
     }
 
-    function removeBatchPreviousStudent(studentId) {
+    function removeBatchExtraStudent(studentId) {
         const sId = Number(studentId);
-        batchPreviousStudents = batchPreviousStudents.filter(item => Number(item.row_id || item.Id) !== sId);
+        batchExtraStudents = batchExtraStudents.filter(item => Number(item.row_id || item.Id) !== sId);
         classBatchStudentsBody?.querySelector(`tr[data-batch-row="${sId}"]`)?.remove();
         document.getElementById(`batch-absence-row-${sId}`)?.remove();
         document.getElementById(`batch-memo-row-${sId}`)?.remove();
-        if (batchAssignedStudents.length === 0 && batchPreviousStudents.length === 0 && classBatchStudentsBody) {
+        if (batchAssignedStudents.length === 0 && batchExtraStudents.length === 0 && classBatchStudentsBody) {
             classBatchStudentsBody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
         }
         updateBatchStudentCount();
     }
 
-    // 현재 이 수업에 배정되지 않은 학생을 이름으로 찾는다(이전 반 누락 기록 등록용).
-    async function searchBatchPreviousStudents() {
-        if (!batchPreviousStudentQ || !batchPreviousStudentResults || !activeBatchClassId) return;
-        const query = batchPreviousStudentQ.value.trim();
-        const requestSeq = ++batchPreviousStudentRequestSeq;
-        if (!query) {
-            batchPreviousStudentCandidates = [];
-            batchPreviousStudentResults.innerHTML = '';
-            batchPreviousStudentResults.classList.add('hidden');
-            return;
-        }
+    // 현재 이 수업에 배정되지 않은 학생을 이름으로 찾는다. 검색어가 없으면 추가할 수 있는 학생부터 보여 준다.
+    async function searchBatchExtraStudents() {
+        if (!batchExtraStudentQ || !batchExtraStudentResults || !activeBatchClassId) return;
+        const query = batchExtraStudentQ.value.trim();
+        const requestSeq = ++batchExtraStudentRequestSeq;
         try {
-            const data = await apiFetch(`/api/user/classes/${activeBatchClassId}/previous-students?q=${encodeURIComponent(query)}`);
-            if (requestSeq !== batchPreviousStudentRequestSeq) return;
-            batchPreviousStudentCandidates = (data.students || []).filter(student =>
-                !batchPreviousStudents.some(item => Number(item.row_id || item.Id) === Number(student.row_id || student.Id)));
-            batchPreviousStudentResults.innerHTML = batchPreviousStudentCandidates.length
-                ? batchPreviousStudentCandidates.map(student => {
+            const data = await apiFetch(`/api/user/classes/${activeBatchClassId}/student-candidates${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+            if (requestSeq !== batchExtraStudentRequestSeq) return;
+            batchExtraStudentCandidates = (data.students || []).filter(student =>
+                !batchExtraStudents.some(item => Number(item.row_id || item.Id) === Number(student.row_id || student.Id)));
+            batchExtraStudentResults.innerHTML = batchExtraStudentCandidates.length
+                ? batchExtraStudentCandidates.map(student => {
                     const meta = [];
-                    if (student.PastRecordCount) meta.push(`이 수업 과거 기록 ${student.PastRecordCount}건`);
+                    if (student.PastRecordCount) meta.push(`이 수업 기존 기록 ${student.PastRecordCount}건`);
                     if (student.SuggestedIsSpecial === true) meta.push('특강 추천');
                     else if (student.SuggestedIsSpecial === false) meta.push('일반 추천');
                     const detail = [formatSex(student.Sex), student.Grade ? formatGrade(student.Grade) : ''].filter(Boolean).join(' · ');
-                    return `<button type="button" class="batch-previous-result" data-row-id="${Number(student.row_id || student.Id)}" role="option">
-                        <span class="batch-previous-result-main">
+                    return `<button type="button" class="batch-extra-result" data-row-id="${Number(student.row_id || student.Id)}" role="option">
+                        <span class="batch-extra-result-main">
                             <strong>${escapeHtml(student.Name || '이름 없음')}</strong>
-                            <span class="batch-previous-result-meta">${escapeHtml([detail, meta.join(' · ')].filter(Boolean).join(' · '))}</span>
+                            <span class="batch-extra-result-meta">${escapeHtml([detail, meta.join(' · ')].filter(Boolean).join(' · '))}</span>
                         </span>
-                        <span class="batch-previous-result-meta"><i class="fa-solid fa-plus"></i> 추가</span>
+                        <span class="batch-extra-result-meta"><i class="fa-solid fa-plus"></i> 추가</span>
                     </button>`;
                 }).join('')
                 : '<div class="empty-state-sm">조건에 맞는 학생이 없습니다.</div>';
-            batchPreviousStudentResults.classList.remove('hidden');
+            batchExtraStudentResults.classList.remove('hidden');
         } catch (err) {
-            if (requestSeq !== batchPreviousStudentRequestSeq) return;
-            batchPreviousStudentCandidates = [];
-            batchPreviousStudentResults.innerHTML = `<div class="empty-state-sm">${escapeHtml(err.message)}</div>`;
-            batchPreviousStudentResults.classList.remove('hidden');
+            if (requestSeq !== batchExtraStudentRequestSeq) return;
+            batchExtraStudentCandidates = [];
+            batchExtraStudentResults.innerHTML = `<div class="empty-state-sm">${escapeHtml(err.message)}</div>`;
+            batchExtraStudentResults.classList.remove('hidden');
         }
     }
 
@@ -7422,8 +7419,8 @@ document.addEventListener('DOMContentLoaded', () => {
         batchFormRequestSeq++;
         batchPlannedBooks = [];
         batchAssignedStudents = [];
-        batchPreviousStudents = [];
-        clearBatchPreviousStudentSearch();
+        batchExtraStudents = [];
+        clearBatchExtraStudentSearch();
         renderBatchPlannedBooks();
         activeBatchClassId = null;
         if (classBatchInfo) classBatchInfo.classList.add('hidden');
@@ -7510,14 +7507,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = contentEl ? contentEl.value.trim() : '';
 
         const logs = [];
-        const previousStudentIds = new Set(batchPreviousStudents.map(student => Number(student.row_id || student.Id)));
+        const extraStudentIds = new Set(batchExtraStudents.map(student => Number(student.row_id || student.Id)));
         (classBatchStudentsBody || document).querySelectorAll('.batch-attend').forEach(chk => {
             const sid = parseInt(chk.getAttribute('data-student-id'));
             const specialEl = document.querySelector(`.batch-special[data-student-id="${sid}"]`);
             const descriptionEl = document.querySelector(`.batch-description[data-student-id="${sid}"]`);
             const absenceReasonEl = document.getElementById(`batch-absence-reason-${sid}`);
-            const isPrevious = previousStudentIds.has(sid);
-            logs.push({ StudentId: sid, include: chk.checked || isPrevious, is_special: specialEl ? specialEl.checked : false, Description: descriptionEl ? descriptionEl.value.trim() : '', AbsenceReason: !chk.checked && !isPrevious && absenceReasonEl ? absenceReasonEl.value.trim() : '', allow_not_assigned: isPrevious });
+            const isExtra = extraStudentIds.has(sid);
+            logs.push({ StudentId: sid, include: chk.checked || isExtra, is_special: specialEl ? specialEl.checked : false, Description: descriptionEl ? descriptionEl.value.trim() : '', AbsenceReason: !chk.checked && !isExtra && absenceReasonEl ? absenceReasonEl.value.trim() : '', allow_not_assigned: isExtra });
         });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
