@@ -59,6 +59,7 @@ from database import (
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from studylog_permissions import mutation_permission, validate_teacher_update
+from studylog_dates import ensure_not_future_studied_day, future_studied_day_message, is_future_studied_day
 from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
 from teacher_assignment import MAX_ASSIGNMENT_ROWS
@@ -1753,6 +1754,8 @@ def user_register_studylog(
     studied_day = payload.StudiedDay.strip()
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', studied_day):
         raise HTTPException(status_code=400, detail="학습 일자는 YYYY-MM-DD 형식이어야 합니다.")
+    # 학습 이력은 실제 진행한 수업 기록이므로 한국 시간 기준 오늘 이후로는 등록할 수 없다.
+    ensure_not_future_studied_day(studied_day)
     class_row = None
     actual_teacher = ""
     payroll_category_id = None
@@ -3041,6 +3044,9 @@ def user_batch_register_class_studylogs(
             "results": []
         }
 
+    # 휴강 일정은 미리 등록할 수 있지만, 학생 학습 이력은 한국 시간 기준 오늘까지만 등록한다.
+    ensure_not_future_studied_day(day)
+
     book_ids = list(dict.fromkeys(
         book_id for book_id in (payload.BookIds or ([payload.BookId] if payload.BookId else []))
         if book_id and book_id > 0
@@ -3733,6 +3739,8 @@ def preview_studylog_csv(payload: StudyLogCsvRequest, current_user: Dict[str, An
             datetime.strptime(source.studied_day.strip(), "%Y-%m-%d")
         except ValueError:
             errors.append("일자는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.")
+        if is_future_studied_day(source.studied_day):
+            errors.append(future_studied_day_message(source.studied_day))
         ranked = sorted(
             [(_csv_book_score(source.book_title, book.get("Title") or ""), book) for book in books],
             key=lambda item: (-item[0], item[1]["row_id"])
@@ -3786,6 +3794,8 @@ def import_studylog_csv(payload: StudyLogCsvRequest, current_user: Dict[str, Any
                       "book_title": source.book_title, "studied_day": source.studied_day}
             try:
                 datetime.strptime(source.studied_day.strip(), "%Y-%m-%d")
+                if is_future_studied_day(source.studied_day):
+                    raise ValueError(future_studied_day_message(source.studied_day))
                 if not source.student_id or not conn.execute('SELECT 1 FROM "Students" WHERE rowid=? OR "Id"=?', (source.student_id, source.student_id)).fetchone():
                     raise ValueError("학생을 확인할 수 없습니다.")
                 if not source.book_id or not conn.execute('SELECT 1 FROM "Books" WHERE rowid=? OR "Id"=?', (source.book_id, source.book_id)).fetchone():
@@ -4624,6 +4634,7 @@ def user_update_studylog(
                 datetime.strptime(studied_day, "%Y-%m-%d")
             except ValueError:
                 raise HTTPException(status_code=400, detail="학습 수행 일자는 YYYY-MM-DD 형식으로 입력해 주세요.")
+            ensure_not_future_studied_day(studied_day)
             update_data["StudiedDay"] = studied_day
 
         assignment_fields = {"ClassId", "ActualTeacherUsername", "PayrollCategoryId"}

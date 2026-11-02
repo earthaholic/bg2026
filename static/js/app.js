@@ -774,6 +774,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('popstate', restoreViewFromUrl);
 
+    // 학습 이력은 한국 시간 기준 오늘까지만 등록할 수 있다. (서버에서도 같은 규칙을 검증한다)
+    const STUDIED_DAY_INPUT_SELECTOR = '#studylog-date, #batch-studied-day, #edit-studylog-studied-day, #input-studylog-studied-day';
+
+    function kstToday() {
+        return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+    }
+
+    function studiedDayFutureWarning(day) {
+        const today = kstToday();
+        const value = String(day || '').trim().slice(0, 10);
+        if (value && value > today) {
+            return `미래 날짜(${value})에는 학습 이력을 등록할 수 없습니다. 학습 일자는 오늘(${today}, 한국 시간)까지만 선택할 수 있습니다.`;
+        }
+        return '';
+    }
+
+    function applyStudiedDayLimits(root) {
+        const today = kstToday();
+        const scope = root && root.querySelectorAll ? root : document;
+        const inputs = [];
+        if (root && root.matches && root.matches(STUDIED_DAY_INPUT_SELECTOR)) inputs.push(root);
+        scope.querySelectorAll(STUDIED_DAY_INPUT_SELECTOR).forEach(input => inputs.push(input));
+        inputs.forEach(input => {
+            input.max = today;
+            input.title = `오늘(${today}, 한국 시간)까지 선택할 수 있습니다.`;
+        });
+    }
+
+    // 동적으로 그리는 입력도 처음 열릴 때 제한일을 적용한다.
+    document.addEventListener('focusin', event => {
+        if (event.target && event.target.matches && event.target.matches(STUDIED_DAY_INPUT_SELECTOR)) {
+            applyStudiedDayLimits(event.target);
+        }
+    });
+
     function switchView(targetView, { replace = false } = {}) {
         if (!currentUser) return;
         if (targetView !== 'tuition-collection' && document.getElementById('view-tuition-collection').classList.contains('active') && !tuitionCollection.canLeave()) return false;
@@ -820,6 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.workspace-view').forEach(view => {
             view.classList.toggle('active', view.id === `view-${targetView}`);
         });
+        applyStudiedDayLimits();
 
         if (targetView === 'data-view' && isAdmin()) {
             dataStudioHeaderBar.classList.remove('hidden');
@@ -1758,10 +1794,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearStudyLogCache = document.getElementById('btn-clear-studylog-cache');
     const recentStudyLogsList = document.getElementById('recent-studylogs-list');
 
-    // Default Date to Today
+    // Default Date to Today (한국 시간 기준)
     if (studylogDate && !studylogDate.value) {
-        studylogDate.value = new Date().toISOString().split('T')[0];
+        studylogDate.value = kstToday();
     }
+    applyStudiedDayLimits();
 
     // Picker Modals Elements
     const modalStudentPicker = document.getElementById('modal-student-picker');
@@ -2393,6 +2430,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (userStudyLogMsg) {
                 userStudyLogMsg.className = 'alert alert-danger';
                 userStudyLogMsg.textContent = '학습 수행 일자를 입력해 주세요.';
+                userStudyLogMsg.classList.remove('hidden');
+            }
+            return;
+        }
+
+        const futureDayWarning = studiedDayFutureWarning(dateVal);
+        if (futureDayWarning) {
+            if (userStudyLogMsg) {
+                userStudyLogMsg.className = 'alert alert-danger';
+                userStudyLogMsg.textContent = futureDayWarning;
                 userStudyLogMsg.classList.remove('hidden');
             }
             return;
@@ -3131,6 +3178,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         feedback.show('학습 수행 일자를 선택해 주세요.', 'warning');
                         return;
                     }
+                    const futureDayWarning = studiedDayFutureWarning(newStudiedDay);
+                    if (futureDayWarning) {
+                        feedback.show(futureDayWarning, 'warning');
+                        return;
+                    }
                     try {
                         saveStudiedDayButton.disabled = true;
                         await apiFetch(`/api/user/studylogs/${l.row_id || l.Id}`, {
@@ -3396,6 +3448,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('form-edit-studylog-detail').addEventListener('submit', async event => {
             const feedback = createActionFeedback(event);
             event.preventDefault();
+            const editFutureDayWarning = studiedDayFutureWarning(document.getElementById('edit-studylog-studied-day').value);
+            if (editFutureDayWarning) {
+                feedback.show(editFutureDayWarning, 'warning');
+                return;
+            }
             if (!selectedBookId) {
                 feedback.show('학습 도서를 선택해 주세요.', 'warning');
                 return;
@@ -6884,7 +6941,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (batchClassStudentCount) batchClassStudentCount.textContent = `${students.length}명`;
             if (classBatchInfo) classBatchInfo.classList.remove('hidden');
             if (classBatchRegCard) classBatchRegCard.classList.remove('hidden');
-            if (!batchStudiedDay.value) batchStudiedDay.value = new Date().toISOString().split('T')[0];
+            if (!batchStudiedDay.value) batchStudiedDay.value = kstToday();
             if (isStaff()) await loadActualTeacherOptions('batch-actual-teacher', cls.TeacherUsername);
             renderBatchStudentsTable(students);
             loadBatchStudylogCalendar(getBatchMonth(batchStudiedDay.value));
@@ -7109,13 +7166,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const date = `${calendarMonth}-${String(day).padStart(2, '0')}`;
                 const count = (days[date] || []).length;
                 const isCancelled = !!cancellations[date];
+                // 미래 날짜에는 학습 이력을 등록할 수 없으므로 달력에서 선택할 수 없게 표시한다.
+                const isFuture = date > kstToday();
                 const classes = ['batch-calendar-day'];
                 if (count) classes.push('has-records');
                 if (isCancelled) classes.push('has-cancellation');
-                if (date === selectedDay) classes.push('selected');
+                if (isFuture) classes.push('is-future');
+                if (date === selectedDay && !isFuture) classes.push('selected');
                 const marker = isCancelled ? '<b>휴</b>' : (count ? `<b>${count}</b>` : '');
-                const label = `${date}${isCancelled ? ', 휴강' : ''}${count ? `, 기존 기록 ${count}건` : ''}`;
-                calendarHtml += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${label}"><span>${day}</span>${marker}</button>`;
+                const label = `${date}${isFuture ? ', 학습 이력 등록 불가' : ''}${isCancelled ? ', 휴강' : ''}${count ? `, 기존 기록 ${count}건` : ''}`;
+                calendarHtml += `<button type="button" class="${classes.join(' ')}" data-batch-date="${date}" aria-label="${label}"${isFuture ? ' disabled' : ''}><span>${day}</span>${marker}</button>`;
             }
             return `<section class="batch-calendar-month" aria-label="${year}년 ${month}월"><h5>${year}년 ${month}월</h5><div class="batch-calendar-grid">${calendarHtml}</div></section>`;
         }).join('');
@@ -7135,6 +7195,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectBatchCalendarDate(date) {
+        // 미래 날짜는 등록 대상이 아니므로 달력에서 눌러도 날짜를 바꾸지 않는다.
+        if (studiedDayFutureWarning(date)) return;
         if (batchStudiedDay) batchStudiedDay.value = date;
         renderBatchStudylogCalendar();
         showBatchExistingRecords(date);
@@ -7278,6 +7340,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 classBatchResult.textContent = err.message;
                 classBatchResult.classList.remove('hidden');
             }
+            return;
+        }
+        const futureDayWarning = studiedDayFutureWarning(dateVal);
+        if (futureDayWarning) {
+            classBatchResult.className = 'alert alert-danger';
+            classBatchResult.textContent = futureDayWarning;
+            classBatchResult.classList.remove('hidden');
             return;
         }
         const bookIds = Array.from(selectedBatchBooks.values()).map(book => book.id);

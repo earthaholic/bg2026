@@ -3123,6 +3123,8 @@ body {
     font: inherit;
 }
 .batch-calendar-day:hover { background: rgba(16, 185, 129, 0.09); border-color: rgba(16, 185, 129, 0.25); }
+.batch-calendar-day:disabled { cursor: not-allowed; color: var(--text-muted); border-style: dashed; border-color: var(--border-color); background: transparent; }
+.batch-calendar-day:disabled:hover { background: transparent; border-color: var(--border-color); }
 .batch-calendar-day.has-records { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.38); color: var(--success); font-weight: 700; }
 .batch-calendar-day.selected { outline: 2px solid var(--primary); outline-offset: 1px; }
 .batch-calendar-day b { position: absolute; top: -0.3rem; right: -0.18rem; min-width: 1.1rem; padding: 0.05rem 0.25rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.64rem; line-height: 1.1rem; }

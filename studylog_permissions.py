@@ -3,6 +3,8 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
+from studylog_dates import ensure_not_future_studied_day
+
 
 TEACHER_EDIT_FIELDS = {"BookId", "StudiedDay", "LessonContent", "Description", "IsSpecial"}
 
@@ -45,6 +47,7 @@ def validate_teacher_update(conn, data):
                 raise ValueError()
         except ValueError:
             raise HTTPException(status_code=400, detail="학습 수행 일자는 유효한 YYYY-MM-DD 형식으로 입력해 주세요.")
+        ensure_not_future_studied_day(day)
     if "BookId" in result:
         book_id = result["BookId"]
         if type(book_id) is not int or book_id <= 0 or not conn.execute(
