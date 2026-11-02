@@ -94,6 +94,19 @@ python server_daemon.py
 
 ---
 
+## 모바일 화면 지원
+
+휴대폰·태블릿에서도 조회·등록·정산 화면을 쓸 수 있습니다. 화면 폭 900px 이하에서 자동으로 적용됩니다.
+
+* 상단 바에 메뉴 버튼이 생기고 왼쪽 메뉴는 **밀어서 여는 서랍**으로 바뀝니다. 메뉴를 고르거나 배경을 누르면 닫힙니다.
+* 넓은 표는 칸을 뭉개지 않고 **가로로 넘겨서** 봅니다. 오른쪽에 더 볼 내용이 있으면 가장자리에 은은한 안내가 표시됩니다.
+* 검색 필터·등록 폼은 **1열**로 바뀌고, 상세·편집 창은 **화면 전체**를 사용합니다(본문만 스크롤).
+* 데스크톱 화면의 레이아웃과 동작은 그대로 유지됩니다.
+
+모바일 규칙은 `static/css/mobile.css`와 `static/js/mobile.js`에만 모아 두었습니다. `static/css/styles.css`는 건드리지 않으므로, 좁은 화면용 조정이 필요하면 `mobile.css`의 `@media (max-width: 900px)` / `(max-width: 600px)` 블록에 추가합니다. 회귀 검증은 `node --test tests/test_mobile_layout_ui.js`입니다.
+
+---
+
 ## 수업 내용 CSV 일괄 반영
 
 `import_lessoncontent_csv.py`는 기존 `StudyLogs`의 `LessonContent`만 수정하는 일회성 반영 도구입니다. DB 파일은 Git에 포함하지 않습니다.

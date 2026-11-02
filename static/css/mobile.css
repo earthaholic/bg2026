@@ -1,0 +1,717 @@
+/* ==========================================================================
+   모바일 지원 (화면 폭 900px 이하)
+   - 상단 바 축소 + 사이드바는 밀어서 여는 서랍(drawer)으로 전환
+   - 작업 영역은 세로 스크롤, 넓은 표는 가로 스크롤
+   - 필터·등록 폼은 1열, 입력 요소는 손가락으로 누르기 좋은 크기
+   styles.css 뒤에 로드되어 모바일 화면만 덮어쓴다.
+   ========================================================================== */
+
+:root {
+    --mobile-gutter: 0.875rem;
+}
+
+/* 서랍이 열린 동안 배경 스크롤 잠금 */
+body.mobile-nav-open {
+    overflow: hidden;
+}
+
+/* --- 서랍 여닫기 버튼 (mobile.js가 상단 바에 삽입) --- */
+.nav-mobile-toggle {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .nav-mobile-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 2.5rem;
+        height: 2.5rem;
+        margin-right: 0.35rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-main);
+        font-size: 1.05rem;
+        cursor: pointer;
+    }
+
+    .nav-mobile-toggle:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+    }
+
+    /* ---------- 전체 틀 ---------- */
+    .app-layout {
+        height: 100vh;
+        height: 100dvh;
+    }
+
+    .main-container {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .navbar {
+        flex-wrap: wrap;
+        row-gap: 0.35rem;
+        column-gap: 0.5rem;
+        padding: 0.5rem var(--mobile-gutter);
+        flex: 0 0 auto;
+    }
+
+    .nav-brand {
+        gap: 0.5rem;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .nav-brand .logo-icon {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+    }
+
+    .brand-text {
+        min-width: 0;
+    }
+
+    .brand-title {
+        display: block;
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .brand-subtitle {
+        display: none;
+    }
+
+    .nav-actions {
+        gap: 0.4rem;
+        margin-left: auto;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .user-badge,
+    .nav-actions .btn,
+    #btn-theme-toggle {
+        flex: 0 0 auto;
+    }
+
+    .nav-actions .btn {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.8rem;
+    }
+
+    #btn-theme-toggle {
+        padding: 0.45rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    /* 좁은 화면에서는 아이콘만 남긴다(문구는 스크린리더용으로 유지) */
+    #btn-theme-toggle span,
+    .nav-actions .btn span {
+        display: none;
+    }
+
+    .user-badge {
+        padding: 0.2rem 0.6rem 0.2rem 0.3rem;
+        gap: 0.4rem;
+    }
+
+    .user-badge .avatar {
+        width: 26px;
+        height: 26px;
+        font-size: 0.8rem;
+    }
+
+    .user-badge .user-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+        line-height: 1.15;
+        min-width: 0;
+    }
+
+    .user-badge .username {
+        max-width: 9rem;
+        font-size: 0.78rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .user-badge .role-pill {
+        display: none;
+    }
+
+    .results-bar .text-muted {
+        display: none;
+    }
+
+    /* ---------- 사이드바: 밀어서 여는 서랍 ---------- */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(85vw, 320px);
+        max-width: 320px;
+        z-index: 320;
+        border-right: 1px solid var(--border-color);
+        background: var(--bg-card);
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+        transform: translateX(-100%);
+        transition: transform 0.22s ease;
+        overflow: hidden;
+    }
+
+    body.mobile-nav-open .sidebar {
+        transform: none;
+    }
+
+    .mobile-nav-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 310;
+        background: rgba(2, 6, 23, 0.6);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+
+    body.mobile-nav-open .mobile-nav-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .sidebar-header {
+        padding: 1rem 1rem 0.4rem;
+    }
+
+    .sidebar-menu-nav {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    }
+
+    .sidebar .menu-nav-item {
+        padding-top: 0.7rem;
+        padding-bottom: 0.7rem;
+        font-size: 0.92rem;
+    }
+
+    .sidebar-footer {
+        display: none;
+    }
+
+    /* ---------- 작업 영역 ---------- */
+    .workspace {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: var(--mobile-gutter);
+        padding-bottom: calc(var(--mobile-gutter) + env(safe-area-inset-bottom));
+        gap: 0.75rem;
+    }
+
+    /* 세로로 자연스럽게 이어지도록 내부 고정 높이·숨김 스크롤을 푼다 */
+    .workspace-view {
+        overflow: visible;
+        flex: 0 0 auto;
+        min-width: 0;
+    }
+
+    .book-search-layout {
+        overflow: visible;
+        flex: 0 0 auto;
+        min-width: 0;
+        gap: 0.75rem;
+    }
+
+    .search-filter-card {
+        padding: 0.9rem;
+        gap: 0.75rem;
+    }
+
+    .form-card {
+        padding: 1rem;
+        overflow: visible;
+    }
+
+    /* ---------- 표: 칸을 뭉개지 않고 가로 스크롤 ---------- */
+    .table-responsive {
+        overflow-x: auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+    }
+
+    .modern-table {
+        min-width: 620px;
+    }
+
+    /* 이미 카드형으로 풀어 쓰는 표는 최소 폭을 두지 않는다 */
+    .book-students-table,
+    .no-min-width-table {
+        min-width: 0;
+    }
+
+    /* 모달 안의 표는 대개 열이 적으므로 화면 폭에 맞춰 줄인다. */
+    .modal-card .modern-table,
+    .modal-backdrop .modern-table,
+    dialog .modern-table {
+        min-width: 0;
+    }
+
+    /* ---------- 필터·버튼 배치 ---------- */
+    .results-bar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0;
+    }
+
+    .search-pagination-bar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+    }
+
+    .filter-row {
+        gap: 0.5rem;
+    }
+
+    .filter-group-actions {
+        justify-content: stretch;
+    }
+
+    .book-cards-grid {
+        grid-template-columns: minmax(0, 1fr);
+        overflow: visible;
+        padding-right: 0;
+    }
+
+    /* 표·목록 카드가 화면 높이에 갇히지 않고 내용만큼 자라게 한다(안쪽 이중 스크롤 방지).
+       가로 스크롤은 .table-responsive가 계속 담당한다. */
+    .table-card {
+        flex: none !important;
+        min-height: 0 !important;
+        overflow: hidden;
+    }
+
+    .table-responsive {
+        max-height: none !important;
+        min-height: 0 !important;
+    }
+
+    /* 가로로 넘기는 표임을 알 수 있도록 스크롤 막대를 항상 보이게 한다. */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 999px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 999px;
+    }
+
+    /* 오른쪽에 더 볼 내용이 있을 때만 은은한 페이드를 보여 준다. */
+    .table-card {
+        position: relative;
+    }
+
+    .table-card.is-h-scrollable::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 10px;
+        width: 26px;
+        background: linear-gradient(to right, transparent, var(--bg-card) 75%);
+        pointer-events: none;
+    }
+
+    /* 끝까지 넘겨서 더 볼 것이 없으면 페이드를 감춘다. */
+    .table-card.is-h-scrollable.is-h-scroll-end::after {
+        display: none;
+    }
+
+    .page-title-box h1,
+    .page-title-box h2 {
+        font-size: 1.15rem;
+    }
+
+    /* ---------- 관리자 도구(Studio·SQL) ---------- */
+    .data-studio-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.65rem;
+        padding: 0.75rem;
+    }
+
+    .studio-left-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .table-selector-group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.3rem;
+        min-width: 0;
+    }
+
+    .table-selector-group label {
+        white-space: nowrap;
+    }
+
+    .data-studio-bar .form-control,
+    .data-studio-bar select,
+    .data-studio-bar input,
+    .sql-editor-container .form-control {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sub-tab-group {
+        flex-wrap: wrap;
+    }
+
+    .table-card-header {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .table-card-header h2 {
+        font-size: 1.02rem;
+    }
+
+    .table-card-footer {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .sql-actions {
+        flex-wrap: wrap;
+    }
+
+    /* Studio 검색창은 아이콘만 남지 않도록 한 줄을 다 쓴다. */
+    .studio-right-controls {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .studio-right-controls .search-box {
+        width: 100%;
+    }
+
+    .studio-right-controls .search-box input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* 결과가 없을 때 안내 문구가 화면 밖으로 밀리지 않도록 표 최소 폭을 풀다. */
+    .modern-table:has(td.empty-state),
+    .modern-table:has(tbody tr:only-child td:only-child) {
+        min-width: 0 !important;
+    }
+
+    /* 기록이 없을 때는 열 제목을 숨겨 안내 문구가 화면 폭 안에서 줄바꿈되게 한다. */
+    .modern-table:has(td.empty-state) thead {
+        display: none;
+    }
+
+    .modern-table:has(td.empty-state) td.empty-state {
+        text-align: left !important;
+        padding: 1rem 0.75rem !important;
+        white-space: normal;
+    }
+
+    /* 파일 선택 입력이 작은 상자로 찌그러지지 않게 한다. */
+    .utility-controls input[type="file"],
+    .utility-csv-controls input[type="file"],
+    .utility-teacher-controls input[type="file"],
+    #studylog-csv-file,
+    #teacher-assignment-file {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* ---------- 모달: 화면을 거의 다 쓰는 시트 ---------- */
+    .modal-backdrop {
+        padding: 0.75rem;
+    }
+
+    .modal-card {
+        width: 100%;
+        max-width: 100%;
+        max-height: 92vh;
+        max-height: 92dvh;
+    }
+
+    .detail-modal-body {
+        max-height: none;
+    }
+}
+
+/* ==========================================================================
+   휴대폰 (600px 이하)
+   ========================================================================== */
+@media (max-width: 600px) {
+    /* 입력 요소가 16px 미만이면 iOS가 자동 확대하므로 키운다 */
+    input,
+    select,
+    textarea,
+    .form-control {
+        font-size: 16px;
+    }
+
+    .navbar {
+        padding: 0.45rem 0.7rem;
+    }
+
+    .brand-title {
+        font-size: 0.85rem;
+    }
+
+    .nav-actions {
+        gap: 0.3rem;
+    }
+
+    .nav-actions .btn,
+    #btn-theme-toggle {
+        padding: 0.4rem 0.5rem;
+    }
+
+    /* 손가락으로 누르기 좋은 최소 높이 */
+    .btn,
+    .btn-sm,
+    .form-control,
+    select.form-control {
+        min-height: 2.5rem;
+    }
+
+    .btn-sm {
+        min-height: 2.125rem;
+        padding: 0.35rem 0.6rem;
+    }
+
+    /* 필터·등록 폼은 1열 */
+    .filter-options-grid,
+    .form-grid,
+    .checkbox-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .span-2,
+    .span-full {
+        grid-column: auto !important;
+    }
+
+    /* 입력 + 버튼을 한 줄에 밀어 넣던 줄은 좁은 화면에서 자연스럽게 다음 줄로 넘긴다. */
+    .input-group {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .input-group > .form-control,
+    .input-group > select {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .input-group > .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    .book-reg-layout,
+    .student-detail-layout,
+    .class-detail-layout,
+    .book-detail-layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+        overflow: visible;
+    }
+
+    .class-detail-layout .planned-books-section {
+        border-left: 0;
+        padding-left: 0;
+    }
+
+    /* 모달은 전체 화면 시트로 */
+    .modal-backdrop {
+        padding: 0;
+    }
+
+    .modal-card,
+    .detail-card,
+    .picker-modal-card {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .modal-header,
+    .modal-actions {
+        flex: 0 0 auto;
+    }
+
+    .modal-actions {
+        padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    }
+
+    /* 하단 버튼이 화면 밖으로 나가지 않게 줄바꿈을 허용한다. */
+    .modal-actions,
+    .modal-footer,
+    .picker-modal-footer {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .picker-footer-controls {
+        flex: 1 1 100%;
+    }
+
+    .picker-footer-controls .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    .picker-modal-footer > .btn {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+
+    /* 모달 머리말: 제목은 한 줄을 다 쓰고, 버튼은 아래 줄로 내린다.
+       닫기 버튼은 오른쪽 위에 고정해 항상 찾을 수 있게 한다. */
+    .modal-header {
+        position: relative;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.4rem;
+        padding-right: 2.75rem;
+    }
+
+    .modal-header > h2,
+    .modal-header > h3 {
+        flex: 1 1 100%;
+        margin: 0;
+        font-size: 1.02rem;
+        line-height: 1.35;
+    }
+
+    .modal-header .btn-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        margin: 0;
+    }
+
+    .detail-header-actions,
+    #modal-student-detail-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 0.4rem;
+        flex: 1 1 100%;
+    }
+
+    .modal-header .btn {
+        min-height: 2.25rem;
+    }
+
+    .modal-body,
+    .detail-modal-body {
+        overflow-y: auto;
+        min-height: 0;
+    }
+
+    /* 전체 화면 모달은 머리말을 고정하고 본문만 스크롤한다. */
+    .modal-card {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-card > .modal-header {
+        flex: 0 0 auto;
+    }
+
+    .modal-card > .modal-body,
+    .modal-card > .detail-modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+    }
+
+    /* 제목·설명이 긴 카드 머리말은 제목 영역을 한 줄 다 쓰고 버튼을 아래로 내린다. */
+    .card-header-styled {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .card-header-styled > div {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    .card-header-styled > .btn {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    /* 휴대폰에서는 표 칸 여백을 줄여 한 화면에 더 많은 줄을 보여 준다. */
+    .modern-table th,
+    .modern-table td {
+        padding: 0.55rem 0.6rem;
+    }
+
+    .book-search-layout,
+    .recent-books-container,
+    .student-studylog-list {
+        max-height: none;
+    }
+
+    /* 좁은 화면에서 표를 카드처럼 풀어 쓰는 표는 그대로 유지 */
+    .book-students-table thead {
+        display: none;
+    }
+}
+
+/* 아주 좁은 화면(360px 이하)에서 상단 바 문구를 최소화 */
+@media (max-width: 380px) {
+    .brand-title {
+        font-size: 0.8rem;
+    }
+
+    .logo-icon {
+        width: 26px !important;
+        height: 26px !important;
+    }
+}
