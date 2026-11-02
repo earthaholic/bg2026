@@ -68,7 +68,7 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
         for mode, version in [('auto', '2026-07-28'), ('legacy', '2025-11-25')]:
             client = await self.client('first', mode=mode)
             self.assertEqual(client.protocol_version, version)
-            self.assertEqual(len((await client.list_tools()).tools), 66)
+            self.assertEqual(len((await client.list_tools()).tools), 67)
             result = await client.call_tool('read_get_me', {})
             self.assertFalse(result.is_error, result)
             self.assertEqual(result.structured_content['username'], 'first')
@@ -145,3 +145,4 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

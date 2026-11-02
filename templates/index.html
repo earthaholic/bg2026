@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261102-save-feedback2">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261102-payroll-summary3">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -249,6 +249,10 @@
                         <div class="menu-nav-item" data-view="teacher-payroll">
                         <i class="fa-solid fa-money-check-dollar nav-icon"></i>
                         <span>월급 정산</span>
+                    </div>
+                        <div class="menu-nav-item staff-only hidden" data-view="payroll-summary">
+                        <i class="fa-solid fa-chart-column nav-icon"></i>
+                        <span>정산 종합 조회</span>
                     </div>
                     </div>
                     <div class="menu-workspace menu-workspace-operations staff-only hidden" role="group" aria-labelledby="menu-heading-operations">
@@ -1179,6 +1183,47 @@
                     </div>
                 </section>
 
+
+                <section id="view-payroll-summary" class="workspace-view compact-search-view">
+                    <div class="book-search-layout">
+                        <div class="card search-filter-card payroll-filter-card">
+                            <div class="payroll-filter-heading">
+                                <div><h2><i class="fa-solid fa-chart-column"></i> 정산 종합 조회</h2><p>선생님별 월 정산액을 한 해 단위로 모아 봅니다. 수업·상담·추가 청구·자료 제작비를 합한 금액이며 월급 정산 화면과 같은 기준으로 계산합니다.</p></div>
+                            </div>
+                            <div class="payroll-filter-fields">
+                                <div class="form-group"><label for="payroll-summary-year">정산 연도</label><select id="payroll-summary-year" class="form-control"></select></div>
+                                <button id="btn-load-payroll-summary" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 조회</button>
+                            </div>
+                            <div id="payroll-summary-total" class="payroll-summary-card" role="status" aria-live="polite"><span>연도를 선택해 조회하세요.</span></div>
+                            <p class="text-muted">금액 칸을 선택하면 해당 선생님·월의 월급 정산 화면으로 이동합니다. 자물쇠 표시는 마감이 끝난 달이고, 마감된 달은 마감 시점 금액으로 표시합니다. 단가가 설정되지 않은 수업은 합계에 반영하지 않고 따로 안내합니다.</p>
+                        </div>
+                        <div class="results-bar"><div id="payroll-summary-caption">정산 내역을 불러오는 중입니다.</div><span id="payroll-summary-count"></span></div>
+                        <div class="card table-card">
+                            <div class="table-responsive">
+                                <table class="modern-table payroll-summary-table">
+                                    <thead><tr>
+                                        <th data-sortable="false">선생님</th>
+                                        <th data-sortable="false">1월</th>
+                                        <th data-sortable="false">2월</th>
+                                        <th data-sortable="false">3월</th>
+                                        <th data-sortable="false">4월</th>
+                                        <th data-sortable="false">5월</th>
+                                        <th data-sortable="false">6월</th>
+                                        <th data-sortable="false">7월</th>
+                                        <th data-sortable="false">8월</th>
+                                        <th data-sortable="false">9월</th>
+                                        <th data-sortable="false">10월</th>
+                                        <th data-sortable="false">11월</th>
+                                        <th data-sortable="false">12월</th>
+                                        <th data-sortable="false">연간 합계</th>
+                                    </tr></thead>
+                                    <tbody id="payroll-summary-body"><tr><td colspan="14" class="empty-state">정산 내역을 불러오는 중입니다.</td></tr></tbody>
+                                    <tfoot id="payroll-summary-foot"></tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
                 <section id="view-studylog-completion" class="workspace-view">
                     <div class="book-search-layout">
@@ -2735,8 +2780,7 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261026-filter-stability"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261102-save-feedback"></script>
+    <script src="/static/js/app.js?v=20261102-payroll-summary"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
 </body>
 </html>
-

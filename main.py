@@ -59,7 +59,7 @@ from database import (
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
 from studylog_permissions import mutation_permission, payroll_record_delete_permission, validate_teacher_update
-from studylog_dates import ensure_not_future_studied_day, future_studied_day_message, is_future_studied_day
+from studylog_dates import ensure_not_future_studied_day, future_studied_day_message, is_future_studied_day, kst_today
 from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
 from teacher_assignment import MAX_ASSIGNMENT_ROWS
@@ -3442,6 +3442,177 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
     for item in consultation_lines:
         totals[item["TeacherUsername"]] = totals.get(item["TeacherUsername"], 0) + item["Amount"]
     return {"month":month,"closed":closed,"lines":rows,"excluded_lines":excluded_rows,"team_students":team_students,"claims":claims,"material_requests":material_requests,"consultation_lines":consultation_lines,"excluded_consultations":excluded_consultations,"totals":totals}
+
+
+PAYROLL_SUMMARY_AMOUNTS = ("lessons", "consultations", "claims", "materials")
+
+
+def _empty_payroll_summary_cell(month: str) -> Dict[str, Any]:
+    """정산 종합 조회의 선생님·월 칸 기본값."""
+    return {"month": month, "lessons": 0, "lesson_sessions": 0, "unconfigured": 0,
+            "consultations": 0, "consultation_count": 0, "claims": 0, "claim_count": 0,
+            "materials": 0, "material_count": 0, "total": 0, "closed": False,
+            "has_activity": False}
+
+
+def _payroll_summary_month(conn, month: str) -> Dict[str, Dict[str, Any]]:
+    """한 달의 선생님별 정산액을 월급 정산 화면과 같은 기준으로 집계한다.
+
+    마감된 선생님은 확정 저장된 금액을, 마감 전 선생님은 현재 단가를 사용한다.
+    수업·상담·추가 청구·자료 제작비를 모두 합치며 정산 제외 건은 빼고 계산한다.
+    """
+    cells: Dict[str, Dict[str, Any]] = {}
+
+    def cell(teacher: str) -> Dict[str, Any]:
+        if teacher not in cells:
+            cells[teacher] = _empty_payroll_summary_cell(month)
+        return cells[teacher]
+
+    seen_sessions = set()
+    for row in _payroll_rows(month, None, connection=conn, include_excluded=False):
+        teacher = str(row.get("TeacherUsername") or "").strip()
+        if not teacher:
+            continue
+        target = cell(teacher)
+        if row.get("IsRateConfigured") is False:
+            target["unconfigured"] += 1
+            continue
+        target["lessons"] += int(row.get("Amount") or 0)
+        # 같은 날짜·수업의 복수 도서는 한 차시로 센다.
+        session = (teacher, row.get("SessionKey") or f'log:{row.get("StudyLogId")}')
+        if session not in seen_sessions:
+            seen_sessions.add(session)
+            target["lesson_sessions"] += 1
+    for row in payroll_consultation_rows(conn, month):
+        teacher = str(row.get("TeacherUsername") or "").strip()
+        if not teacher or row.get("IsExcluded"):
+            continue
+        target = cell(teacher)
+        target["consultations"] += int(row.get("Amount") or 0)
+        target["consultation_count"] += 1
+    for row in conn.execute('''SELECT "TeacherUsername", COUNT(*) AS "Count", COALESCE(SUM("Amount"), 0) AS "Amount"
+                               FROM "TeacherPayrollClaims" WHERE "PayrollMonth"=? GROUP BY "TeacherUsername"''',
+                            (month,)).fetchall():
+        teacher = str(row["TeacherUsername"] or "").strip()
+        if not teacher:
+            continue
+        target = cell(teacher)
+        target["claims"] += int(row["Amount"] or 0)
+        target["claim_count"] += int(row["Count"] or 0)
+    for row in conn.execute('''SELECT "RequestedBy", COUNT(*) AS "Count", COALESCE(SUM("ApprovedAmount"), 0) AS "Amount"
+                               FROM "BookMaterialRequests" WHERE "Status"='approved' AND "PayrollMonth"=?
+                               GROUP BY "RequestedBy"''', (month,)).fetchall():
+        teacher = str(row["RequestedBy"] or "").strip()
+        if not teacher:
+            continue
+        target = cell(teacher)
+        target["materials"] += int(row["Amount"] or 0)
+        target["material_count"] += int(row["Count"] or 0)
+    for row in conn.execute('SELECT "TeacherUsername" FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?',
+                            (month,)).fetchall():
+        teacher = str(row["TeacherUsername"] or "").strip()
+        if teacher:
+            cell(teacher)["closed"] = True
+    for target in cells.values():
+        target["total"] = sum(int(target[key] or 0) for key in PAYROLL_SUMMARY_AMOUNTS)
+        target["has_activity"] = bool(target["lesson_sessions"] or target["consultation_count"]
+                                      or target["claim_count"] or target["material_count"]
+                                      or target["unconfigured"])
+    return cells
+
+
+def _payroll_summary_years(conn, current_year: int) -> List[int]:
+    """정산 대상 기록이 있는 연도를 최신순으로 돌려준다."""
+    queries = [
+        # 월급 정산 조회와 같은 연결 조건을 쓴다.
+        '''SELECT DISTINCT substr(sl."StudiedDay",1,4) AS "Year" FROM "StudyLogs" sl
+           LEFT JOIN "Classes" c ON sl."ClassId"=c."Id"
+           WHERE length(sl."StudiedDay")>=7
+             AND (c."Id" IS NOT NULL OR (sl."ClassId" IS NULL AND sl."PayrollCategoryId" IS NOT NULL
+                  AND COALESCE(sl."ActualTeacherUsername", '') != ''))''',
+        'SELECT DISTINCT substr("ConsultationDate",1,4) AS "Year" FROM "StudentConsultations"',
+        'SELECT DISTINCT substr("PayrollMonth",1,4) AS "Year" FROM "TeacherPayrollClaims"',
+        'SELECT DISTINCT substr("PayrollMonth",1,4) AS "Year" FROM "BookMaterialRequests"',
+        'SELECT DISTINCT substr("PayrollMonth",1,4) AS "Year" FROM "TeacherPayrollClosures"',
+    ]
+    years = {current_year}
+    for query in queries:
+        try:
+            years.update(int(str(row[0]).strip()) for row in conn.execute(query).fetchall()
+                         if row[0] and str(row[0]).strip().isdigit())
+        except Exception:
+            # 구버전 DB에 없는 테이블·컬럼은 건너뛴다.
+            continue
+    return sorted((year for year in years if 1900 <= year <= 2100), reverse=True)
+
+
+@app.get("/api/user/payroll/summary")
+def get_payroll_summary(year: Optional[str] = Query(None),
+                        current_user: Dict[str, Any] = Depends(get_current_staff)):
+    """관리 선생님 이상이 선생님별 월 정산액을 한 해 단위로 종합해 본다."""
+    current_year = int(kst_today()[:4])
+    value = (year or "").strip()
+    if value and not re.fullmatch(r'\d{4}', value):
+        raise HTTPException(status_code=400, detail="정산 연도는 4자리 연도로 입력해 주세요.")
+    target_year = int(value) if value else current_year
+    if not 1900 <= target_year <= 2100:
+        raise HTTPException(status_code=400, detail="정산 연도는 1900~2100 사이여야 합니다.")
+    months = [f"{target_year}-{number:02d}" for number in range(1, 13)]
+    conn = get_db_connection()
+    try:
+        month_cells = {month: _payroll_summary_month(conn, month) for month in months}
+        years = _payroll_summary_years(conn, current_year)
+        roles = {row[0]: row[1] for row in conn.execute('SELECT username, role FROM _app_users').fetchall()}
+        excluded_teachers = {row[0] for row in conn.execute(
+            'SELECT username FROM _app_users WHERE COALESCE(excluded_from_payroll, 0)=1').fetchall()}
+    finally:
+        conn.close()
+    month_totals = []
+    for month in months:
+        entry = {"month": month, "lessons": 0, "consultations": 0, "claims": 0,
+                 "materials": 0, "total": 0, "closed_count": 0, "teacher_count": 0}
+        for teacher, cell in month_cells[month].items():
+            for key in PAYROLL_SUMMARY_AMOUNTS:
+                entry[key] += int(cell[key] or 0)
+            entry["total"] += int(cell["total"] or 0)
+            if cell["has_activity"]:
+                entry["teacher_count"] += 1
+                if cell["closed"]:
+                    entry["closed_count"] += 1
+        month_totals.append(entry)
+    teachers = []
+    totals = {key: 0 for key in PAYROLL_SUMMARY_AMOUNTS}
+    for teacher in sorted({name for cells in month_cells.values() for name in cells}):
+        cells = [dict(month_cells[month].get(teacher) or _empty_payroll_summary_cell(month))
+                 for month in months]
+        row_totals = {key: sum(int(cell[key] or 0) for cell in cells) for key in PAYROLL_SUMMARY_AMOUNTS}
+        active_cells = [cell for cell in cells if cell["has_activity"]]
+        teachers.append({
+            "username": teacher,
+            "role": roles.get(teacher, ""),
+            "is_payroll_excluded": teacher in excluded_teachers,
+            "cells": cells,
+            "totals": row_totals,
+            "total": sum(int(cell["total"] or 0) for cell in cells),
+            "closed_count": sum(1 for cell in active_cells if cell["closed"]),
+            "open_count": sum(1 for cell in active_cells if not cell["closed"]),
+            "unconfigured_count": sum(int(cell["unconfigured"] or 0) for cell in cells),
+        })
+        for key in PAYROLL_SUMMARY_AMOUNTS:
+            totals[key] += row_totals[key]
+    active_cells = [cell for row in teachers for cell in row["cells"] if cell["has_activity"]]
+    return {
+        "year": target_year,
+        "years": years,
+        "months": months,
+        "teachers": teachers,
+        "month_totals": month_totals,
+        "totals": totals,
+        "grand_total": sum(row["total"] for row in teachers),
+        "closed_count": sum(1 for cell in active_cells if cell["closed"]),
+        "open_count": sum(1 for cell in active_cells if not cell["closed"]),
+        "unconfigured_count": sum(row["unconfigured_count"] for row in teachers),
+    }
 
 
 @app.post("/api/user/payroll/exclusions")

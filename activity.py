@@ -34,7 +34,7 @@ AREAS = {
 VIEWS = {
     "book-search", "student-search", "studylog-search", "studylog-completion", "book-reg", "student-reg",
     "studylog-reg", "class-list", "class-reg", "class-rate-settings", "class-studylog-reg",
-    "monthly-report", "teacher-payroll", "tuition-payment", "tuition-payment-search",
+    "monthly-report", "teacher-payroll", "payroll-summary", "tuition-payment", "tuition-payment-search",
     "tuition-fee-settings", "book-material-request", "book-material-review", "book-material-rates",
     "utilities", "audit-log", "activity-log", "data-view", "sql-console", "user-manage",
 }

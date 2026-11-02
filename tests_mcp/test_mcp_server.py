@@ -83,7 +83,7 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
             async with Client(create_server(self.gateway), mode=mode) as client:
                 self.assertEqual(client.protocol_version, version)
                 tools = (await client.list_tools()).tools
-                self.assertEqual(len(tools), 66)
+                self.assertEqual(len(tools), 67)
                 self.assertTrue(all(t.annotations.read_only_hint for t in tools))
                 result = await client.call_tool('read_get_me', {})
                 self.assertFalse(result.is_error)
@@ -117,7 +117,7 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
                                             'BG_MCP_BASE_URL': f'http://127.0.0.1:{backend.server_port}'})
         async with Client(params) as client:
             self.assertEqual(client.protocol_version, '2026-07-28')
-            self.assertEqual(len((await client.list_tools()).tools), 66)
+            self.assertEqual(len((await client.list_tools()).tools), 67)
             result = await client.call_tool('read_get_me', {})
             self.assertFalse(result.is_error)
             self.assertEqual(result.structured_content['role'], 'teacher')
@@ -131,3 +131,4 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

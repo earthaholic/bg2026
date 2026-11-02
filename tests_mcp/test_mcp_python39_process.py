@@ -46,7 +46,7 @@ class Python39ProcessTests(unittest.IsolatedAsyncioTestCase):
                     for mode, version in [('auto', '2026-07-28'), ('legacy', '2025-11-25')]:
                         async with Client(streamable_http_client(url, http_client=http), mode=mode) as client:
                             self.assertEqual(client.protocol_version, version)
-                            self.assertEqual(len((await client.list_tools()).tools), 66)
+                            self.assertEqual(len((await client.list_tools()).tools), 67)
                             result = await client.call_tool('read_get_me', {})
                             self.assertFalse(result.is_error)
                             self.assertEqual(result.structured_content['role'], 'teacher')
@@ -57,3 +57,4 @@ class Python39ProcessTests(unittest.IsolatedAsyncioTestCase):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
+

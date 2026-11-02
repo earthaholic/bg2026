@@ -660,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Role Helpers
     const ROLE_LABELS = { admin: '사이트 관리자', subadmin: '부관리자', manager: '관리 선생님', teacher: '선생님' };
-    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-collection', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'consultation-rate-settings', 'utilities', 'audit-log'];
+    const STAFF_ONLY_VIEWS = ['student-reg', 'book-reg', 'class-reg', 'class-rate-settings', 'tuition-collection', 'tuition-payment', 'tuition-payment-search', 'tuition-fee-settings', 'book-material-review', 'book-material-rates', 'consultation-rate-settings', 'utilities', 'audit-log', 'payroll-summary'];
     const ADMIN_ONLY_VIEWS = ['data-view', 'sql-console', 'user-manage', 'activity-log'];
 
     function isAdmin() {
@@ -899,6 +899,8 @@ document.addEventListener('DOMContentLoaded', () => {
             initMonthlyReportView();
         } else if (targetView === 'teacher-payroll') {
             initTeacherPayrollView();
+        } else if (targetView === 'payroll-summary') {
+            initPayrollSummaryView();
         } else if (targetView === 'tuition-collection') {
             tuitionCollection.load();
         } else if (targetView === 'tuition-payment') {
@@ -8832,6 +8834,113 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCloseAuditDetail) {
         btnCloseAuditDetail.addEventListener('click', () => modalAuditDetail.classList.add('hidden'));
     }
+    // --- 정산 종합 조회: 선생님별 월 정산액 ---
+    const PAYROLL_SUMMARY_SOURCES = [
+        { count: 'lesson_sessions', amount: 'lessons', label: '수업', unit: '차시' },
+        { count: 'consultation_count', amount: 'consultations', label: '상담', unit: '건' },
+        { count: 'claim_count', amount: 'claims', label: '추가 청구', unit: '건' },
+        { count: 'material_count', amount: 'materials', label: '자료 제작비', unit: '건' }
+    ];
+    let payrollSummaryTarget = null;
+    let payrollSummaryRequest = 0;
+    let payrollSummaryBound = false;
+
+    function payrollSummaryWon(value) {
+        return `${Number(value || 0).toLocaleString()}원`;
+    }
+
+    function payrollSummaryCellTitle(cell) {
+        const lines = PAYROLL_SUMMARY_SOURCES
+            .filter(source => Number(cell[source.count]) > 0)
+            .map(source => `${source.label} ${Number(cell[source.count])}${source.unit} · ${payrollSummaryWon(cell[source.amount])}`);
+        if (Number(cell.unconfigured) > 0) lines.push(`단가 미설정 ${Number(cell.unconfigured)}건 · 합계 제외`);
+        lines.push(cell.closed ? '정산 마감 완료' : '정산 진행 중');
+        return lines.join('\n');
+    }
+
+    function payrollSummaryCellHtml(cell, teacher) {
+        if (!cell || !cell.has_activity) {
+            return '<td class="payroll-summary-cell"><span class="payroll-summary-empty">-</span></td>';
+        }
+        const monthLabel = `${Number(String(cell.month).slice(5, 7))}월`;
+        const lock = cell.closed ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : '';
+        const label = `${userName(teacher)} ${monthLabel} 정산 ${payrollSummaryWon(cell.total)}${cell.closed ? ' 마감 완료' : ''}`;
+        return `<td class="payroll-summary-cell"><button type="button" class="payroll-summary-cell-button" data-teacher="${escapeHtml(teacher)}" data-month="${escapeHtml(cell.month)}" title="${escapeHtml(payrollSummaryCellTitle(cell))}" aria-label="${escapeHtml(label)}">${lock}<span>${payrollSummaryWon(cell.total)}</span></button></td>`;
+    }
+
+    function payrollSummaryTeacherHtml(row) {
+        const meta = [ROLE_LABELS[row.role] || '', row.closed_count ? `마감 ${row.closed_count}개월` : '',
+            row.open_count ? `미마감 ${row.open_count}개월` : ''].filter(Boolean);
+        const excluded = row.is_payroll_excluded ? '<span class="badge badge-warning">정산 제외</span>' : '';
+        return `<td class="payroll-summary-teacher"><span class="payroll-summary-teacher-name">${escapeHtml(userName(row.username))}</span>${excluded}<span class="payroll-summary-teacher-meta">${escapeHtml(meta.join(' · '))}</span></td>`;
+    }
+
+    function renderPayrollSummaryYears(data) {
+        const select = document.getElementById('payroll-summary-year');
+        const years = (data.years && data.years.length ? data.years : [data.year]).map(Number);
+        if (!years.includes(Number(data.year))) years.unshift(Number(data.year));
+        select.innerHTML = years.map(year => `<option value="${year}">${year}년</option>`).join('');
+        select.value = String(data.year);
+    }
+
+    function renderPayrollSummary(data) {
+        const body = document.getElementById('payroll-summary-body');
+        const foot = document.getElementById('payroll-summary-foot');
+        const rows = (data.teachers || []).slice().sort((a, b) =>
+            String(userName(a.username)).localeCompare(String(userName(b.username)), 'ko', { numeric: true })
+            || String(a.username).localeCompare(String(b.username)));
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="14" class="empty-state">${escapeHtml(String(data.year))}년에 정산할 내역이 없습니다.</td></tr>`;
+            foot.innerHTML = '';
+        } else {
+            body.innerHTML = rows.map(row => `<tr>${payrollSummaryTeacherHtml(row)}${(row.cells || []).map(cell => payrollSummaryCellHtml(cell, row.username)).join('')}<td class="payroll-summary-total-cell">${payrollSummaryWon(row.total)}</td></tr>`).join('');
+            foot.innerHTML = `<tr><td>월 합계</td>${(data.month_totals || []).map(month =>
+                month.total ? `<td>${payrollSummaryWon(month.total)}</td>` : '<td><span class="payroll-summary-empty">-</span></td>').join('')}<td>${payrollSummaryWon(data.grand_total)}</td></tr>`;
+        }
+        document.getElementById('payroll-summary-total').innerHTML =
+            `<span class="payroll-summary-label">${escapeHtml(String(data.year))}년 정산 합계</span><strong>${payrollSummaryWon(data.grand_total)}</strong>`
+            + `<em>선생님 ${rows.length}명 · 마감 ${Number(data.closed_count || 0)}월</em>`
+            + (Number(data.open_count || 0) > 0 ? `<em class="is-open">미마감 ${Number(data.open_count)}월</em>` : '');
+        const totals = data.totals || {};
+        document.getElementById('payroll-summary-caption').textContent = PAYROLL_SUMMARY_SOURCES
+            .map(source => `${source.label} ${payrollSummaryWon(totals[source.amount])}`).join(' · ');
+        document.getElementById('payroll-summary-count').innerHTML = Number(data.unconfigured_count || 0) > 0
+            ? `<span class="badge badge-warning">단가 미설정 ${Number(data.unconfigured_count)}건 합계 제외</span>` : '';
+    }
+
+    async function initPayrollSummaryView() {
+        if (!payrollSummaryBound) {
+            payrollSummaryBound = true;
+            document.getElementById('btn-load-payroll-summary').addEventListener('click', loadPayrollSummary);
+            document.getElementById('payroll-summary-year').addEventListener('change', loadPayrollSummary);
+            document.getElementById('payroll-summary-body').addEventListener('click', event => {
+                const button = event.target.closest('.payroll-summary-cell-button');
+                if (!button || !isStaff()) return;
+                payrollSummaryTarget = { teacher: button.dataset.teacher || '', month: button.dataset.month || '' };
+                switchView('teacher-payroll');
+            });
+        }
+        await loadPayrollSummary();
+    }
+
+    async function loadPayrollSummary() {
+        const year = document.getElementById('payroll-summary-year').value.trim();
+        const request = ++payrollSummaryRequest;
+        document.getElementById('payroll-summary-body').innerHTML = '<tr><td colspan="14" class="empty-state">정산 내역을 불러오는 중입니다.</td></tr>';
+        document.getElementById('payroll-summary-foot').innerHTML = '';
+        try {
+            const data = await apiFetch(`/api/user/payroll/summary${year ? `?year=${encodeURIComponent(year)}` : ''}`);
+            if (request !== payrollSummaryRequest) return;
+            renderPayrollSummaryYears(data);
+            renderPayrollSummary(data);
+        } catch (err) {
+            if (request !== payrollSummaryRequest) return;
+            document.getElementById('payroll-summary-body').innerHTML = `<tr><td colspan="14" class="empty-state">${escapeHtml(err.message || '정산 내역을 불러오지 못했습니다.')}</td></tr>`;
+            document.getElementById('payroll-summary-caption').textContent = '정산 내역을 불러오지 못했습니다. 조회를 다시 시도해 주세요.';
+            document.getElementById('payroll-summary-total').innerHTML = '<span>정산 내역을 불러오지 못했습니다.</span>';
+        }
+    }
+
     async function initTeacherPayrollView() {
         const month = document.getElementById('payroll-month');
         if (!month.value) month.value = new Date().toISOString().slice(0, 7);
@@ -8839,6 +8948,13 @@ document.addEventListener('DOMContentLoaded', () => {
         teacherGroup.classList.toggle('hidden', !isStaff());
         if (isStaff()) {
             await loadPayrollTeacherOptions();
+        }
+        // 정산 종합 조회에서 넘어온 경우 해당 선생님·월로 바로 조회한다.
+        if (payrollSummaryTarget) {
+            if (payrollSummaryTarget.month) month.value = payrollSummaryTarget.month;
+            const teacherSelect = document.getElementById('payroll-teacher');
+            if (isStaff() && payrollSummaryTarget.teacher) teacherSelect.value = payrollSummaryTarget.teacher;
+            payrollSummaryTarget = null;
         }
         await loadTeacherPayroll();
     }

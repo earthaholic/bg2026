@@ -1946,6 +1946,33 @@
     "encoding": "none"
   },
   {
+    "name": "read_get_payroll_summary",
+    "method": "GET",
+    "path": "/api/user/payroll/summary",
+    "description": "조회 전용: /api/user/payroll/summary. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 관리 선생님 이상이 선생님별 월 정산액을 한 해 단위로 종합해 본다.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "year": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Year"
+        }
+      },
+      "additionalProperties": false
+    },
+    "locations": {
+      "year": "query"
+    },
+    "encoding": "none"
+  },
+  {
     "name": "read_preview_teacher_assignment",
     "method": "POST",
     "path": "/api/user/utilities/teacher-assignment/preview",
