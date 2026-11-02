@@ -1716,6 +1716,49 @@
     "encoding": "none"
   },
   {
+    "name": "read_user_search_previous_class_students",
+    "method": "GET",
+    "path": "/api/user/classes/{class_id}/previous-students",
+    "description": "조회 전용: /api/user/classes/{class_id}/previous-students. 기존 로그인 계정 권한과 조회 범위를 적용합니다. 현재 이 수업에 배정되지 않은 학생을 찾는다. 반 이동 후 누락 기록 등록용(staff 전용).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "title": "Class Id"
+        },
+        "q": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Q"
+        },
+        "limit": {
+          "type": "integer",
+          "maximum": 50,
+          "minimum": 1,
+          "default": 20,
+          "title": "Limit"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "class_id"
+      ]
+    },
+    "locations": {
+      "class_id": "path",
+      "q": "query",
+      "limit": "query"
+    },
+    "encoding": "none"
+  },
+  {
     "name": "read_user_get_recent_lesson_contents",
     "method": "GET",
     "path": "/api/user/recent-lesson-contents",

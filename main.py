@@ -269,6 +269,8 @@ class ClassStudyLogItem(BaseModel):
     is_special: bool = False
     Description: Optional[str] = ""
     AbsenceReason: Optional[str] = ""
+    # 반을 옮긴 학생의 누락 기록을 이전 수업으로 등록할 때만 staff가 명시적으로 지정한다.
+    allow_not_assigned: bool = False
 
 class ClassStudyLogBatchRequest(BaseModel):
     BookId: Optional[int] = None
@@ -2848,6 +2850,53 @@ def user_get_class_batch_form(
     students = get_class_students(class_id)
     return {"class_": class_row, "students": students, "planned_books": _get_class_planned_books(class_id)}
 
+@app.get("/api/user/classes/{class_id}/previous-students")
+def user_search_previous_class_students(
+    class_id: int,
+    q: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    """현재 이 수업에 배정되지 않은 학생을 찾는다. 반 이동 후 누락 기록 등록용(staff 전용)."""
+    _get_accessible_class(class_id, current_user)
+    keyword = (q or "").strip()
+    params: List[Any] = [class_id, class_id, class_id]
+    where = ['''NOT EXISTS (
+            SELECT 1 FROM "ClassStudents" cs
+            WHERE cs."ClassId" = ?
+              AND (cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"))''']
+    if keyword:
+        pattern = f"%{keyword}%"
+        where.append('(s."Name" LIKE ? OR s."Grade" LIKE ?)')
+        params.extend([pattern, pattern])
+    params.append(limit)
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(f'''
+            SELECT s.rowid AS row_id, s.*,
+                   (SELECT COUNT(*) FROM "StudyLogs" sl
+                     WHERE (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
+                       AND sl."ClassId" = ?) AS PastRecordCount,
+                   (SELECT COUNT(*) FROM "StudyLogs" sl
+                     WHERE (sl."StudentId" = s.rowid OR sl."StudentId" = s."Id")
+                       AND sl."ClassId" = ? AND COALESCE(sl."IsSpecial", 0) = 1) AS PastSpecialCount
+            FROM "Students" s
+            WHERE {" AND ".join(where)}
+            ORDER BY PastRecordCount DESC, s."Name" ASC
+            LIMIT ?
+        ''', params).fetchall()
+    finally:
+        conn.close()
+    students = []
+    for row in rows:
+        item = dict(row)
+        past_count = item.get("PastRecordCount") or 0
+        special_count = item.get("PastSpecialCount") or 0
+        # 과거 기록의 특강 비율로만 추천하고, 기록이 없으면 미체크로 둔다.
+        item["SuggestedIsSpecial"] = None if past_count == 0 else bool(special_count * 2 > past_count)
+        students.append(item)
+    return {"students": students}
+
 @app.get("/api/user/recent-lesson-contents")
 def user_get_recent_lesson_contents(
     book_ids: List[int] = Query(...),
@@ -3122,9 +3171,18 @@ def user_batch_register_class_studylogs(
     for item in payload.logs:
         sid = item.StudentId
         name = student_name(sid)
-        if sid not in allowed_student_ids:
-            results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
-            continue
+        # 현재 배정되지 않은 학생도 staff가 명시적으로 요청한 경우에만 이전 반 누락 기록으로 등록한다.
+        previous_class_student = sid not in allowed_student_ids
+        if previous_class_student:
+            if not item.allow_not_assigned or current_user["role"] not in ("admin", "subadmin", "manager"):
+                results.append({"StudentId": sid, "Name": name, "status": "error", "message": "해당 수업에 배정되지 않은 학생입니다."})
+                continue
+            if _resolve_student_row_id(sid) is None:
+                results.append({"StudentId": sid, "Name": name, "status": "error", "message": "학생 정보를 확인할 수 없습니다."})
+                continue
+            if not item.include:
+                results.append({"StudentId": sid, "Name": name, "status": "error", "message": "이전 반 학생은 결석으로 등록할 수 없습니다. 참석으로 선택해 주세요."})
+                continue
 
         conn = get_db_connection()
         student_results = []
@@ -3179,7 +3237,8 @@ def user_batch_register_class_studylogs(
                 write_audit_log("StudyLogs", record_id, "INSERT", None, new_snapshot, None,
                                 current_user["username"], current_user["role"], connection=conn)
                 student_created += 1
-                student_results.append(dict(result, status="created", message="등록 완료"))
+                student_results.append(dict(result, status="created",
+                                            message="등록 완료 (이전 반 학생)" if previous_class_student else "등록 완료"))
             # 실제로 같은 수업에 참석 기록이 존재할 때만 결석을 해제한다.
             if old_absence and conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=? LIMIT 1',
                                             (sid, class_id, day)).fetchone():

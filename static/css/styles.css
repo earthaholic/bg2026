@@ -2860,6 +2860,88 @@ body {
     line-height: 1.5;
 }
 
+#view-class-studylog-reg .batch-previous-tools {
+    margin-top: 0.85rem;
+    padding: 0.85rem;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+}
+
+#view-class-studylog-reg .batch-previous-search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+#view-class-studylog-reg .batch-previous-search label {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#view-class-studylog-reg .batch-previous-search .form-control {
+    flex: 1 1 260px;
+    min-width: 200px;
+}
+
+#view-class-studylog-reg .batch-previous-results {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+    max-height: 14rem;
+    overflow-y: auto;
+}
+
+#view-class-studylog-reg .batch-previous-result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+#view-class-studylog-reg .batch-previous-result:hover,
+#view-class-studylog-reg .batch-previous-result:focus-visible {
+    border-color: var(--primary);
+}
+
+#view-class-studylog-reg .batch-previous-result-meta {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+#view-class-studylog-reg .batch-previous-result-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+#view-class-studylog-reg .batch-previous-guide {
+    margin: 0.55rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+#view-class-studylog-reg .batch-previous-badge {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: var(--radius-sm);
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--warning);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
 #view-class-studylog-reg #batch-lesson-content {
     min-height: 9rem;
     resize: none;
