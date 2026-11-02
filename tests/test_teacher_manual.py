@@ -45,7 +45,7 @@ class TeacherManualTests(unittest.TestCase):
                 self.assertIn(href[1:], self.parsed.ids)
 
     def test_chapters_and_assets(self):
-        self.assertEqual(len(self.parsed.chapters), 12)
+        self.assertEqual(len(self.parsed.chapters), 13)
         for url in self.parsed.assets:
             self.assertTrue((ROOT / url.split("?")[0].lstrip("/")).is_file(), url)
         self.assertIn('<html lang="ko">', self.html)
@@ -58,12 +58,26 @@ class TeacherManualTests(unittest.TestCase):
             self.assertIn(text, self.html)
 
     def test_latest_version_guidance(self):
-        for text in ["버전 2.2", "2026년 11월 2일", "Esc 키", "기존 행의 상대 순서",
+        for text in ["버전 2.3", "2026년 11월 2일", "Esc 키", "기존 행의 상대 순서",
                      "현재 본인 담당 수업에 배정된 학생", "상담 기록 추가", "본인으로 고정",
                      "저장한 상담의 수정·삭제는 관리 선생님에게 요청", "단가 미설정",
                      "오늘(한국 시간)까지만", "오늘 이후 날짜는 선택할 수 없습니다"]:
             self.assertIn(text, self.html)
         self.assertIn("consultation", self.parsed.chapters)
+        self.assertIn("mobile-use", self.parsed.chapters)
+
+    def test_mobile_layout_guidance(self):
+        css = (ROOT / "static/css/teacher_manual.css").read_text(encoding="utf-8")
+        script = (ROOT / "static/js/teacher_manual.js").read_text(encoding="utf-8")
+        self.assertIn('id="manual-toc-toggle"', self.html)
+        self.assertIn('id="manual-sidebar"', self.html)
+        self.assertIn('id="manual-toc-backdrop"', self.html)
+        self.assertIn("body.manual-toc-open", css)
+        self.assertIn("html.js-ready .manual-sidebar", css)
+        self.assertIn("setToc", script)
+        self.assertIn("max-width: 760px", script)
+        for text in ["휴대폰에서 사용하기", "옆으로 밀면", "메뉴"]:
+            self.assertIn(text, self.html)
 
     def test_route_and_new_tab_entry(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")

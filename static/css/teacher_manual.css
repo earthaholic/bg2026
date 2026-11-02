@@ -123,3 +123,59 @@ body { font-size:17px; }
 @media print { .manual-main { padding:0; } .manual-chapter[hidden] { display:block!important; } .visual-step { break-inside:avoid; margin-bottom:12px; } .visual-step-portrait .visual-step-body { display:block; } .manual-image img { max-height:17cm; width:auto; margin:auto; object-fit:contain; } .picture-actions li { font-size:11pt; } .image-open-label,.chapter-return,#manual-image-dialog,.start-task-grid,.screen-example-notice { display:none!important; } .visual-step-heading h3 { font-size:14pt; } .visual-step-body { padding:10px; } }
 
 button.manual-image { padding:0; font:inherit; color:inherit; text-align:inherit; }
+
+/* ---------- 휴대폰·작은 태블릿: 목차 서랍과 읽기 편한 배치 ---------- */
+.manual-toc-toggle { display:none; }
+.manual-toc-backdrop { display:none; }
+.toc-drawer-head { display:none; }
+
+@media(max-width:760px) {
+    html { scroll-padding-top:74px; }
+    .manual-header { padding:10px 12px; gap:8px; flex-wrap:wrap; }
+    .header-actions { gap:6px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+    .header-actions .button { display:inline-flex; align-items:center; min-height:40px; padding:8px 11px; font-size:13px; }
+
+    /* 스크립트가 있을 때만 숨겨진 서랍으로 바꿔, 스크립트가 없으면 예전처럼 목차를 그대로 보여 준다. */
+    html.js-ready .manual-toc-toggle { display:inline-flex; }
+    html.js-ready .manual-sidebar { position:fixed; top:0; left:0; bottom:0; z-index:30; width:min(86vw,340px); height:100dvh; overflow-y:auto; padding:18px 16px calc(24px + env(safe-area-inset-bottom)); background:var(--paper); border-right:1px solid var(--line); border-bottom:0; box-shadow:0 22px 44px rgba(15,30,25,.32); transform:translateX(-100%); transition:transform .22s ease; }
+    html.js-ready body.manual-toc-open .manual-sidebar { transform:none; }
+    html.js-ready .manual-toc-backdrop { position:fixed; inset:0; z-index:25; background:rgba(15,30,25,.55); }
+    body.manual-toc-open { overflow:hidden; }
+    html.js-ready .toc-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 14px; padding-bottom:12px; border-bottom:1px solid var(--line); font-weight:700; font-size:15px; }
+    .toc-drawer-close { min-height:38px; }
+
+    .manual-layout { display:block; }
+    .manual-toc { grid-template-columns:1fr; gap:2px; }
+    .manual-toc a { padding:12px 10px; font-size:15px; }
+    .sidebar-note { display:block; }
+
+    .manual-main { padding:18px 16px 56px; }
+    .manual-chapter { padding:26px 0; scroll-margin-top:62px; }
+    h1 { font-size:27px; }
+    h2 { font-size:20px; }
+    h3 { font-size:17px; }
+    .chapter-heading { flex-wrap:wrap; gap:2px; }
+    .permalink { font-size:12px; }
+    .search-input { font-size:16px; }
+    .quick-card { padding:14px; }
+    .table-wrap { -webkit-overflow-scrolling:touch; }
+    th,td { padding:9px 10px; }
+    details { padding:12px 14px; }
+    summary { min-height:30px; }
+    .manual-footer { font-size:12px; }
+}
+
+@media(max-width:600px) {
+    #manual-image-dialog { width:100vw; max-width:100vw; height:100dvh; max-height:100dvh; border:0; border-radius:0; }
+    .image-dialog-canvas { height:calc(100% - 152px); }
+    .image-dialog-toolbar .button { min-height:38px; padding:6px 10px; font-size:13px; }
+    .image-dialog-toolbar > div { flex-wrap:wrap; gap:6px; }
+    /* 휴대폰에서는 브라우저 인쇄 메뉴로 대신하고, 상단 버튼은 숨겨 자리를 비운다. */
+    #manual-print { display:none !important; }
+    .visual-step-body { padding:12px 10px; }
+    .visual-step-heading { align-items:flex-start; }
+    .picture-actions li { font-size:16px; }
+    .start-task-grid a { padding:16px; }
+    .callout,.example,.first-use-guide,.visual-warning { font-size:15px; }
+    .manual-footer { padding-top:16px; }
+}

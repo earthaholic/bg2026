@@ -114,6 +114,36 @@
         printButton.textContent = '전체 인쇄';
         window.print();
     });
+    /* 휴대폰에서는 목차와 검색을 서랍으로 열고 닫는다. */
+    const tocToggle = document.getElementById('manual-toc-toggle');
+    const tocSidebar = document.getElementById('manual-sidebar');
+    const tocBackdrop = document.getElementById('manual-toc-backdrop');
+    const narrow = window.matchMedia('(max-width: 760px)');
+    const tocIsOpen = () => document.body.classList.contains('manual-toc-open');
+    function syncSidebar() {
+        const hidden = narrow.matches && !tocIsOpen();
+        if (hidden) { tocSidebar.setAttribute('inert', ''); } else { tocSidebar.removeAttribute('inert'); }
+        tocBackdrop.hidden = !(narrow.matches && tocIsOpen());
+    }
+    function setToc(open) {
+        document.body.classList.toggle('manual-toc-open', open);
+        tocToggle.setAttribute('aria-expanded', String(open));
+        syncSidebar();
+        if (open) {
+            const first = tocSidebar.querySelector('a, input');
+            if (first) first.focus({ preventScroll: true });
+        }
+    }
+    tocToggle.addEventListener('click', () => setToc(!tocIsOpen()));
+    document.getElementById('manual-toc-close').addEventListener('click', () => { setToc(false); tocToggle.focus(); });
+    tocBackdrop.addEventListener('click', () => { setToc(false); tocToggle.focus(); });
+    tocSidebar.addEventListener('click', event => { if (event.target.closest('a')) setToc(false); });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && tocIsOpen() && !dialog.open) { setToc(false); tocToggle.focus(); }
+    });
+    narrow.addEventListener('change', () => setToc(false));
+    setToc(false);
+
     search();
     if (location.hash) locate();
 })();

@@ -5,17 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="꿈꾸는봄결 일반 선생님을 위한 웹 매뉴얼. 수업 준비, 학습 기록, 결석, 월말보고와 본인 정산 확인을 안내합니다.">
     <title>일반 선생님 웹 매뉴얼 | 꿈꾸는봄결</title>
-    <link rel="stylesheet" href="/static/css/teacher_manual.css?v=20261102-future-day-limit">
-    <script defer src="/static/js/teacher_manual.js?v=20261102-future-day-limit"></script>
+    <link rel="stylesheet" href="/static/css/teacher_manual.css?v=20261102-mobile-manual4">
+    <script defer src="/static/js/teacher_manual.js?v=20261102-mobile-manual4"></script>
 </head>
 <body>
 <a class="skip-link" href="#manual-main">본문으로 건너뛰기</a>
 <header class="manual-header">
     <a class="brand" href="#manual-home"><span class="brand-symbol" aria-hidden="true">봄</span><span><strong>꿈꾸는봄결</strong><small>일반 선생님 웹 매뉴얼</small></span></a>
-    <div class="header-actions"><button type="button" id="manual-print" class="button js-only">전체 인쇄</button><a class="button" href="/" target="_blank" rel="noopener">업무 화면 열기</a></div>
+    <div class="header-actions"><button type="button" id="manual-toc-toggle" class="button manual-toc-toggle" aria-expanded="false" aria-controls="manual-sidebar">목차·검색</button><button type="button" id="manual-print" class="button js-only">전체 인쇄</button><a class="button" href="/" target="_blank" rel="noopener">업무 화면 열기</a></div>
 </header>
+<div id="manual-toc-backdrop" class="manual-toc-backdrop" hidden></div>
 <div class="manual-layout">
-<aside class="manual-sidebar" aria-label="매뉴얼 검색과 목차">
+<aside id="manual-sidebar" class="manual-sidebar" aria-label="매뉴얼 검색과 목차">
+<div class="toc-drawer-head"><span>목차·검색</span><button type="button" id="manual-toc-close" class="button toc-drawer-close">닫기</button></div>
     <div class="js-only"><label class="search-label" for="manual-search">도움말 검색</label><input class="search-input" id="manual-search" type="search" placeholder="예: 결석, 특강, 정산" autocomplete="off" aria-controls="manual-main"><p id="manual-search-status" class="search-state" role="status" aria-live="polite"></p><button type="button" id="manual-search-clear" class="button" hidden>검색 지우기</button></div>
     <p class="toc-title">업무 순서대로 찾아보기</p>
     <nav class="manual-toc" aria-label="매뉴얼 목차">
@@ -30,9 +32,10 @@
         <a href="#material-request">08 · 도서·자료 요청하기</a>
         <a href="#payroll">09 · 내 월급 정산 확인하기</a>
         <a href="#consultation">10 · 상담 기록 추가하기</a>
-        <a href="#troubleshooting">11 · 문제가 생겼을 때</a>
+        <a href="#mobile-use">11 · 휴대폰에서 사용하기</a>
+        <a href="#troubleshooting">12 · 문제가 생겼을 때</a>
     </nav>
-    <p class="sidebar-note">일반 선생님 기준<br>문서 기준일: 2026년 11월 2일<br>버전 2.2<br><br>바로가기 주소를 복사하면 해당 도움말을 공유할 수 있습니다. 개인정보와 실제 수업 기록은 싣지 않았습니다.</p>
+    <p class="sidebar-note">일반 선생님 기준<br>문서 기준일: 2026년 11월 2일<br>버전 2.3<br><br>바로가기 주소를 복사하면 해당 도움말을 공유할 수 있습니다. 개인정보와 실제 수업 기록은 싣지 않았습니다.</p>
 </aside>
 <main id="manual-main" class="manual-main" tabindex="-1">
     <div id="manual-home" class="hero">
@@ -61,6 +64,7 @@
 
         <h3>로그인하기</h3>
         <ol class="steps"><li>안내받은 bg2026 업무 사이트를 엽니다.</li><li>발급받은 아이디와 비밀번호를 입력하고 <b>로그인</b>을 누릅니다.</li><li>상단에 표시된 사용자와 역할을 확인합니다. 일반 선생님의 역할 표시는 <b>선생님</b>입니다.</li><li>왼쪽 메뉴에서 필요한 업무를 선택합니다. 공용 컴퓨터에서는 업무를 마친 뒤 <b>로그아웃</b>합니다.</li></ol>
+        <p>휴대폰처럼 화면이 좁으면 왼쪽 메뉴가 숨겨지고 위쪽의 줄 세 개 모양 <b>메뉴</b> 버튼으로 엽니다. 자세한 방법은 <a href="#mobile-use">11 · 휴대폰에서 사용하기</a>에 있습니다.</p>
         <p>비밀번호를 잊었거나 계정이 없으면 관리자에게 계정 발급 또는 비밀번호 초기화를 요청하세요. 비밀번호를 메시지나 화면 사진에 포함해 보내지 마세요.</p>
         <h3>화면 읽는 법</h3>
         <ul><li><strong>왼쪽 메뉴:</strong> 업무 화면을 바꿉니다. 메뉴명과 버튼명은 실제 화면에 적힌 대로 굵게 표시했습니다.</li><li><strong>검색 조건:</strong> 검색어·날짜·필터를 조합해 목록을 좁힙니다. 원하는 결과가 없으면 조건을 먼저 풀어보세요.</li><li><strong>목록과 상세:</strong> 목록에서 이름이나 상세 버튼을 누르면 자세한 정보가 나옵니다. 여러 페이지가 있으면 <b>이전</b>·<b>다음</b>으로 이동합니다.</li><li><strong>저장 안내:</strong> 저장을 누르면 화면 가운데에 결과 창이 잠깐 나타납니다. 초록색 체크 표시와 함께 내용이 보이면 저장이 끝난 것입니다. 이 창은 잠시 뒤 저절로 닫히며, 창을 누르거나 아무 키나 눌러도 바로 닫힙니다. 빨간색·주황색 표시와 <b>확인</b> 버튼이 있는 창이 나오면 저장이 되지 않은 것이니 내용을 읽고 <b>확인</b>을 누른 뒤 입력을 고치세요. 화면에 입력한 것만으로는 저장되지 않습니다.</li></ul>
@@ -246,8 +250,39 @@
 <p class="visual-warning">입력란이 없으면 현재 담당 학생인지 관리 선생님에게 확인을 요청하세요. 일반 선생님은 상담을 추가할 수 있지만, 저장한 상담의 수정·삭제는 관리 선생님에게 요청합니다.</p>
 <details class="reference-details"><summary>글로 된 설명·주의사항 보기</summary><div class="reference-body"><h3>등록 제한과 정산 확인</h3><ul><li>저장할 때도 현재 담당 수업 배정과 본인 명의를 다시 확인합니다. 입력 중 담당 관계가 바뀌었다면 저장이 거부될 수 있습니다.</li><li>상담일이 속한 본인 정산월이 마감되었다면 추가할 수 없습니다. 다른 날짜로 바꾸어 우회하지 말고 확인을 요청하세요.</li><li>상담은 건당 단가로 계산합니다. 소요 시간은 기록용이며 시간에 비례해 금액을 늘리지 않습니다. <b>단가 미설정</b>은 저장 실패나 0원 확정이 아니므로 관리 선생님에게 단가 확인을 요청합니다.</li><li>저장 오류가 나면 입력을 보관하고 안내를 확인합니다. 응답이 불확실할 때는 같은 상담을 반복 등록하지 말고 목록을 먼저 확인하세요.</li></ul><p class="related">관련: <a href="#prepare">학생 찾기</a><a href="#payroll">내 상담 정산 확인하기</a></p></div></details><p class="chapter-return"><a href="#quick-start">다른 업무 고르기</a></p></section>
 
+    <section id="mobile-use" class="manual-chapter" aria-labelledby="title-mobile-use">
+        <div class="chapter-heading"><h2 id="title-mobile-use">11 · 휴대폰에서 사용하기</h2><a class="permalink" href="#mobile-use" aria-label="휴대폰 사용 바로가기">바로가기</a></div>
+<p class="chapter-purpose">휴대폰이나 작은 태블릿에서도 같은 계정으로 같은 기록을 남길 수 있습니다. 화면 폭에 맞춰 메뉴와 표가 저절로 바뀌고, 저장되는 내용은 컴퓨터와 같습니다.</p>
+<p class="menu-path"><strong>접속</strong> 컴퓨터와 같은 주소로 접속해 로그인합니다. 따로 설치하는 앱은 없습니다.</p>
+<div class="callout"><strong>먼저 알아 둘 세 가지</strong>왼쪽 메뉴는 숨겨지고 위쪽의 줄 세 개 모양 <b>메뉴</b> 버튼으로 엽니다. 넓은 표는 손가락으로 옆으로 밀어 봅니다. 상세·수정 창은 화면을 가득 채우고, 닫기는 오른쪽 위 <b>×</b>입니다.</div>
+<h3>메뉴 열고 화면 옮기기</h3>
+<ol class="steps">
+    <li>왼쪽 위의 줄 세 개 모양 버튼을 누르면 메뉴가 옆에서 나옵니다.</li>
+    <li>필요한 업무를 누르면 화면이 바뀌고 메뉴는 저절로 닫힙니다.</li>
+    <li>메뉴만 닫으려면 메뉴 바깥의 어두운 곳을 누릅니다.</li>
+    <li>오른쪽 위에 로그인한 이름과 <b>로그아웃</b>이 있습니다. 함께 쓰는 기기라면 다 쓴 뒤 로그아웃합니다.</li>
+</ol>
+<h3>표에서 필요한 열 찾기</h3>
+<p>학습 기록·학생·도서 목록은 열이 많아 한 화면에 다 들어가지 않습니다. 표 안에서 손가락을 <b>옆으로 밀면</b> 오른쪽 열이 나타납니다. 오른쪽 가장자리에 흐린 안내가 보이면 아직 볼 열이 더 있다는 뜻이고, 끝까지 밀면 사라집니다. 이때 페이지 전체가 아니라 <b>표 안에서</b> 밀어야 합니다.</p>
+<div class="callout warning"><strong>정렬과 선택은 그대로입니다.</strong>열 제목을 누르면 정렬이 바뀌고, 다음 페이지로 넘기면 선택한 기록은 풀립니다. 값을 고칠 때는 행의 <b>상세</b>를 눌러 창에서 수정합니다.</div>
+<h3>입력하고 저장하기</h3>
+<ol class="steps">
+    <li>입력 항목은 한 줄에 하나씩 쌓입니다. 위에서 아래로 차례로 채웁니다.</li>
+    <li>칸을 누르면 휴대폰 키보드가 올라옵니다. 키보드에 저장 버튼이 가려질 수 있으니 다 적은 뒤 키보드를 내리고 아래로 내려 저장합니다.</li>
+    <li><b>저장</b>을 누르면 화면 가운데 확인 창이 1~2초 떴다가 사라집니다. 이 창이 보이면 저장된 것입니다.</li>
+    <li>저장하기 전에 다른 화면으로 옮기거나 창을 닫으면 적은 내용은 사라집니다. 저장을 먼저 마칩니다.</li>
+</ol>
+<h3>상세·수정 창과 사진</h3>
+<p>상세 창은 화면을 가득 채웁니다. 제목 아래에 <b>수정</b>·<b>삭제</b> 같은 버튼이 있고 오른쪽 위 <b>×</b>로 닫습니다. 창 안의 내용이 길면 창 안에서만 위아래로 내려갑니다. 사진은 두 손가락으로 벌려 확대하고, 두 번 두드리면 원래 크기로 돌아옵니다.</p>
+<div class="callout warning"><strong>같은 기록을 두 기기에서 동시에 고치지 마세요.</strong>컴퓨터와 휴대폰에서 같은 기록을 함께 열어 두면 먼저 연 화면의 내용이 저장되지 않을 수 있습니다. 한쪽에서 저장을 마친 뒤 다른 쪽에서 다시 조회하세요.</div>
+<details><summary>휴대폰에서 글자가 잘리거나 버튼이 안 보여요.</summary><p>두 손가락으로 확대한 상태라면 두 번 두드려 원래 크기로 돌립니다. 표가 안 넘어가면 표 안에서 옆으로 밀고 페이지 전체를 밀지 않습니다. 상세 창의 저장 버튼이 안 보이면 창 안을 아래로 내립니다. 그래도 좁으면 휴대폰을 가로로 돌려 봅니다.</p></details>
+<details><summary>휴대폰에서 저장했는데 컴퓨터에 안 보여요.</summary><p>같은 계정으로 로그인했는지 먼저 확인합니다. 목록에서 <b>검색</b>이나 <b>필터 초기화</b>를 눌러 다시 조회합니다. 다른 계정으로 저장했거나 다른 수업에 기록했다면 본인 화면에 보이지 않을 수 있으니, 기록 번호와 학생·날짜를 관리 선생님에게 전달해 확인합니다.</p></details>
+<details><summary>메뉴 버튼이 안 보여요.</summary><p>화면이 넓으면(태블릿 가로 등) 왼쪽 메뉴가 그대로 보이므로 메뉴 버튼이 나오지 않습니다. 이때는 왼쪽 메뉴를 바로 누르면 됩니다. 화면을 확대한 상태에서는 버튼이 화면 밖으로 밀릴 수 있으니 확대를 먼저 되돌립니다.</p></details>
+<p class="related">다음: <a href="#getting-started">처음 시작하기</a><a href="#batch-record">수업 후 일괄 등록</a><a href="#troubleshooting">문제가 생겼을 때</a></p>
+    <p class="chapter-return"><a href="#quick-start">다른 업무 고르기</a></p></section>
+
     <section id="troubleshooting" class="manual-chapter" aria-labelledby="title-troubleshooting">
-        <div class="chapter-heading"><h2 id="title-troubleshooting">11 · 문제가 생겼을 때</h2><a class="permalink" href="#troubleshooting" aria-label="문제 해결 바로가기">바로가기</a></div>
+        <div class="chapter-heading"><h2 id="title-troubleshooting">12 · 문제가 생겼을 때</h2><a class="permalink" href="#troubleshooting" aria-label="문제 해결 바로가기">바로가기</a></div>
 <p class="chapter-purpose">오류 문구를 읽고 아래에서 해당하는 상황을 찾아보세요. 해결되지 않으면 이 장 끝의 양식으로 관리 선생님에게 문의하세요.</p>
 
 <div class="visual-walkthrough"><article class="visual-step"><header class="visual-step-heading"><span class="visual-step-order">1</span><h3>삭제창을 잘못 열었다면 취소합니다</h3></header><div class="visual-step-body"><figure><button type="button" class="manual-image" data-manual-image aria-label="삭제창을 잘못 열었다면 취소합니다 사진 크게 보기"><img src="/static/images/manual/31-delete-warning.png" width="796" height="443" alt="삭제창을 잘못 열었다면 취소합니다: 빨간 번호로 누를 곳을 표시한 예시 화면" loading="lazy" decoding="async"><span class="image-open-label">사진 크게 보기</span></button><noscript><a href="/static/images/manual/31-delete-warning.png" target="_blank" rel="noopener">원본 사진 열기</a></noscript></figure><ol class="picture-actions"><li><span class="picture-number" aria-hidden="true">1</span><div>이 칸은 정말 삭제할 때만 확인 문구를 적는 곳입니다. 단순히 내용을 고치려던 것이라면 입력하지 마세요.</div></li><li><span class="picture-number" aria-hidden="true">2</span><div><b>취소</b>를 눌러 돌아갑니다. 기록을 삭제하면 화면에서 복구할 수 없습니다.</div></li></ol></div></article></div>
@@ -267,7 +302,7 @@
         <div class="example">사용한 메뉴:<br>학생·수업:<br>학습일 또는 정산월:<br>기록 번호 또는 요청 번호:<br>하려던 작업:<br>화면에 표시된 오류·제한 문구:<br>원하는 정정 내용:<br>이미 확인한 사항:</div>
         <p>화면 사진을 보낼 때에는 관계없는 학생 정보와 연락처를 가리고, 비밀번호는 절대 포함하지 마세요. 삭제·학생 이동·과거 수업 연결처럼 영향이 큰 변경은 어느 기록을 어떻게 바꿔야 하는지 정확히 알려주세요.</p>
     <p class="chapter-return"><a href="#quick-start">다른 업무 고르기</a></p></section>
-    <footer class="manual-footer"><p>꿈꾸는봄결 · 일반 선생님 웹 매뉴얼 2.2 · 문서 기준일 2026년 11월 2일</p><p>기능과 버튼은 버전에 따라 달라질 수 있습니다. 실제 화면의 권한·저장 결과·제한 안내를 우선 확인하세요. 이 매뉴얼은 계정 정보나 실제 학생 데이터를 불러오지 않습니다.</p><a href="#manual-home">맨 위로</a></footer>
+    <footer class="manual-footer"><p>꿈꾸는봄결 · 일반 선생님 웹 매뉴얼 2.3 · 문서 기준일 2026년 11월 2일</p><p>기능과 버튼은 버전에 따라 달라질 수 있습니다. 실제 화면의 권한·저장 결과·제한 안내를 우선 확인하세요. 이 매뉴얼은 계정 정보나 실제 학생 데이터를 불러오지 않습니다.</p><a href="#manual-home">맨 위로</a></footer>
 </main>
 </div>
 <dialog id="manual-image-dialog" aria-labelledby="manual-image-title"><div class="image-dialog-toolbar"><h2 id="manual-image-title">화면 크게 보기</h2><div><button id="manual-image-fit" type="button" class="button">전체 보기</button><button id="manual-image-original" type="button" class="button">원본 크기</button><button id="manual-image-close" type="button" class="button">닫기</button></div></div><p class="image-dialog-help">작은 글씨는 「원본 크기」로 보세요. 사진이 크면 아래·옆으로 움직여 볼 수 있습니다.</p><div class="image-dialog-canvas"><img id="manual-image-expanded" alt=""></div></dialog>
