@@ -4266,6 +4266,9 @@ body {
 /* 월급 정산: 팀별 차시 현황 */
 #view-teacher-payroll {
     overflow-y: auto;
+    /* 정산 부속 카드(상담 정산·추가 청구·자료 제작비·정산 제외 내역)의 최소 높이.
+       머리말이 긴 카드도 표 본문이 넉넉히 보이도록 뷰 전용 변수로 관리한다. */
+    --payroll-card-min-height: 25rem;
 }
 
 .payroll-layout {
@@ -4283,6 +4286,12 @@ body {
 .payroll-team-cards > .payroll-team-card {
     flex: 0 0 auto;
     min-height: max-content;
+}
+
+/* 표를 담은 정산 카드는 검색 화면 공용 최소 높이(230px) 대신 표가 여러 행 보이는 높이를 유지한다. */
+#view-teacher-payroll .payroll-layout > .table-card,
+#view-teacher-payroll .payroll-team-cards > .payroll-team-card {
+    min-height: var(--payroll-card-min-height);
 }
 
 .payroll-filter-card {
