@@ -179,16 +179,25 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 회귀 검증: `tests/test_teacher_visibility.py`, `tests/test_teacher_visibility_ui.js`.
 
 ## 학생별 수업 정산 제외
-- 월급 정산에서 특정 선생님을 선택하면 학생별 날짜 칸의 `정산 제외`로 해당 칸의 내역을 제외할 수 있다. 제외 내역은 별도 목록에서 한 건씩 다시 포함한다. 관리자·부관리자·관리 선생님만 변경 가능하며 일반 선생님은 본인 제외 내역을 조회한다.
+- 정산 화면의 학생별 날짜 칸은 `정산 제외` 대신 `기록 삭제`를 제공한다. 잘못 기록한 차시를 화면에서 바로 삭제하기 위한 변경이며, 새 제외를 만드는 버튼은 두지 않는다.
+- 기존 `TeacherPayrollExclusions` 이력은 `정산 제외 내역` 카드에 남아 한 건씩 다시 포함할 수 있다. 계정별 `모든 수업 정산 제외` 설정과 상담 정산 제외도 그대로 유지한다. 관리자·부관리자·관리 선생님만 제외 내역을 변경할 수 있고 일반 선생님은 본인 제외 내역을 조회한다.
 - `TeacherPayrollExclusions`에 정산월·선생님·학습 기록 rowid와 당시 학생·도서·날짜를 저장한다. `StudyLogs`와 월말 보고·수강 차시는 변경하지 않는다. 기록의 학생·도서·날짜·진행 선생님이 바뀌면 이전 제외를 새 정산에 적용하지 않는다.
 - `POST /api/user/payroll/exclusions`는 `PayrollMonth`, `TeacherUsername`, `StudentRowId`, `StudiedDay`, `LogIds`, `Excluded`, 선택적 `Reason`을 받는다. 같은 학생·날짜의 1~50건을 재검증하고 변경 및 감사 로그를 한 트랜잭션에 저장한다. 마감된 월 및 확정 정산 행은 제외·복원하지 않는다.
 - 정산 조회는 `lines`와 `excluded_lines`를 분리하며 제외 내역은 정산 차시·합계·마감 행에서 빠진다. 마감과 제외 변경은 동일한 쓰기 잠금으로 직렬화한다. 제외한 단가 미설정 기록은 마감을 막지 않는다.
 - 회귀 검증: `tests/test_payroll_exclusions.py`, `tests/test_payroll_lesson_type_ui.js`.
 
+## 정산 화면 학습 기록 삭제
+- 학생별 날짜 칸의 `기록 삭제`는 그 차시에 포함된 원본 `StudyLogs` 기록을 삭제한다. 확인 창에 학생·수업일·도서·기록 번호를 보여 주고, 삭제 후 정산·월말 보고·수강 차시에서도 빠지며 감사 이력은 보존된다고 안내한다.
+- `GET /api/user/payroll`은 차시별 `CanDelete`, `DeleteBlockedReason`, `RecordBooks`(기록별 도서명)를 함께 반환한다. 화면은 이 값으로만 버튼을 표시하며 일반 선생님 화면도 같은 응답을 사용한다.
+- `POST /api/user/payroll/records/delete`는 `{PayrollMonth, TeacherUsername, LogIds, Confirmation: "학습 기록 삭제"}`를 받는다. 1~50개의 서로 다른 양의 정수 rowid만 허용하고, 기록 존재·정산월 일치·진행 선생님 일치·삭제 권한을 전체 재검증한다.
+- `studylog_permissions.payroll_record_delete_permission()`이 관리자·부관리자·관리 선생님에게는 모든 기록 삭제를, 일반 선생님에게는 기존 `mutation_permission()` 기준(본인 진행 기록, 정산 마감 전)을 적용한다. `TeacherPayrollLines`에 확정된 기록은 역할과 관계없이 삭제하지 않는다. 마감된 달의 제외 기록처럼 확정 정산에 포함되지 않은 기록은 삭제할 수 있다.
+- 삭제·감사 기록·남은 `TeacherPayrollExclusions` 정리는 하나의 트랜잭션이다. 하나라도 실패하면 전체 삭제를 취소한다.
+- 회귀 검증: `tests/test_payroll_record_delete.py`, `tests/test_payroll_record_delete_ui.js`, `tests/test_payroll_lesson_type_ui.js`.
+
 ## 복수 도서의 차시 계산
 - 월급 정산과 월말 보고는 학생·날짜·실제 진행 선생님(빈 값이면 수업 담당자)·수업·일반/특강·수업 내용이 모두 같을 때 여러 도서를 1차시로 묶는다. 수업 미연결 기록은 정산 카테고리도 구분한다. 수업 내용의 앞뒤 공백은 제거하고 빈 내용끼리도 묶으며 도서와 메모는 차시 식별 기준에서 제외한다.
 - `lesson_sessions.py`의 `lesson_session_key()`를 정산 및 월말 보고 시작 강의 계산에 사용한다. 문자 생성의 Python/JS도 같은 기준을 사용하고 도서명은 모두 표시한다. 수업료 잔여 차시 계산의 기존 기준은 유지한다.
-- 정산 화면은 차시당 한 행 및 체크 한 개를 표시하고 `StudyLogIds`로 모든 도서 기록을 보관한다. 정산 제외 버튼은 차시의 모든 원본 번호를 전달한다. 일부 도서만 제외되어도 포함된 도서가 남으면 해당 차시의 수당은 한 번 지급한다.
+- 정산 화면은 차시당 한 행 및 체크 한 개를 표시하고 `StudyLogIds`로 모든 도서 기록을 보관한다. 기록 삭제 버튼은 차시의 모든 원본 번호를 전달한다. 일부 도서만 제외되어도 포함된 도서가 남으면 해당 차시의 수당은 한 번 지급한다.
 - 새 정산 마감은 모든 도서 기록을 `TeacherPayrollLines`에 저장하되 차시당 수당을 한 번만 저장하고 나머지는 0원으로 보관한다. `SessionKey`를 확정 저장하여 이후 기록 변경과 분리한다. 기존 마감의 빈 `SessionKey`는 원본 행 단위로 유지하며 기존 지급액을 소급 변경하지 않는다.
 - 회귀 검증: `tests/test_lesson_sessions.py`, `tests/test_monthly_report_absences.js`, `tests/test_payroll_lesson_type_ui.js`.
 

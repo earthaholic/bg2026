@@ -11,7 +11,7 @@ const context = vm.createContext({
     escapeHtml: value => String(value).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
     payrollTransferCheckbox: () => '',
 });
-const start = source.indexOf('    function payrollLessonTypeBadge(');
+const start = source.indexOf('    function payrollRecordDeleteButton(');
 const end = source.indexOf('    function renderPayrollMaterials(', start);
 assert.ok(start > 0 && end > start);
 vm.runInContext(source.slice(start, end), context);
@@ -81,17 +81,17 @@ test('같은 날짜의 정산 차시만큼 학생별 체크를 표시한다', ()
     assert.match(container.innerHTML, /35,000원/);
 });
 
-test('제외 버튼은 학생·날짜 칸의 모든 기록을 대상으로 하고 마감 상태에서는 숨긴다', () => {
-    const line = { StudyLogId: 11, ClassId: 1, ClassName: '검증반', StudentRowId: 1, StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000 };
+test('기록 삭제 버튼은 학생·날짜 칸의 모든 기록을 대상으로 하고 삭제 불가 차시에서는 숨긴다', () => {
+    const line = { StudyLogId: 11, ClassId: 1, ClassName: '검증반', StudentRowId: 1, StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000, CanDelete: true };
     const lines = [line, { ...line, StudyLogId: 12 }, { ...line, StudyLogId: 13, StudiedDay: '2026-09-08' }];
-    context.renderPayrollTeamCards(lines, false, [], true);
+    context.renderPayrollTeamCards(lines, false, []);
     assert.match(container.innerHTML, /data-log-ids="11,12"/);
     assert.match(container.innerHTML, /data-log-ids="13"/);
-    assert.equal((container.innerHTML.match(/class="btn btn-xs btn-outline payroll-exclude-button"/g) || []).length, 2);
-    context.renderPayrollTeamCards(lines, false, [], false);
-    assert.doesNotMatch(container.innerHTML, /payroll-exclude-button/);
-    context.renderPayrollTeamCards(lines.map(line => ({ ...line, IsPayrollClosed: true })), false, [], true);
-    assert.doesNotMatch(container.innerHTML, /payroll-exclude-button/);
+    assert.equal((container.innerHTML.match(/class="btn btn-xs btn-outline payroll-record-delete-button"/g) || []).length, 2);
+    assert.match(container.innerHTML, />기록 삭제</);
+    assert.doesNotMatch(container.innerHTML, /정산 제외/);
+    context.renderPayrollTeamCards(lines.map(line => ({ ...line, CanDelete: false, DeleteBlockedReason: '정산이 마감되어 학습 기록을 삭제할 수 없습니다.' })), false, []);
+    assert.doesNotMatch(container.innerHTML, /payroll-record-delete-button/);
 });
 
 test('제외 목록은 마감 상태와 권한에 따라 복원 버튼을 숨긴다', () => {
@@ -115,11 +115,11 @@ test('제외 목록은 마감 상태와 권한에 따라 복원 버튼을 숨긴
     assert.doesNotMatch(body.innerHTML, /payroll-restore-button/);
 });
 
-test('복수 도서 묶음은 체크 한 개를 표시하고 제외 버튼에 모든 원본 번호를 넣는다', () => {
+test('복수 도서 묶음은 체크 한 개를 표시하고 기록 삭제 버튼에 모든 원본 번호를 넣는다', () => {
     context.document.getElementById = () => container;
     const line = {StudyLogId: 11, StudyLogIds: [11, 12], ClassId: 1, ClassName: '검증반', StudentRowId: 1,
-        StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000};
-    context.renderPayrollTeamCards([line], false, [], true);
+        StudentName: '학생', CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000, CanDelete: true};
+    context.renderPayrollTeamCards([line], false, []);
     assert.equal((container.innerHTML.match(/fa-check/g) || []).length, 1);
     assert.match(container.innerHTML, /<b>1회<\/b>/);
     assert.match(container.innerHTML, /data-log-ids="11,12"/);
@@ -155,3 +155,4 @@ test('수업은 월~일·시간순으로 정렬하고 미지정 일정은 뒤에
     assert.deepEqual(names, ['라 월요일 빠름', '나 월요일 늦음', '바 월요일 시간 없음', '다 화요일', '가 일요일', '마 미지정']);
     assert.equal((container.innerHTML.match(/10,000원/g) || []).length, 12);
 });
+

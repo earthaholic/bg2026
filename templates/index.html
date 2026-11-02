@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261102-future-day-limit">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261102-payroll-record-delete">
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1136,7 +1136,7 @@
                                 <button id="btn-load-payroll" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> 정산 조회</button>
                             </div>
                             <div id="payroll-summary" class="payroll-summary-card"><span>정산월을 선택해 조회하세요.</span></div>
-                            <p id="payroll-exclusion-guide" class="text-muted hidden">선생님을 선택하면 학생별 날짜 칸에서 정산만 제외할 수 있습니다. 학습 기록은 유지되며 제외 내역에서 다시 포함할 수 있습니다. 마감된 정산은 변경할 수 없습니다.</p>
+                            <p id="payroll-record-guide" class="text-muted">학생별 날짜 칸의 <strong>기록 삭제</strong>는 잘못 기록한 학습 기록을 삭제합니다. 관리 선생님 이상은 모든 기록을, 일반 선생님은 본인이 진행한 기록을 정산 마감 전까지 삭제할 수 있습니다. 삭제한 기록은 정산·월말 보고·수강 차시에서도 빠지며 복구할 수 없습니다. 마감된 정산의 기록은 삭제할 수 없습니다.</p>
                             <div id="payroll-transfer-panel" class="payroll-transfer-panel hidden">
                                 <div class="payroll-transfer-copy"><strong><i class="fa-solid fa-arrow-right-arrow-left"></i> 선택 차시 담당 이전</strong><span id="payroll-transfer-selection">선택한 차시 없음</span></div>
                                 <div class="payroll-transfer-controls"><select id="payroll-transfer-teacher" class="form-control"><option value="">이전할 선생님 선택</option></select><button id="btn-transfer-payroll-sessions" class="btn btn-primary" disabled>선택 차시 이전</button></div>
@@ -2255,6 +2255,25 @@
         </div>
     </div>
 
+    <div id="modal-payroll-record-delete" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-payroll-record-delete-title">
+        <div class="modal-card confirm-delete-card studylog-bulk-delete-card">
+            <div class="modal-header studylog-bulk-delete-header">
+                <h3 id="modal-payroll-record-delete-title"><i class="fa-solid fa-triangle-exclamation"></i> 학습 기록 삭제 확인</h3>
+                <button id="btn-close-payroll-record-delete" class="btn-close" aria-label="기록 삭제 확인 닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger studylog-bulk-delete-warning"><i class="fa-solid fa-triangle-exclamation"></i> 삭제한 학습 기록은 복구할 수 없습니다. 정산·월말 보고·수강 차시에서도 함께 빠지며, 감사 이력은 보존됩니다.</div>
+                <p id="payroll-record-delete-count" class="studylog-bulk-delete-count">0건을 삭제합니다.</p>
+                <div id="payroll-record-delete-list" class="studylog-bulk-delete-list" aria-label="삭제할 학습 기록 목록"></div>
+                <div id="payroll-record-delete-error" class="alert alert-danger hidden" role="alert"></div>
+                <div class="modal-actions studylog-bulk-delete-actions">
+                    <button type="button" id="btn-cancel-payroll-record-delete" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-submit-payroll-record-delete" class="btn btn-danger"><i class="fa-solid fa-trash-can"></i> 기록 삭제</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <dialog id="payroll-consultation-dialog" class="consultation-payroll-dialog">
         <div class="modal-header"><h3>상담 정산 상세</h3><button type="button" id="close-payroll-consultation-dialog" class="btn-close" aria-label="상담 정산 상세 닫기">&times;</button></div>
         <div id="payroll-consultation-detail" class="modal-body"></div>
@@ -2708,7 +2727,8 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261026-filter-stability"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261102-future-day-limit"></script>
+    <script src="/static/js/app.js?v=20261102-payroll-record-delete"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
 </body>
 </html>
+

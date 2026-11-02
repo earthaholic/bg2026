@@ -58,7 +58,7 @@ from database import (
     get_audit_username_options
 )
 from auth import create_access_token, get_current_user, get_current_admin, get_current_staff
-from studylog_permissions import mutation_permission, validate_teacher_update
+from studylog_permissions import mutation_permission, payroll_record_delete_permission, validate_teacher_update
 from studylog_dates import ensure_not_future_studied_day, future_studied_day_message, is_future_studied_day
 from similarity import normalize_key, classify_match
 from teacher_assignment import parse_assignment_file, assignment_context, assignment_candidates, match_assignment, fingerprint
@@ -316,6 +316,13 @@ class PayrollExclusionRequest(BaseModel):
     LogIds: List[int]
     Excluded: bool
     Reason: str = ""
+
+class PayrollRecordDeleteRequest(BaseModel):
+    PayrollMonth: str
+    TeacherUsername: str = ""
+    LogIds: List[StrictInt]
+    Confirmation: str = ""
+
 
 class TuitionFeeSettingRequest(BaseModel):
     ClassType: str
@@ -3289,6 +3296,34 @@ def get_special_pay_rates(current_user: Dict[str, Any] = Depends(get_current_use
         return {"rates":[dict(r) for r in rows]}
     finally: conn.close()
 
+def _attach_payroll_record_info(conn, rows, excluded_rows, all_rows, current_user):
+    """차시별 삭제 가능 여부와 원본 기록의 도서명을 정산 응답에 붙인다."""
+    log_ids = sorted({int(row["StudyLogId"]) for row in all_rows})
+    book_titles = {}
+    if log_ids:
+        placeholders = ','.join('?' for _ in log_ids)
+        for item in conn.execute(f'''SELECT sl.rowid AS "StudyLogId",
+                                            COALESCE(b."Title", '도서 정보 없음') AS "BookTitle"
+                                     FROM "StudyLogs" sl LEFT JOIN "Books" b ON b.rowid=sl."BookId" OR b."Id"=sl."BookId"
+                                     WHERE sl.rowid IN ({placeholders})''', log_ids).fetchall():
+            book_titles[int(item["StudyLogId"])] = item["BookTitle"]
+    permissions = {}
+    for row in all_rows:
+        row_id = int(row["StudyLogId"])
+        if row.get("IsPayrollClosed"):
+            permissions[row_id] = (False, "정산이 마감되어 학습 기록을 삭제할 수 없습니다.")
+            continue
+        blocked = payroll_record_delete_permission(conn, row, row_id, current_user)
+        permissions[row_id] = (False, blocked[1]) if blocked else (True, "")
+    for line in list(rows) + list(excluded_rows):
+        ids = [int(item) for item in (line.get("StudyLogIds") or [line.get("StudyLogId")])]
+        line["RecordBooks"] = [{"StudyLogId": item, "BookTitle": book_titles.get(item, "도서 정보 없음")}
+                               for item in ids]
+        results = [permissions.get(item, (False, "학습 기록을 찾을 수 없습니다.")) for item in ids]
+        line["CanDelete"] = all(allowed for allowed, _ in results)
+        line["DeleteBlockedReason"] = next((reason for allowed, reason in results if not allowed), "")
+
+
 @app.get("/api/user/payroll")
 def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(get_current_user)):
     if not re.match(r'^\d{4}-\d{2}$', month): raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
@@ -3334,6 +3369,7 @@ def get_payroll(month: str = Query(...), teacher_username: Optional[str] = Query
             material_sql += ' AND r."RequestedBy"=?'; material_params.append(teacher)
         material_requests = [_book_material_request_dict(r) for r in conn.execute(material_sql, material_params).fetchall()]
         consultation_rows = payroll_consultation_rows(conn, month, teacher)
+        _attach_payroll_record_info(conn, rows, excluded_rows, all_rows, current_user)
     finally: conn.close()
     # 추가 청구는 별도 승인 없이 등록 즉시 해당 월 정산에 포함한다.
     for claim in claims:
@@ -3417,6 +3453,74 @@ def set_payroll_exclusions(payload: PayrollExclusionRequest,
         raise HTTPException(status_code=500, detail="정산 제외 여부를 저장하지 못하여 전체 변경을 취소했습니다.")
     finally:
         conn.close()
+
+@app.post("/api/user/payroll/records/delete")
+def payroll_delete_records(
+    payload: PayrollRecordDeleteRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """정산 화면에서 잘못 기록한 학습 기록을 한 트랜잭션으로 삭제한다."""
+    if payload.Confirmation != "학습 기록 삭제":
+        raise HTTPException(status_code=400, detail="삭제 확인 절차를 다시 진행해 주세요.")
+    if not re.match(r'^\d{4}-\d{2}$', payload.PayrollMonth or ''):
+        raise HTTPException(status_code=400, detail="정산월은 YYYY-MM 형식이어야 합니다.")
+    log_ids = payload.LogIds
+    if not 1 <= len(log_ids) <= 50 or any(log_id <= 0 for log_id in log_ids):
+        raise HTTPException(status_code=400, detail="삭제할 학습 기록을 1개 이상 50개 이하로 선택해 주세요.")
+    if len(set(log_ids)) != len(log_ids):
+        raise HTTPException(status_code=400, detail="삭제 대상에 중복된 학습 기록이 있습니다. 정산을 다시 조회해 주세요.")
+    teacher = (payload.TeacherUsername or '').strip()
+    if not teacher:
+        raise HTTPException(status_code=400, detail="삭제할 기록의 진행 선생님을 확인해 주세요.")
+    if current_user["role"] == "teacher" and teacher != current_user["username"]:
+        raise HTTPException(status_code=403, detail="본인이 진행한 학습 기록만 삭제할 수 있습니다.")
+
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        snapshots = []
+        for row_id in log_ids:
+            row = conn.execute('SELECT rowid AS _row_id, * FROM "StudyLogs" WHERE rowid=?', (row_id,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"학습 기록 #{row_id}을 찾을 수 없어 삭제를 취소했습니다. 정산을 다시 조회해 주세요.")
+            log = dict(row)
+            log.pop("_row_id", None)
+            if str(log.get("StudiedDay") or "")[:7] != payload.PayrollMonth:
+                raise HTTPException(status_code=409, detail=f"학습 기록 #{row_id}은(는) {payload.PayrollMonth} 정산 대상이 아니어서 삭제를 취소했습니다. 정산을 다시 조회해 주세요.")
+            effective_teacher = str(log.get("ActualTeacherUsername") or "").strip()
+            if not effective_teacher and log.get("ClassId"):
+                class_row = conn.execute('SELECT "TeacherUsername" FROM "Classes" WHERE "Id"=?', (log["ClassId"],)).fetchone()
+                effective_teacher = str(class_row["TeacherUsername"] or "").strip() if class_row else ""
+            if effective_teacher != teacher:
+                raise HTTPException(status_code=409, detail=f"학습 기록 #{row_id}의 진행 선생님이 달라 삭제를 취소했습니다. 정산을 다시 조회해 주세요.")
+            blocked = payroll_record_delete_permission(conn, log, row_id, current_user)
+            if blocked:
+                raise HTTPException(status_code=blocked[0], detail=f"학습 기록 #{row_id}: {blocked[1]} 삭제를 취소했습니다.")
+            snapshots.append((row_id, log))
+
+        for row_id, log in snapshots:
+            conn.execute('DELETE FROM "StudyLogs" WHERE rowid=?', (row_id,))
+            write_audit_log("StudyLogs", row_id, "DELETE", log, None, None,
+                            current_user["username"], current_user["role"], connection=conn)
+            # 삭제한 기록의 남은 정산 제외 설정을 정리해 번호 재사용 시 다른 기록에 적용되지 않게 한다.
+            for exclusion in conn.execute('SELECT * FROM "TeacherPayrollExclusions" WHERE "StudyLogId"=?', (row_id,)).fetchall():
+                old_exclusion = dict(exclusion)
+                conn.execute('DELETE FROM "TeacherPayrollExclusions" WHERE "Id"=?', (old_exclusion["Id"],))
+                write_audit_log("TeacherPayrollExclusions", old_exclusion["Id"], "DELETE", old_exclusion, None, None,
+                                current_user["username"], current_user["role"], connection=conn)
+        conn.commit()
+        return {"status": "success", "deleted_rows": len(snapshots),
+                "message": f"학습 기록 {len(snapshots)}건을 삭제했습니다. 정산에서도 제외됩니다."}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        logging.exception("정산 화면 학습 기록 삭제 실패")
+        raise HTTPException(status_code=500, detail="학습 기록 삭제 처리 중 오류가 발생하여 전체 삭제를 취소했습니다.")
+    finally:
+        conn.close()
+
 
 @app.post("/api/user/payroll/backfill-class-links")
 def backfill_payroll_class_links(

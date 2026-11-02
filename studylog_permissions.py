@@ -34,6 +34,15 @@ def mutation_permission(conn, log, row_id, user, target_day=None):
     return None
 
 
+def payroll_record_delete_permission(conn, log, row_id, user):
+    """정산 화면의 기록 삭제 권한: 관리 선생님 이상은 전체, 일반 선생님은 본인 진행 기록만."""
+    if user.get("role") in ("admin", "subadmin", "manager"):
+        if conn.execute('SELECT 1 FROM "TeacherPayrollLines" WHERE "StudyLogId"=?', (row_id,)).fetchone():
+            return (409, "정산이 마감된 학습 기록은 삭제할 수 없습니다.")
+        return None
+    return mutation_permission(conn, log, row_id, user)
+
+
 def validate_teacher_update(conn, data):
     if set(data) - TEACHER_EDIT_FIELDS:
         raise HTTPException(status_code=403, detail="일반 선생님은 날짜·도서·특강 여부·수업 내용·메모만 수정할 수 있습니다.")
