@@ -13,6 +13,94 @@
         }, true);
     }
 
+    // 입력 결과는 놓치지 않도록 화면 가운데에서 크게 알린다. 성공은 잠깐 뒤 스스로 닫히고,
+    // 확인이 필요한 경고·오류는 사용자가 확인을 눌러야 닫힌다.
+    let centeredState = null;
+    const CENTERED_TYPES = new Set(['success', 'warning', 'error']);
+    const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6.5 9.2 17.3l-5.2-5.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const ICON_ALERT = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 7.6v6.1" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="17.4" r="1.45" fill="currentColor"/></svg>';
+
+    function closeCenteredFeedback() {
+        if (centeredState) centeredState.close();
+    }
+
+    function showCenteredFeedback(type, message) {
+        closeCenteredFeedback();
+        // 화면 전체를 가리는 충은 dialog가 직접 그리고, 카드는 그 안에서 가운데 정렬한다.
+        const panel = document.createElement('dialog');
+        panel.className = 'action-feedback-overlay';
+        panel.setAttribute('role', 'alertdialog');
+        panel.setAttribute('aria-label', type === 'success' ? '입력 결과' : '확인 필요');
+        const card = document.createElement('div');
+        card.className = `action-feedback-card action-feedback-${type}`;
+        const icon = document.createElement('div');
+        icon.className = 'action-feedback-icon';
+        icon.innerHTML = type === 'success' ? ICON_CHECK : ICON_ALERT;
+        const text = document.createElement('div');
+        text.className = 'action-feedback-text';
+        text.textContent = String(message ?? '');
+        card.append(icon, text);
+        panel.append(card);
+
+        const autoClose = type === 'success';
+        let timer = null;
+        const state = {
+            panel,
+            close() {
+                if (timer !== null) { clearTimeout(timer); timer = null; }
+                document.removeEventListener('keydown', onKey, true);
+                if (panel.open) panel.close();
+                panel.remove();
+                if (centeredState === state) centeredState = null;
+            }
+        };
+
+        function schedule(delay) {
+            if (timer !== null) clearTimeout(timer);
+            timer = setTimeout(() => state.close(), delay);
+        }
+        // 성공 안내는 아무 키나 눌러도 바로 닫는다. 경고·오류는 Esc만 허용한다.
+        function onKey(event) {
+            if (!autoClose && event.key !== 'Escape') return;
+            if (autoClose && ['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
+            event.preventDefault();
+            state.close();
+        }
+
+        if (autoClose) {
+            const hint = document.createElement('p');
+            hint.className = 'action-feedback-hint';
+            hint.textContent = '잠시 뒤 자동으로 닫힙니다';
+            card.append(hint);
+            // 어디를 눌러도 바로 닫히며, 마우스 위치와 관계없이 시간이 지나면 닫힌다.
+            panel.addEventListener('click', () => state.close());
+        } else {
+            const actions = document.createElement('div');
+            actions.className = 'action-feedback-actions';
+            const accept = document.createElement('button');
+            accept.type = 'button';
+            accept.className = 'btn btn-primary';
+            accept.textContent = '확인';
+            accept.addEventListener('click', () => state.close());
+            actions.append(accept);
+            card.append(actions);
+            // 창 바깥(배경)을 눌러도 닫는다.
+            panel.addEventListener('click', event => { if (event.target === panel) state.close(); });
+        }
+
+        panel.addEventListener('close', () => state.close());
+        document.body.append(panel);
+        try { panel.showModal(); } catch (error) { panel.setAttribute('open', ''); }
+        document.addEventListener('keydown', onKey, true);
+        if (autoClose) {
+            const length = String(message ?? '').length;
+            schedule(Math.min(2400, Math.max(1500, 1200 + length * 30)));
+        } else {
+            card.querySelector('button')?.focus();
+        }
+        centeredState = state;
+    }
+
     window.createActionFeedback = source => {
         const eventTrigger = source?.submitter || (source?.target?.tagName === 'FORM' ? source.target.querySelector('[type="submit"]') : source?.target?.closest?.('button, input, select, textarea'));
         const element = typeof source === 'string' ? document.querySelector(source) : source;
@@ -95,9 +183,18 @@
 
         return {
             show(message, type = 'info') {
-                mount(type === 'danger' ? 'error' : type, message);
+                const kind = type === 'danger' ? 'error' : type;
+                if (CENTERED_TYPES.has(kind)) {
+                    // 진행 안내 등 이 버튼에 붙어 있던 이전 메시지는 닫는다.
+                    activePanel?.close(false);
+                    showCenteredFeedback(kind, message);
+                    return;
+                }
+                closeCenteredFeedback();
+                mount(kind, message);
             },
             confirm(message) {
+                closeCenteredFeedback();
                 const state = mount('warning', message, true);
                 if (!state || !state.panel.isConnected) return Promise.resolve(false);
                 return new Promise(resolve => {

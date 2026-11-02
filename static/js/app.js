@@ -4472,6 +4472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggle(false);
                 message.className = 'alert alert-success';
                 message.textContent = '학습 특성 및 특이사항을 저장했습니다.';
+                createActionFeedback().show('학습 특성 및 특이사항을 저장했습니다.', 'success');
             } catch (err) {
                 message.className = 'alert alert-danger';
                 message.textContent = err.message;
@@ -5024,6 +5025,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadStudentSearchResults();
             await loadRecentStudents();
             if (currentTable === 'Students') await loadTableData();
+            createActionFeedback().show('학생 정보를 저장했습니다.', 'success');
         } catch (err) {
             modalEditAlert.className = 'alert alert-danger';
             modalEditAlert.textContent = err.message;
@@ -5273,6 +5275,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadBookSearchResults();
             await loadRecentBooks();
             if (currentTable === 'Books') await loadTableData();
+            createActionFeedback().show('도서 정보를 저장했습니다.', 'success');
         } catch (err) {
             modalEditAlert.className = 'alert alert-danger';
             modalEditAlert.textContent = err.message;
@@ -5732,6 +5735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalCrud.classList.add('hidden');
             await loadTables();
             await loadTableData();
+            createActionFeedback().show('변경 내용을 저장했습니다.', 'success');
         } catch (err) {
             crudErrorMsg.textContent = err.message;
             crudErrorMsg.classList.remove('hidden');
@@ -6610,7 +6614,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         data.planned_books.find(book => Number(book.PlannedId) === Number(item.PlannedId)).PlannedDay = item.PlannedDay;
                         plannedRows.querySelector(`[data-planned-id="${Number(item.PlannedId)}"] .planned-book-date`).value = item.PlannedDay;
                     });
-                    feedback.show(`${result.dates.length}건의 예정일을 1주 간격으로 저장했습니다.`, 'info');
+                    feedback.show(`${result.dates.length}건의 예정일을 1주 간격으로 저장했습니다.`, 'success');
                 } catch (err) {
                     feedback.show(err.message, 'error');
                 } finally {
@@ -6652,7 +6656,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         books.get(Number(item.PlannedId)).PlannedDay = item.PlannedDay;
                         plannedRows.querySelector(`[data-planned-id="${Number(item.PlannedId)}"] .planned-book-date`).value = item.PlannedDay || '';
                     });
-                    feedback.show('예정 수업 순서를 저장했습니다.', 'info');
+                    feedback.show('예정 수업 순서를 저장했습니다.', 'success');
                 } catch (err) {
                     restorePlannedOrder();
                     feedback.show(err.message, 'error');
@@ -6884,6 +6888,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             await openClassDetailModal(classId);
             await loadClassSearchResults();
+            createActionFeedback().show('수업 정보를 저장했습니다.', 'success');
         } catch (err) {
             alertEl.className = 'alert alert-danger';
             alertEl.textContent = err.message;
@@ -7539,6 +7544,7 @@ document.addEventListener('DOMContentLoaded', () => {
             classBatchResult.className = 'alert alert-success';
             classBatchResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escapeHtml(result.message)}${resList ? `<div class="class-batch-result-list">${resList}</div>` : ''}`;
             classBatchResult.classList.remove('hidden');
+            createActionFeedback().show(result.message, 'success');
             // 도서 선택 초기화 (연속 등록 편의)
             const bId = document.getElementById('batch-book-id');
             const bDisp = document.getElementById('batch-book-display');
@@ -10405,6 +10411,7 @@ document.addEventListener('DOMContentLoaded', () => {
             completionEl('confirm-dialog').close();
             await loadCompletionRows(true);
             completionEl('status').textContent = `${result.updated_count}건의 실제 진행 선생님을 ${pending.teacherName} 선생님으로 지정했습니다. 남은 미입력 기록을 확인해 주세요.`;
+            createActionFeedback().show(`${result.updated_count}건의 실제 진행 선생님을 ${pending.teacherName} 선생님으로 지정했습니다.`, 'success');
         } catch (err) {
             completionEl('confirm-dialog').close();
             completionState.selected.clear();

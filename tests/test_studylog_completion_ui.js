@@ -64,6 +64,8 @@ function harness({ staff = true } = {}) {
         isStaff: () => staff, userName: value => value || '', formatGrade: value => value || '',
         hideRecordCoverageTooltip() {}, switchView() {}, openClassDetailModal() {},
         modalClassDetail: element('modal-class-detail'), modalClassDetailBody: element('modal-class-detail-body'), currentDetailClass: null,
+        // 저장 성공 안내는 화면 가운데 확인 창으로 표시한다(feedback.js). 테스트에서는 기록만 남긴다.
+        createActionFeedback: () => ({ show: (message, type) => calls.push({ notify: { message, type } }) }),
         apiFetch: async (url, options) => { calls.push({ url, options }); return response(); },
     });
     vm.runInContext(snippet + '\n;globalThis.state = completionState;', context);
