@@ -57,10 +57,11 @@ class TeacherManualTests(unittest.TestCase):
                      "본인 정산을 조회할 수 있습니다", "즉시 포함됩니다", "마감된 월"]:
             self.assertIn(text, self.html)
 
-    def test_october_18_guidance(self):
-        for text in ["버전 2.1", "2026년 10월 18일", "Esc 키", "기존 행의 상대 순서",
+    def test_latest_version_guidance(self):
+        for text in ["버전 2.2", "2026년 11월 2일", "Esc 키", "기존 행의 상대 순서",
                      "현재 본인 담당 수업에 배정된 학생", "상담 기록 추가", "본인으로 고정",
-                     "저장한 상담의 수정·삭제는 관리 선생님에게 요청", "단가 미설정"]:
+                     "저장한 상담의 수정·삭제는 관리 선생님에게 요청", "단가 미설정",
+                     "오늘(한국 시간)까지만", "오늘 이후 날짜는 선택할 수 없습니다"]:
             self.assertIn(text, self.html)
         self.assertIn("consultation", self.parsed.chapters)
 
