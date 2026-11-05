@@ -4561,7 +4561,7 @@ def _payroll_rows(month: str, teacher_username: Optional[str] = None, connection
         closed_teachers = {r[0] for r in conn.execute('SELECT "TeacherUsername" FROM "TeacherPayrollClosures" WHERE "PayrollMonth"=?', (month,))}
         if closed_teachers and (not teacher_username or teacher_username in closed_teachers):
             sql = '''SELECT pl.*, sl."StudiedDay", sl."ClassId", s.rowid AS "StudentRowId", s."Name" AS "StudentName", s."Grade" AS "CurrentGrade",
-                            sl."GradeSnapshot", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
+                            sl."GradeSnapshot", sl."LessonContent", COALESCE(c."ClassName", '수업 없음 · ' || pc."Name") AS "ClassName",
                             CASE WHEN pl."Reason" LIKE '특강%' THEN 1 ELSE 0 END AS "IsSpecial"
                      FROM "TeacherPayrollLines" pl JOIN "StudyLogs" sl ON sl.rowid=pl."StudyLogId"
                      LEFT JOIN "Students" s ON sl."StudentId"=s.rowid OR sl."StudentId"=s."Id"

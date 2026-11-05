@@ -132,11 +132,27 @@ test('보존한 수업 종류·단가·출처는 체크 칸의 툴팁과 접근�
         IsSpecial: 0, UnitAmount: 10000, CategoryName: '독서글쓰기', PayrollBasisLabel: '도입 시점 기준 보존' }]);
     assert.match(container.innerHTML, /현재 토론반/);
     assert.match(container.innerHTML, /독서글쓰기 · 10,000원 · 도입 시점 기준 보존/);
-    assert.match(container.innerHTML, /title="수업 1회 독서글쓰기 · 10,000원 · 도입 시점 기준 보존"/);
-    assert.match(container.innerHTML, /aria-label="수업 1회 독서글쓰기 · 10,000원 · 도입 시점 기준 보존"/);
+    assert.ok(container.innerHTML.includes(`title="수업 1회\n독서글쓰기 · 10,000원 · 도입 시점 기준 보존"`));
+    assert.ok(container.innerHTML.includes(`aria-label="수업 1회\n독서글쓰기 · 10,000원 · 도입 시점 기준 보존"`));
     assert.doesNotMatch(container.innerHTML, /payroll-basis-note/);
     assert.doesNotMatch(container.innerHTML.replace(/<[^>]*>/g, ''), /도입 시점 기준 보존|독서글쓰기/);
     assert.equal((container.innerHTML.match(/fa-check/g) || []).length, 1);
+});
+
+test('체크 칸 툴팁에 학습 이력의 도서명과 수업 내용을 함께 표시한다', () => {
+    context.document.getElementById = () => container;
+    const base = { ClassId: 1, ClassName: '검증반', StudentRowId: 1, StudentName: '검증학생',
+        CurrentGrade: '초3', StudiedDay: '2026-09-01', Amount: 10000 };
+    context.renderPayrollTeamCards([{ ...base, IsSpecial: 1, UnitAmount: 5000, CategoryName: '토론',
+        LessonContent: '2장 토론하기',
+        RecordBooks: [{ StudyLogId: 1, BookTitle: '도서 <A>' }, { StudyLogId: 2, BookTitle: '도서 A' }] }], false, []);
+    assert.ok(container.innerHTML.includes('title="수업 1회\n도서: 도서 &lt;A&gt;, 도서 A\n수업 내용: 2장 토론하기">'), container.innerHTML);
+    assert.doesNotMatch(container.innerHTML, /도서: .*도서 A, 도서 A/);
+
+    // 도서·수업 내용이 비어 있거나 알 수 없는 값이면 해당 항목 없이 횟수만 안내한다.
+    context.renderPayrollTeamCards([{ ...base, LessonContent: '   ',
+        RecordBooks: [{ StudyLogId: 1, BookTitle: '도서 정보 없음' }] }], false, []);
+    assert.ok(container.innerHTML.includes(`title="수업 1회"`), container.innerHTML);
 });
 
 

@@ -9120,6 +9120,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<button type="button" class="btn btn-xs btn-outline payroll-record-delete-button" data-log-ids="${ids}" aria-label="${escapeHtml(label)}">기록 삭제</button>`;
     }
 
+    // 체크 칸에 마우스를 올리면 수업 횟수와 함께 학습 이력의 도서명·수업 내용, 보존한 정산 기준을 안내한다.
+    function payrollAttendanceTooltip(count, lines, basisText) {
+        const unique = values => [...new Set(values)];
+        const books = unique((lines || []).flatMap(line => (line.RecordBooks || [])
+            .map(item => String(item.BookTitle || '').trim()))
+            .filter(title => title && title !== '도서 정보 없음'));
+        const contents = unique((lines || []).map(line => String(line.LessonContent || '').trim()).filter(Boolean));
+        const parts = [`수업 ${count}회`];
+        if (books.length) parts.push(`도서: ${books.join(', ')}`);
+        if (contents.length) parts.push(`수업 내용: ${contents.join(' / ')}`);
+        if (basisText) parts.push(basisText);
+        return escapeHtml(parts.join('\n'));
+    }
+
     function updatePayrollTransferSelection() {
         const count = payrollSelectedSessions.size;
         const label = document.getElementById('payroll-transfer-selection');
@@ -9210,9 +9224,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const basisText = dateLines.map(line => line.PayrollBasisLabel
                         ? `${line.IsSpecial ? '특강' : (line.CategoryName || '종류 미설정')} · ${Number(line.UnitAmount).toLocaleString()}원 · ${line.PayrollBasisLabel}`
                         : '').filter(Boolean).join(' / ');
-                    return count
-                        ? `<td class="is-attended" aria-label="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}" title="수업 ${count}회${basisText ? ' ' + escapeHtml(basisText) : ''}"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${deleteButton}</td>`
-                        : '<td>-</td>';
+                    if (!count) return '<td>-</td>';
+                    const tooltip = payrollAttendanceTooltip(count, dateLines, basisText);
+                    return `<td class="is-attended" aria-label="${tooltip}" title="${tooltip}"><span class="payroll-attendance-marks" aria-hidden="true">${'<i class="fa-solid fa-check"></i>'.repeat(count)}</span>${deleteButton}</td>`;
                 }).join('');
                 return `<tr><td class="payroll-grade">${escapeHtml(student.grade)}</td><td class="payroll-student-name">${escapeHtml(student.name)}</td><td>${payrollLessonTypeBadge(student)}</td>${attendanceCells}<td><b>${student.lines.length}회</b></td><td class="payroll-amount">${amount.toLocaleString()}원</td></tr>`;
             }).join('');
