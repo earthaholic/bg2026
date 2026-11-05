@@ -11,6 +11,8 @@ assert.ok(start > 0 && end > start);
 const context = vm.createContext({
     escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
 });
+// 배지 렌더러는 수정 모드(배지 드래그 이동) 상태를 참조한다.
+vm.runInContext('var classEditMode = false;', context);
 vm.runInContext(source.slice(start, end), context);
 const student = (total, teacher, content) => ({
     row_id: 7, Name: '가람', IsSpecial: 0,
@@ -67,6 +69,13 @@ test('기록 없음은 회색이며 미완료 비율을 100%로 반올림하지 
     assert.match(incomplete, /9999\/10000건 \(99.9%\)/);
     assert.doesNotMatch(incomplete, /record-lamp-complete/);
     assert.match(incomplete, /1\/10000건 \(0.1% 미만\)/);
+});
+
+test('카드·시간표에서는 입력 현황 표시등을 그리지 않는다', () => {
+    const html = context.renderClassStudentBadge(student(10, 10, 3), true, false);
+    assert.equal(html.includes('student-record-lamp'), false);
+    assert.ok(html.includes('class-student-badge'));
+    assert.ok(context.renderClassStudentBadge(student(10, 10, 3)).includes('student-record-lamp'));
 });
 
 test('학생 이름은 속성과 표시 텍스트 모두 이스케이프한다', () => {

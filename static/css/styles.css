@@ -4961,6 +4961,372 @@ button.class-student-badge { cursor: pointer; }
     outline-offset: 2px;
 }
 
+/* 수업 목록 보기 방식(리스트·카드·시간표)과 배지 이동 수정 모드 */
+#view-class-list .class-results-bar {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.class-results-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.class-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.class-view-switch {
+    display: inline-flex;
+    gap: 0.15rem;
+    padding: 0.15rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.class-view-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.class-view-option:hover { color: var(--text-main); }
+
+.class-view-option.is-active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.class-view-option:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.class-edit-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.class-edit-mode-toggle input {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.class-edit-mode-toggle:has(input:checked) {
+    border-color: var(--primary);
+    background: var(--bg-selection);
+    color: var(--primary);
+}
+
+.class-edit-mode-hint {
+    margin: 0;
+    padding: 0.6rem 0.9rem;
+    border: 1px dashed var(--primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-selection);
+    color: var(--text-main);
+    font-size: 0.8rem;
+    line-height: 1.6;
+}
+
+#view-class-list .class-view-panel { min-height: 12rem; }
+
+#view-class-list .class-card-panel,
+#view-class-list .class-timetable-panel {
+    flex: 0 1 auto;
+    padding: 1rem;
+    overflow: auto;
+}
+
+.class-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+    gap: 0.75rem;
+}
+
+.class-card-grid.is-empty { display: block; }
+
+.class-view-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    min-width: 0;
+}
+
+/* 카드·시간표는 학생을 한 줄에 한 명씩 쌓아 배지를 끌어 옮기기 쉽게 한다. */
+#view-class-list .class-view-card .class-student-badges {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+}
+
+#view-class-list .class-view-card .class-student-badges .record-student-group {
+    display: block;
+}
+
+#view-class-list .class-view-card .class-student-badges .class-student-badge {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+}
+
+#view-class-list .class-view-card .class-student-badges .class-student-badge.is-movable {
+    cursor: grab;
+}
+
+#view-class-list .class-view-card .class-student-badges .class-student-badge.is-movable:active {
+    cursor: grabbing;
+}
+
+.class-view-card.is-ended { opacity: 0.72; }
+
+.class-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.class-card-day,
+.class-card-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.class-card-ended,
+.class-ended-badge {
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: rgba(148, 163, 184, 0.18);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.class-card-title {
+    font-size: 1rem;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+}
+
+.class-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.class-card-teacher {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.class-card-category-empty {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.class-card-students {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.class-card-student-count {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.class-card-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.class-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: auto;
+}
+
+.class-timetable {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(8rem, 1fr));
+    align-items: start;
+    gap: 0.6rem;
+    min-width: 56rem;
+}
+
+.class-timetable.is-empty { display: block; }
+
+.class-timetable-day {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    min-width: 0;
+}
+
+.class-timetable-day-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.1rem 0.2rem;
+    color: var(--text-main);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.class-timetable-day-count {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.class-timetable-day-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.class-timetable-empty {
+    margin: 0;
+    padding: 0.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+.class-timetable-item {
+    gap: 0.35rem;
+    padding: 0.6rem;
+}
+
+.class-timetable-item .class-card-title { font-size: 0.85rem; }
+.class-timetable-item .class-card-teacher { font-size: 0.72rem; }
+
+.class-timetable-unscheduled {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.class-timetable-unscheduled-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.class-student-badge.is-movable { cursor: grab; }
+.class-student-badge.is-movable:active { cursor: grabbing; }
+.class-student-badge.is-dragging { opacity: 0.45; }
+
+.class-student-badge.is-move-selected {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
+}
+
+#view-class-list .class-view-card.class-drop-active {
+    border-color: var(--primary);
+    background: var(--bg-selection);
+    box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+#view-class-list tr.class-drop-active > td {
+    background: var(--bg-selection);
+    box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.class-move-card { max-width: 30rem; }
+
+.class-move-summary {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4rem 0.9rem;
+    margin: 0 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.class-move-summary div { display: contents; }
+
+.class-move-summary dt {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.class-move-summary dd {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.class-move-notice {
+    margin: 0 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+    .class-card-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+    #view-class-list .class-view-controls { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 600px) {
+    .class-card-grid { grid-template-columns: 1fr; }
+}
+
 /* 도서 등록 요청은 공통 등록 폼과 요청 내역을 한 흐름으로 표시한다. */
 #view-book-material-request {
     overflow-y: auto;

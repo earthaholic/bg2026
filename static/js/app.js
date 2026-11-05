@@ -69,6 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Class State
     let currentDetailClass = null;
+    // 수업 목록 보기 방식(리스트·카드·시간표)과 배지 드래그 수정 모드
+    const CLASS_VIEW_MODES = ['list', 'card', 'timetable'];
+    const CLASS_VIEW_STORAGE_KEY = 'bg2026.classViewMode';
+    const CLASS_DAY_ORDER = ['월', '화', '수', '목', '금', '토', '일'];
+    let classViewMode = readClassViewMode();
+    let classEditMode = false;
+    let currentClassResults = [];
+    let classSelectedMoveStudent = null;
+    let classDragPayload = null;
+    let classPendingMove = null;
+    let classMoveSaving = false;
     let pendingClassDeleteId = null;
     let pendingClassDeleteName = '';
     let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
@@ -454,6 +465,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClassSearchPrev = document.getElementById('btn-class-search-prev');
     const btnClassSearchNext = document.getElementById('btn-class-search-next');
     const classSearchCurrentPageSpan = document.getElementById('class-search-current-page');
+    const classListView = document.getElementById('class-list-view');
+    const classCardView = document.getElementById('class-card-view');
+    const classCardGrid = document.getElementById('class-card-grid');
+    const classTimetableView = document.getElementById('class-timetable-view');
+    const classTimetableEl = document.getElementById('class-timetable');
+    const classTimetableUnscheduled = document.getElementById('class-timetable-unscheduled');
+    const classEditModeHint = document.getElementById('class-edit-mode-hint');
+    const chkClassEditMode = document.getElementById('chk-class-edit-mode');
+    const classViewOptions = document.querySelectorAll('[data-class-view]');
+    const modalClassStudentMove = document.getElementById('modal-class-student-move');
+    const classStudentMoveSummary = document.getElementById('class-student-move-summary');
+    const classStudentMoveError = document.getElementById('class-student-move-error');
+    const btnConfirmClassStudentMove = document.getElementById('btn-confirm-class-student-move');
+    const btnCancelClassStudentMove = document.getElementById('btn-cancel-class-student-move');
+    const btnCloseClassStudentMove = document.getElementById('btn-close-class-student-move');
 
     // Class Registration View Elements
     const formUserClassReg = document.getElementById('form-user-class-reg');
@@ -952,6 +978,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleLogout() {
         mcpConnection.reset();
+        // 배지 이동 수정 모드가 다음 로그인 계정으로 넘어가지 않게 정리한다.
+        classEditMode = false;
+        classSelectedMoveStudent = null;
+        currentClassResults = [];
+        if (chkClassEditMode) chkClassEditMode.checked = false;
+        closeClassStudentMoveModal();
+        updateClassEditHint();
         globalThis.BgSearch?.cancelAll();
         tuitionCollection.reset();
         completionState.version++;
@@ -1443,6 +1476,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+
+        // 수업 보기 방식과 배지 이동 수정 모드
+        applyClassViewMode();
+        classViewOptions.forEach(button => {
+            button.addEventListener('click', () => {
+                const mode = button.dataset.classView;
+                if (!CLASS_VIEW_MODES.includes(mode) || mode === classViewMode) return;
+                classViewMode = mode;
+                saveClassViewMode(mode);
+                classSelectedMoveStudent = null;
+                renderClassCards(currentClassResults);
+                updateClassEditHint();
+            });
+        });
+        if (chkClassEditMode) {
+            chkClassEditMode.addEventListener('change', () => {
+                classEditMode = chkClassEditMode.checked && isStaff();
+                applyClassEditMode();
+            });
+        }
+        if (btnCancelClassStudentMove) btnCancelClassStudentMove.addEventListener('click', closeClassStudentMoveModal);
+        if (btnCloseClassStudentMove) btnCloseClassStudentMove.addEventListener('click', closeClassStudentMoveModal);
+        if (btnConfirmClassStudentMove) btnConfirmClassStudentMove.addEventListener('click', submitClassStudentMove);
 
         // Class Registration Form
         if (formUserClassReg) {
@@ -6171,7 +6227,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const BATCH_STATUS_ICON = { created: 'fa-circle-check', absent: 'fa-circle-check', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
 
     function formatDayOfWeek(d) {
-        return DAY_LABELS[d] || d || '-';
+        const key = normalizeClassDay(d);
+        return DAY_LABELS[key] || d || '-';
     }
 
     // 전체 학생 체크박스 목록 HTML 생성 (등록/편집 폼 공용)
@@ -6418,13 +6475,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<span class="record-student-group"><button type="button" class="student-search-name cell-clickable btn-open-student-detail" data-student-id="${Number(student.row_id || student.Id)}" aria-label="${escapeHtml(name + ' 학생 상세 정보')}">${escapeHtml(name)}</button>${recordCompletionButton(student)}</span>`;
     }
 
-    function renderClassStudentBadge(student, interactive = true) {
+    function renderClassStudentBadge(student, interactive = true, showCoverage = true) {
         const name = student.Name || '이름 없음';
         const special = Number(student.IsSpecial) === 1;
+        const studentId = Number(student.row_id || student.Id);
+        // 수정 모드에서는 배지를 끌어 달 반으로 옮길 수 있다.
+        const movable = interactive && classEditMode && Number.isFinite(studentId);
+        const moveAttrs = movable
+            ? ` draggable="true" data-move-student-id="${studentId}" data-move-student-name="${escapeHtml(name)}" title="${escapeHtml(name)} 학생을 다른 반으로 끌어다 놓으세요"`
+            : '';
         const nameHtml = interactive
-            ? `<button type="button" data-student-id="${Number(student.row_id)}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge" aria-label="${escapeHtml(name + (special ? ' 특강' : '') + ' 학생 상세 정보')}">${escapeHtml(name)}</button>`
+            ? `<button type="button" data-student-id="${studentId}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${movable ? ' is-movable' : ''}"${moveAttrs} aria-label="${escapeHtml(name + (special ? ' 특강' : '') + ' 학생 상세 정보' + (movable ? ' · 다른 반으로 끌어서 이동' : ''))}">${escapeHtml(name)}</button>`
             : `<span class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge">${escapeHtml(name)}</span>`;
-        return `<span class="record-student-group">${nameHtml}${recordCompletionButton(student)}</span>`;
+        return `<span class="record-student-group">${nameHtml}${showCoverage ? recordCompletionButton(student) : ''}</span>`;
     }
 
     let recordCoverageTooltip = null;
@@ -6463,7 +6526,392 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     window.addEventListener('resize', hideRecordCoverageTooltip);
 
+    function readClassViewMode() {
+        try {
+            const saved = localStorage.getItem(CLASS_VIEW_STORAGE_KEY);
+            return CLASS_VIEW_MODES.includes(saved) ? saved : 'list';
+        } catch (err) {
+            return 'list';
+        }
+    }
+
+    function saveClassViewMode(mode) {
+        try { localStorage.setItem(CLASS_VIEW_STORAGE_KEY, mode); } catch (err) { /* 저장할 수 없으면 현재 화면만 바뀐다. */ }
+    }
+
+    // 보기 방식·수정 모드 상태를 화면에 반영한다.
+    function applyClassViewMode() {
+        if (classListView) classListView.classList.toggle('hidden', classViewMode !== 'list');
+        if (classCardView) classCardView.classList.toggle('hidden', classViewMode !== 'card');
+        if (classTimetableView) classTimetableView.classList.toggle('hidden', classViewMode !== 'timetable');
+        classViewOptions.forEach(button => {
+            const active = button.dataset.classView === classViewMode;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', String(active));
+        });
+    }
+
+    function classEmptyStateHtml(message) {
+        return `<div class="empty-state"><i class="fa-solid fa-folder-open fa-2x" aria-hidden="true"></i><p>${escapeHtml(message)}</p></div>`;
+    }
+
+    // 기존 데이터에는 요일이 '월'과 'MON'처럼 섮여 있어 하나의 요일 키로 맞춘다.
+    function normalizeClassDay(value) {
+        if (value === null || value === undefined) return '';
+        const raw = String(value).trim().toUpperCase();
+        if (!raw) return '';
+        const map = {
+            '월': '월', '화': '화', '수': '수', '목': '목', '금': '금', '토': '토', '일': '일',
+            '월요일': '월', '화요일': '화', '수요일': '수', '목요일': '목', '금요일': '금', '토요일': '토', '일요일': '일',
+            'MON': '월', 'TUE': '화', 'WED': '수', 'THU': '목', 'FRI': '금', 'SAT': '토', 'SUN': '일',
+            'MONDAY': '월', 'TUESDAY': '화', 'WEDNESDAY': '수', 'THURSDAY': '목',
+            'FRIDAY': '금', 'SATURDAY': '토', 'SUNDAY': '일'
+        };
+        return map[raw] || '';
+    }
+
+    // 요일별로 나누고 같은 요일 안에서는 시작 시간 순으로 보여 준다.
+    function classTimetableGroups(classes) {
+        const columns = CLASS_DAY_ORDER.map(day => ({ day, items: [] }));
+        const byDay = Object.create(null);
+        columns.forEach(column => { byDay[column.day] = column; });
+        const unscheduled = [];
+        (classes || []).forEach(cls => {
+            const column = byDay[normalizeClassDay(cls.DayOfWeek)];
+            if (!column) { unscheduled.push(cls); return; }
+            column.items.push(cls);
+        });
+        columns.forEach(column => column.items.sort(compareClassStartTime));
+        return { columns, unscheduled };
+    }
+
+    function compareClassStartTime(a, b) {
+        const left = a && a.StartTime ? String(a.StartTime).trim() : '';
+        const right = b && b.StartTime ? String(b.StartTime).trim() : '';
+        if (left !== right) {
+            if (!left) return 1;
+            if (!right) return -1;
+            return left < right ? -1 : 1;
+        }
+        return String((a && a.ClassName) || '').localeCompare(String((b && b.ClassName) || ''), 'ko');
+    }
+
+    function classStudentBadgesHtml(students) {
+        const list = Array.isArray(students) ? students : [];
+        if (!list.length) return '<p class="class-card-empty">배정된 학생이 없습니다.</p>';
+        // 카드·시간표에서는 학생을 한 줄에 한 명씩 보여 주어 다른 반으로 끌어 옮기기 쉽게 하고,
+        // 입력 현황 표시등은 목록 화면에서만 보여 준다.
+        return `<div class="class-student-badges">${list.map(student => renderClassStudentBadge(student, true, false)).join('')}</div>`;
+    }
+
+    function classCardHtml(cls) {
+        const cId = Number(cls.Id);
+        const students = Array.isArray(cls.Students) ? cls.Students : [];
+        const category = cls.CategoryName
+            ? `<span class="tag-badge primary"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeHtml(cls.CategoryName)}</span>`
+            : '<span class="class-card-category-empty">카테고리 미지정</span>';
+        return `<article class="class-view-card${cls.IsEnded ? ' is-ended' : ''}" data-class-drop-id="${cId}">
+            <div class="class-card-head">
+                <span class="class-card-day"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ${formatDayOfWeek(cls.DayOfWeek)}</span>
+                <span class="class-card-time"><i class="fa-solid fa-clock" aria-hidden="true"></i> ${cls.StartTime ? escapeHtml(cls.StartTime) : '시간 미지정'}</span>
+                ${cls.IsEnded ? '<span class="class-card-ended">종강</span>' : ''}
+            </div>
+            <button type="button" class="class-name-button class-card-title btn-open-class-detail" data-class-id="${cId}">${escapeHtml(cls.ClassName || '수업명 없음')}</button>
+            <div class="class-card-meta">
+                ${category}
+                <span class="class-card-teacher"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> ${escapeHtml(userName(cls.TeacherUsername || '-'))}</span>
+            </div>
+            <div class="class-card-students">
+                <span class="class-card-student-count">수강 학생 ${students.length}명</span>
+                ${classStudentBadgesHtml(students)}
+            </div>
+            <div class="class-card-actions">
+                <button type="button" class="btn btn-xs btn-outline btn-open-class-detail" data-class-id="${cId}">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i> 상세
+                </button>
+                <button type="button" class="btn btn-xs btn-primary btn-class-batch" data-class-id="${cId}">
+                    <i class="fa-solid fa-square-plus" aria-hidden="true"></i> 일괄 등록
+                </button>
+            </div>
+        </article>`;
+    }
+
+    function classTimetableItemHtml(cls) {
+        const cId = Number(cls.Id);
+        const students = Array.isArray(cls.Students) ? cls.Students : [];
+        return `<article class="class-view-card class-timetable-item${cls.IsEnded ? ' is-ended' : ''}" data-class-drop-id="${cId}">
+            <div class="class-card-head">
+                <span class="class-card-time">${cls.StartTime ? escapeHtml(cls.StartTime) : '시간 미지정'}</span>
+                ${cls.IsEnded ? '<span class="class-card-ended">종강</span>' : ''}
+            </div>
+            <button type="button" class="class-name-button class-card-title btn-open-class-detail" data-class-id="${cId}">${escapeHtml(cls.ClassName || '수업명 없음')}</button>
+            <p class="class-card-teacher"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> ${escapeHtml(userName(cls.TeacherUsername || '-'))}</p>
+            ${classStudentBadgesHtml(students)}
+        </article>`;
+    }
+
+    function renderClassCardGrid(classes) {
+        if (!classCardGrid) return;
+        if (!classes.length) {
+            classCardGrid.classList.add('is-empty');
+            classCardGrid.innerHTML = classEmptyStateHtml('등록된 수업이 없습니다.');
+            return;
+        }
+        classCardGrid.classList.remove('is-empty');
+        classCardGrid.innerHTML = classes.map(classCardHtml).join('');
+        bindRecordCoverageTooltips(classCardGrid);
+        bindClassViewActions(classCardGrid);
+    }
+
+    function renderClassTimetable(classes) {
+        if (!classTimetableEl) return;
+        if (!classes.length) {
+            classTimetableEl.classList.add('is-empty');
+            classTimetableEl.innerHTML = classEmptyStateHtml('등록된 수업이 없습니다.');
+            if (classTimetableUnscheduled) {
+                classTimetableUnscheduled.classList.add('hidden');
+                classTimetableUnscheduled.innerHTML = '';
+            }
+            return;
+        }
+        classTimetableEl.classList.remove('is-empty');
+        const groups = classTimetableGroups(classes);
+        classTimetableEl.innerHTML = groups.columns.map(column => `
+            <section class="class-timetable-day" data-day="${column.day}">
+                <header class="class-timetable-day-head">
+                    <span>${formatDayOfWeek(column.day)}</span>
+                    <span class="class-timetable-day-count">${column.items.length}</span>
+                </header>
+                <div class="class-timetable-day-body">
+                    ${column.items.length ? column.items.map(classTimetableItemHtml).join('') : '<p class="class-timetable-empty">수업 없음</p>'}
+                </div>
+            </section>`).join('');
+        bindRecordCoverageTooltips(classTimetableEl);
+        bindClassViewActions(classTimetableEl);
+        if (!classTimetableUnscheduled) return;
+        if (!groups.unscheduled.length) {
+            classTimetableUnscheduled.classList.add('hidden');
+            classTimetableUnscheduled.innerHTML = '';
+            return;
+        }
+        classTimetableUnscheduled.classList.remove('hidden');
+        classTimetableUnscheduled.innerHTML = `
+            <h4 class="class-timetable-unscheduled-title"><i class="fa-solid fa-clock" aria-hidden="true"></i> 요일 미지정 ${groups.unscheduled.length}건</h4>
+            <div class="class-card-grid">${groups.unscheduled.map(classCardHtml).join('')}</div>`;
+        bindRecordCoverageTooltips(classTimetableUnscheduled);
+        bindClassViewActions(classTimetableUnscheduled);
+    }
+
+    // 수정 모드에서 학생 배지를 끌거나 눌러서 다른 반으로 옮긴다.
+    function classRecordById(classId) {
+        return currentClassResults.find(cls => Number(cls.Id) === Number(classId));
+    }
+
+    function updateClassEditHint() {
+        if (!classEditModeHint) return;
+        if (!classEditMode) {
+            classEditModeHint.classList.add('hidden');
+            classEditModeHint.textContent = '';
+            return;
+        }
+        classEditModeHint.classList.remove('hidden');
+        classEditModeHint.innerHTML = classSelectedMoveStudent
+            ? `<i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i> 「${escapeHtml(classSelectedMoveStudent.studentName || '학생')}」 학생을 옮길 반을 눌러 주세요. 같은 배지를 다시 누르면 취소됩니다.`
+            : '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> 수정 모드: 학생 배지를 다른 반으로 끌어다 놓으면 이동합니다. 휴대폰에서는 배지를 누른 뒤 옮길 반을 눌러 주세요.';
+    }
+
+    function applyClassEditMode() {
+        if (!isStaff()) classEditMode = false;
+        if (chkClassEditMode) chkClassEditMode.checked = classEditMode;
+        classSelectedMoveStudent = null;
+        document.getElementById('view-class-list')?.classList.toggle('class-edit-active', classEditMode);
+        updateClassEditHint();
+        renderClassCards(currentClassResults);
+    }
+
+    function selectClassMoveStudent(badge) {
+        const studentId = Number(badge.dataset.moveStudentId);
+        const zone = badge.closest('[data-class-drop-id]');
+        const same = classSelectedMoveStudent && Number(classSelectedMoveStudent.studentId) === studentId;
+        document.querySelectorAll('.class-student-badge.is-move-selected').forEach(el => el.classList.remove('is-move-selected'));
+        if (same || !zone) {
+            classSelectedMoveStudent = null;
+            updateClassEditHint();
+            return;
+        }
+        classSelectedMoveStudent = {
+            studentId,
+            studentName: badge.dataset.moveStudentName || '',
+            sourceClassId: Number(zone.dataset.classDropId)
+        };
+        badge.classList.add('is-move-selected');
+        updateClassEditHint();
+    }
+
+    function requestClassStudentMove(payload, targetClassId) {
+        if (!payload || Number(payload.sourceClassId) === Number(targetClassId)) return;
+        const source = classRecordById(payload.sourceClassId);
+        const target = classRecordById(targetClassId);
+        openClassStudentMoveConfirm({
+            studentId: payload.studentId,
+            studentName: payload.studentName,
+            sourceClassId: Number(payload.sourceClassId),
+            sourceClassName: (source && source.ClassName) || `수업 #${payload.sourceClassId}`,
+            targetClassId: Number(targetClassId),
+            targetClassName: (target && target.ClassName) || `수업 #${targetClassId}`
+        });
+    }
+
+    function openClassStudentMoveConfirm(payload) {
+        if (!modalClassStudentMove || !payload) return;
+        if (Number(payload.sourceClassId) === Number(payload.targetClassId)) return;
+        classPendingMove = payload;
+        if (classStudentMoveError) classStudentMoveError.classList.add('hidden');
+        if (classStudentMoveSummary) {
+            classStudentMoveSummary.innerHTML = `
+                <div><dt>학생</dt><dd>${escapeHtml(payload.studentName || '학생')}</dd></div>
+                <div><dt>지금 반</dt><dd>${escapeHtml(payload.sourceClassName || '-')}</dd></div>
+                <div><dt>이동할 반</dt><dd>${escapeHtml(payload.targetClassName || '-')}</dd></div>`;
+        }
+        if (btnConfirmClassStudentMove) btnConfirmClassStudentMove.disabled = false;
+        modalClassStudentMove.classList.remove('hidden');
+        if (btnConfirmClassStudentMove) btnConfirmClassStudentMove.focus();
+    }
+
+    function closeClassStudentMoveModal() {
+        classPendingMove = null;
+        classMoveSaving = false;
+        if (classStudentMoveError) classStudentMoveError.classList.add('hidden');
+        if (modalClassStudentMove) modalClassStudentMove.classList.add('hidden');
+    }
+
+    async function submitClassStudentMove() {
+        if (!classPendingMove || classMoveSaving) return;
+        const feedback = createActionFeedback();
+        const pending = classPendingMove;
+        classMoveSaving = true;
+        if (btnConfirmClassStudentMove) btnConfirmClassStudentMove.disabled = true;
+        if (classStudentMoveError) classStudentMoveError.classList.add('hidden');
+        try {
+            const result = await apiFetch(`/api/user/classes/${pending.sourceClassId}/students/move`, {
+                method: 'POST',
+                body: JSON.stringify({ StudentId: pending.studentId, TargetClassId: pending.targetClassId })
+            });
+            closeClassStudentMoveModal();
+            classSelectedMoveStudent = null;
+            updateClassEditHint();
+            await loadClassSearchResults();
+            feedback.show(result.message || '학생을 이동했습니다.', 'success');
+        } catch (err) {
+            if (classStudentMoveError) {
+                classStudentMoveError.textContent = err.message;
+                classStudentMoveError.classList.remove('hidden');
+            }
+            if (btnConfirmClassStudentMove) btnConfirmClassStudentMove.disabled = false;
+        } finally {
+            classMoveSaving = false;
+        }
+    }
+
+    function handleClassDragStart(event) {
+        const badge = event.currentTarget;
+        const zone = badge.closest('[data-class-drop-id]');
+        if (!zone) return;
+        classDragPayload = {
+            studentId: Number(badge.dataset.moveStudentId),
+            studentName: badge.dataset.moveStudentName || '',
+            sourceClassId: Number(zone.dataset.classDropId)
+        };
+        badge.classList.add('is-dragging');
+        document.body.classList.add('class-drag-active');
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            try { event.dataTransfer.setData('text/plain', classDragPayload.studentName || '학생'); } catch (err) { /* 일부 브라우저는 drag 데이터 설정을 막는다. */ }
+        }
+    }
+
+    function clearClassDragState() {
+        classDragPayload = null;
+        document.body.classList.remove('class-drag-active');
+        document.querySelectorAll('.class-student-badge.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+        document.querySelectorAll('.class-drop-active').forEach(el => el.classList.remove('class-drop-active'));
+    }
+
+    function handleClassDragOver(event) {
+        if (!classDragPayload) return;
+        const zone = event.currentTarget;
+        if (Number(zone.dataset.classDropId) === Number(classDragPayload.sourceClassId)) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        zone.classList.add('class-drop-active');
+    }
+
+    function handleClassDragLeave(event) {
+        if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
+        event.currentTarget.classList.remove('class-drop-active');
+    }
+
+    function handleClassDrop(event) {
+        const zone = event.currentTarget;
+        if (!classDragPayload) return;
+        event.preventDefault();
+        const payload = classDragPayload;
+        clearClassDragState();
+        requestClassStudentMove(payload, Number(zone.dataset.classDropId));
+    }
+
+    // 휴대폰 등 끌어놓기가 어려운 환경에서는 배지를 눌러 선택한 뒤 반을 누른다.
+    function handleClassDropZoneClick(event) {
+        if (!classEditMode || !classSelectedMoveStudent) return;
+        if (event.target.closest('.class-student-badge, .record-completion-button, .class-card-actions, .btn-class-batch')) return;
+        requestClassStudentMove(classSelectedMoveStudent, Number(event.currentTarget.dataset.classDropId));
+    }
+
+    function bindClassViewActions(container) {
+        if (!container) return;
+        container.querySelectorAll('.btn-open-class-detail').forEach(button => {
+            button.addEventListener('click', event => {
+                // 수정 모드에서 이동할 학생을 고른 상태면 카드 클릭이 이동으로 이어진다.
+                if (classEditMode && classSelectedMoveStudent) return;
+                event.stopPropagation();
+                openClassDetailModal(Number(button.dataset.classId));
+            });
+        });
+        container.querySelectorAll('.btn-class-batch').forEach(button => {
+            button.addEventListener('click', event => {
+                event.stopPropagation();
+                goToClassBatchReg(Number(button.dataset.classId));
+            });
+        });
+        container.querySelectorAll('.class-student-badge[data-student-id]').forEach(badge => {
+            badge.addEventListener('click', event => {
+                event.stopPropagation();
+                if (classEditMode) { selectClassMoveStudent(badge); return; }
+                openStudentDetailModal(badge.dataset.studentId);
+            });
+        });
+        if (!classEditMode) return;
+        container.querySelectorAll('[data-move-student-id]').forEach(badge => {
+            badge.addEventListener('dragstart', handleClassDragStart);
+            badge.addEventListener('dragend', clearClassDragState);
+        });
+        container.querySelectorAll('[data-class-drop-id]').forEach(zone => {
+            zone.addEventListener('dragover', handleClassDragOver);
+            zone.addEventListener('dragleave', handleClassDragLeave);
+            zone.addEventListener('drop', handleClassDrop);
+            zone.addEventListener('click', handleClassDropZoneClick);
+        });
+    }
+
     function renderClassCards(classes) {
+        currentClassResults = Array.isArray(classes) ? classes : [];
+        applyClassViewMode();
+        if (classViewMode === 'card') renderClassCardGrid(currentClassResults);
+        else if (classViewMode === 'timetable') renderClassTimetable(currentClassResults);
+        else renderClassListRows(currentClassResults);
+    }
+
+    function renderClassListRows(classes) {
         if (!classCardsGrid) return;
         if (classes.length === 0) {
             classCardsGrid.innerHTML = '<tr><td colspan="7" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div></td></tr>';
@@ -6481,10 +6929,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 : '<span class="text-muted">미지정</span>';
 
             html += `
-                <tr data-class-id="${cId}">
+                <tr data-class-id="${cId}" data-class-drop-id="${cId}">
                     <td><strong>#${cId}</strong></td>
                     <td>
-                        <button type="button" class="class-name-button cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</button>
+                        <button type="button" class="class-name-button cell-clickable btn-open-class-detail" data-class-id="${cId}">${name}</button>${c.IsEnded ? ' <span class="class-ended-badge">종강</span>' : ''}
                         <div class="class-student-badges">${(c.Students || []).map(student => renderClassStudentBadge(student)).join('')}</div>
                     </td>
                     <td data-sort-value="${Object.keys(DAY_LABELS).indexOf(c.DayOfWeek) + 1}"><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
@@ -6506,27 +6954,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         classCardsGrid.innerHTML = html;
         bindRecordCoverageTooltips(classCardsGrid);
-
-        classCardsGrid.querySelectorAll('.btn-open-class-detail').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openClassDetailModal(btn.getAttribute('data-class-id'));
-            });
-        });
-
-        classCardsGrid.querySelectorAll('.class-student-badge').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openStudentDetailModal(btn.dataset.studentId);
-            });
-        });
-
-        classCardsGrid.querySelectorAll('.btn-class-batch').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                goToClassBatchReg(parseInt(btn.getAttribute('data-class-id')));
-            });
-        });
+        bindClassViewActions(classCardsGrid);
     }
 
     // 수업 상세 모달
@@ -8356,6 +8784,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const AUDIT_TABLE_LABELS = {
         Books: '도서', Students: '학생', StudyLogs: '학습 기록', Classes: '수업',
+        ClassStudents: '수업 학생 배정',
         MonthlyReports: '월말보고', _app_users: '계정'
     };
     const AUDIT_ACTION_LABELS = { INSERT: '등록', UPDATE: '수정', DELETE: '삭제' };

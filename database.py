@@ -1140,6 +1140,74 @@ def validate_class_student_assignments(class_id: Optional[int], student_items: L
     finally:
         conn.close()
 
+def move_class_student(source_class_id: int, target_class_id: int, student_id: int) -> Dict[str, Any]:
+    """학생의 수업 배정을 원 수업에서 대상 수업으로 옮긴다.
+
+    배정(ClassStudents)만 한 트랜잭션에서 교체하며, 이미 등록된 학습 기록의 수업 연결과
+    보존된 정산 기준은 변경하지 않는다. 특강 여부는 원래 배정 값을 그대로 유지한다.
+    """
+    if source_class_id == target_class_id:
+        raise ValueError("같은 수업으로는 이동할 수 없습니다.")
+    conn = get_db_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        student = conn.execute(
+            'SELECT rowid AS row_id, "Id" AS "Id", "Name" FROM "Students" WHERE rowid = ? OR "Id" = ? LIMIT 1',
+            (student_id, student_id)
+        ).fetchone()
+        if not student:
+            raise ValueError("이동할 학생을 찾을 수 없습니다.")
+        # ClassStudents.StudentId에는 rowid와 Id가 섞여 저장될 수 있어 두 값을 모두 확인한다.
+        keys = sorted({int(value) for value in (student["row_id"], student["Id"], student_id) if value is not None})
+        placeholders = ','.join('?' for _ in keys)
+        assignment = conn.execute(
+            'SELECT "Id", "StudentId", "IsSpecial" FROM "ClassStudents" '
+            f'WHERE "ClassId" = ? AND "StudentId" IN ({placeholders}) LIMIT 1',
+            (source_class_id, *keys)
+        ).fetchone()
+        if not assignment:
+            raise ValueError("선택한 수업에 배정된 학생이 아닙니다.")
+        is_special = 1 if assignment["IsSpecial"] else 0
+        already = conn.execute(
+            'SELECT "Id" FROM "ClassStudents" '
+            f'WHERE "ClassId" = ? AND "StudentId" IN ({placeholders}) LIMIT 1',
+            (target_class_id, *keys)
+        ).fetchone()
+        if already:
+            raise ValueError("이미 이동할 수업에 배정된 학생입니다.")
+        conflict = conn.execute(
+            'SELECT c."ClassName" FROM "ClassStudents" cs '
+            'JOIN "Classes" c ON c."Id" = cs."ClassId" '
+            f'WHERE cs."StudentId" IN ({placeholders}) '
+            'AND cs."ClassId" NOT IN (?, ?) AND COALESCE(cs."IsSpecial", 0) = ? LIMIT 1',
+            (*keys, source_class_id, target_class_id, is_special)
+        ).fetchone()
+        if conflict:
+            kind = "특강" if is_special else "정규 수업"
+            raise ValueError(
+                f'{student["Name"] or "학생"} 학생은 이미 {kind}(「{conflict["ClassName"]}」)에 등록되어 있어 이동할 수 없습니다. '
+                '그 수업에서 먼저 빼 주세요.'
+            )
+        conn.execute('DELETE FROM "ClassStudents" WHERE "Id" = ?', (assignment["Id"],))
+        conn.execute(
+            'INSERT INTO "ClassStudents" ("ClassId", "StudentId", "IsSpecial") VALUES (?, ?, ?)',
+            (target_class_id, assignment["StudentId"], is_special)
+        )
+        conn.commit()
+        return {
+            'student_row_id': int(student['row_id']),
+            'student_name': student['Name'] or '',
+            'student_key': int(assignment['StudentId']),
+            'is_special': is_special,
+            'source_class_id': source_class_id,
+            'target_class_id': target_class_id,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 # 표시등 집계와 검색 필터는 같은 공백·입력 건수 기준을 사용한다.
 _STUDENT_RECORD_WHITESPACE = ' \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'
 _STUDENT_RECORD_COUNTS_SQL = '''COUNT(sl.rowid) AS total,

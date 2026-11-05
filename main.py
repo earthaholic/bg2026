@@ -47,6 +47,7 @@ from database import (
     search_classes,
     set_class_students,
     validate_class_student_assignments,
+    move_class_student,
     get_class_students,
     _attach_student_record_coverage,
     student_record_coverage_filter,
@@ -262,6 +263,10 @@ class ClassRequest(BaseModel):
 
 class ClassCategoryRequest(BaseModel):
     CategoryId: int
+
+class ClassStudentMoveRequest(BaseModel):
+    StudentId: int
+    TargetClassId: int
 
 class ClassEndedRequest(BaseModel):
     IsEnded: bool
@@ -2837,6 +2842,44 @@ def user_update_class(
         return {"status": "success", "message": "수업 정보가 성공적으로 수정되었습니다."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"수업 수정 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/user/classes/{class_id}/students/move")
+def user_move_class_student(
+    class_id: int,
+    payload: ClassStudentMoveRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    """학생의 수업 배정을 원 수업에서 다른 수업으로 옮긴다."""
+    source = get_class_by_id(class_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    if payload.TargetClassId == class_id:
+        raise HTTPException(status_code=400, detail="같은 수업으로는 이동할 수 없습니다.")
+    target = get_class_by_id(payload.TargetClassId)
+    if not target:
+        raise HTTPException(status_code=404, detail="이동할 수업을 찾을 수 없습니다.")
+    if target.get("IsEnded"):
+        raise HTTPException(status_code=400, detail="종강 처리된 수업으로는 학생을 이동할 수 없습니다.")
+    try:
+        result = move_class_student(class_id, payload.TargetClassId, payload.StudentId)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    old_data = {"ClassId": class_id, "IsSpecial": result["is_special"], "StudentId": result["student_key"]}
+    new_data = {"ClassId": payload.TargetClassId, "IsSpecial": result["is_special"], "StudentId": result["student_key"]}
+    _audit_update("ClassStudents", result["student_row_id"], old_data, new_data,
+                  current_user["username"], current_user["role"])
+    kind = "특강" if result["is_special"] else "정규 수업"
+    return {
+        "status": "success",
+        "message": (
+            f'「{result["student_name"] or "학생"}」 학생을 '
+            f'「{source.get("ClassName") or "원 수업"}」에서 「{target.get("ClassName") or "이동 수업"}」({kind})으로 옮겼습니다.'
+        ),
+        "source_class_id": class_id,
+        "target_class_id": payload.TargetClassId,
+        "student_row_id": result["student_row_id"],
+        "is_special": result["is_special"],
+    }
 
 @app.put("/api/user/classes/{class_id}/category")
 def user_update_class_category(

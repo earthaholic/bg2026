@@ -1733,6 +1733,7 @@
                                         <option value="StudyLogs">학습 기록</option>
                                         <option value="TeacherPayrollExclusions">정산 제외 내역</option>
                                         <option value="Classes">수업</option>
+                                        <option value="ClassStudents">수업 학생 배정</option>
                                         <option value="MonthlyReports">월말보고</option>
                                         <option value="_app_users">계정</option>
                                     </select>
@@ -1821,13 +1822,34 @@
                         </div>
 
                         <!-- Class Results Summary Bar -->
-                        <div class="results-bar">
-                            <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
-                            <span class="text-muted record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준 · 표시등을 누르면 미입력 기록을 보완할 수 있습니다.</span>
+                        <div class="results-bar class-results-bar">
+                            <div class="class-results-summary">
+                                <span id="class-search-total-count" class="badge badge-info">총 0 건의 수업</span>
+                                <span class="text-muted record-coverage-legend">표시등 왼쪽: 실제 진행 선생님 · 오른쪽: 수업 내용<br>학생 전체 기록 기준 · 표시등을 누르면 미입력 기록을 보완할 수 있습니다.</span>
+                            </div>
+                            <div class="class-view-controls">
+                                <div class="class-view-switch" role="group" aria-label="수업 보기 방식">
+                                    <button type="button" class="class-view-option is-active" data-class-view="list" aria-pressed="true">
+                                        <i class="fa-solid fa-list" aria-hidden="true"></i> 리스트
+                                    </button>
+                                    <button type="button" class="class-view-option" data-class-view="card" aria-pressed="false">
+                                        <i class="fa-solid fa-table-cells-large" aria-hidden="true"></i> 카드
+                                    </button>
+                                    <button type="button" class="class-view-option" data-class-view="timetable" aria-pressed="false">
+                                        <i class="fa-solid fa-calendar-week" aria-hidden="true"></i> 시간표
+                                    </button>
+                                </div>
+                                <label class="class-edit-mode-toggle staff-only hidden">
+                                    <input type="checkbox" id="chk-class-edit-mode">
+                                    <span>수정 모드</span>
+                                </label>
+                            </div>
                         </div>
 
+                        <p id="class-edit-mode-hint" class="class-edit-mode-hint hidden" role="status" aria-live="polite"></p>
+
                         <!-- Class List Table Card -->
-                        <div class="card table-card">
+                        <div id="class-list-view" class="card table-card class-view-panel">
                             <div class="table-responsive">
                                 <table class="modern-table">
                                     <thead>
@@ -1853,6 +1875,17 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        <!-- Class Card View -->
+                        <div id="class-card-view" class="card class-view-panel class-card-panel hidden">
+                            <div id="class-card-grid" class="class-card-grid"></div>
+                        </div>
+
+                        <!-- Class Timetable View -->
+                        <div id="class-timetable-view" class="card class-view-panel class-timetable-panel hidden">
+                            <div id="class-timetable" class="class-timetable"></div>
+                            <div id="class-timetable-unscheduled" class="class-timetable-unscheduled hidden"></div>
                         </div>
 
                         <!-- Class Search Pagination -->
@@ -2793,6 +2826,30 @@
                     <button type="button" id="btn-cancel-class-delete-confirm" class="btn btn-outline">취소</button>
                     <button type="button" id="btn-submit-class-delete-confirm" class="btn btn-danger" disabled>
                         <i class="fa-solid fa-trash-can"></i> 수업 영구 삭제
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-class-student-move" class="modal-backdrop hidden">
+        <div class="modal-card class-move-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-people-arrows"></i> 학생 반 이동</h3>
+                <button id="btn-close-class-student-move" class="btn-close" aria-label="닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <dl id="class-student-move-summary" class="class-move-summary"></dl>
+                <p class="class-move-notice">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    앞으로 이 학생으로 등록하는 학습 기록부터 새 반의 담당 선생님·카테고리를 따릅니다.
+                    이미 등록된 학습 기록의 수업 연결과 정산 기준은 바뀌지 않습니다.
+                </p>
+                <p id="class-student-move-error" class="alert alert-danger hidden" role="alert"></p>
+                <div class="modal-actions">
+                    <button type="button" id="btn-cancel-class-student-move" class="btn btn-outline">취소</button>
+                    <button type="button" id="btn-confirm-class-student-move" class="btn btn-primary">
+                        <i class="fa-solid fa-people-arrows"></i> 이동
                     </button>
                 </div>
             </div>
