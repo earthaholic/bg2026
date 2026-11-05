@@ -46,6 +46,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentSearchTotalPages = 1;
     let studentSearchRequestVersion = 0;
 
+    // 조회 목록 서버 정렬 상태 (빈 값이면 서버 기본 순서를 쓴다)
+    let studentSortBy = '';
+    let studentSortDirection = 'desc';
+    let classSortBy = '';
+    let classSortDirection = 'desc';
+    let activitySortBy = '';
+    let activitySortDirection = 'desc';
+    let auditSortBy = '';
+    let auditSortDirection = 'desc';
+    let studioSortBy = '';
+    let studioSortDirection = 'desc';
+
     // 도서 검색의 "미학습 학생" 필터: key는 Students.rowid
     const bookUnstudiedStudents = new Map();
     let bookStudentSearchTimer = null;
@@ -3942,6 +3954,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (studentFilterIncludeEnded.checked) params.set('include_ended', 'true');
         if (studentFilterTeacherRecord.value) params.set('teacher_record_state', studentFilterTeacherRecord.value);
         if (studentFilterContentRecord.value) params.set('content_record_state', studentFilterContentRecord.value);
+        if (studentSortBy) {
+            params.set('sort_by', studentSortBy);
+            params.set('sort_direction', studentSortDirection);
+        }
         return params;
     }
 
@@ -5416,7 +5432,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             tableBody.innerHTML = '<tr><td colspan="100" class="empty-state"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><p>데이터 로딩 중...</p></td></tr>';
 
-            const url = `/api/tables/${currentTable}/data?page=${currentPage}&limit=${limit}&q=${encodeURIComponent(searchQuery)}`;
+            let url = `/api/tables/${currentTable}/data?page=${currentPage}&limit=${limit}&q=${encodeURIComponent(searchQuery)}`;
+            if (studioSortBy) url += `&sort_by=${encodeURIComponent(studioSortBy)}&sort_direction=${studioSortDirection}`;
             const data = await apiFetch(url);
 
             totalPages = data.total_pages;
@@ -6313,6 +6330,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const q = classSearchQ ? classSearchQ.value.trim() : '';
             const params = new URLSearchParams({ page: classSearchPage, limit: classSearchLimit });
             if (q) params.append('q', q);
+            if (classSortBy) {
+                params.set('sort_by', classSortBy);
+                params.set('sort_direction', classSortDirection);
+            }
             const data = await apiFetch(`/api/user/classes?${params.toString()}`, {signal: lookup?.signal, headers: {'X-Activity-Intent': directSearch ? 'search' : 'load'}});
             if (lookup && !lookup.current()) return;
             lookup?.success();
@@ -8361,6 +8382,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (auditFilterTable.value) params.set('table_name', auditFilterTable.value);
         const actions = [...document.querySelectorAll('.audit-filter-action:checked')].map(cb => cb.value);
         if (actions.length) params.set('action', actions.join(','));
+        if (auditSortBy) {
+            params.set('sort_by', auditSortBy);
+            params.set('sort_direction', auditSortDirection);
+        }
 
         const urlParams = new URLSearchParams(params.toString());
         urlParams.set('view', 'audit-log');
@@ -9934,6 +9959,32 @@ document.addEventListener('DOMContentLoaded', () => {
     /* 모든 목록 테이블 공통 정렬 */
     const NON_SORTABLE_HEADER_PATTERN = /^(관리|작업|처리|상세|저장|선택|이전)$/;
 
+    // 서버에서 전체 결과를 정렬하는 목록: tbody id → {열 인덱스: API 정렬 키}
+    const SERVER_SORT_COLUMNS = {
+        'book-cards-grid': {
+            1: 'row_id', 2: 'Title', 3: 'Author', 4: 'Publisher', 5: 'Target', 6: 'BookLength',
+            7: 'StudyStudentCount', 8: 'HasReadingQuestion', 9: 'IsPdfExist'
+        },
+        'studylog-cards-grid': {
+            1: 'row_id', 2: 'StudiedDay', 3: 'StudentName', 4: 'TeacherName', 5: 'BookTitle',
+            6: 'IsSpecial', 7: 'LessonContent', 8: 'Description'
+        },
+        'student-cards-grid': { 0: 'row_id', 1: 'Name', 2: 'Sex', 3: 'Grade', 4: 'Referrer', 5: 'Description', 6: 'IsClassEnded' },
+        'class-cards-grid': { 0: 'Id', 1: 'ClassName', 2: 'DayOfWeek', 3: 'StartTime', 4: 'TeacherUsername', 5: 'StudentCount' },
+        'activity-body': { 0: 'created_at', 1: 'username', 2: 'event', 3: 'area', 5: 'status_code' },
+        'audit-log-body': { 0: 'created_at', 1: 'username', 2: 'table_name', 3: 'record_id', 4: 'action' },
+        'tc-body': { 0: 'student', 1: 'remaining', 2: 'status', 3: 'reminder_count', 4: 'last_sent_at', 5: 'next_followup' }
+    };
+
+    function serverSortTarget(table, columnIndex) {
+        for (const [gridId, columns] of Object.entries(SERVER_SORT_COLUMNS)) {
+            if (!table.querySelector('#' + gridId)) continue;
+            const key = columns[columnIndex];
+            return key ? { gridId, key } : null;
+        }
+        return null;
+    }
+
     function isSortableTableHeader(header) {
         if (!header || header.dataset.sortable === 'false' || header.colSpan > 1) return false;
         const label = header.textContent.replace(/\s+/g, ' ').trim();
@@ -9941,10 +9992,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = header.closest('table');
         const columnIndex = Array.from(header.parentElement.children).indexOf(header);
         if (!table || columnIndex < 0 || header.querySelector('input, button, select, a')) return false;
-        if (table.querySelector('#studylog-cards-grid')) return columnIndex > 0 && columnIndex < 9;
+        // 서버 정렬을 지원하는 열은 셀 안의 버튼(학생 상세·빠른 수정 등)과 관계없이 정렬할 수 있다.
+        if (serverSortTarget(table, columnIndex)) return true;
+        // 데이터 그리드 Studio: 동적 열 이름을 API 정렬 키로 쓴다.
+        if (studioColumnForHeader(table, columnIndex)) return true;
+        // 빠른 수정 배지 버튼은 셀 값 자체를 보여 주므로 정렬 가능한 열로 본다.
         return !Array.from(table.tBodies).some(body =>
-            Array.from(body.rows).some(row => row.cells[columnIndex]?.querySelector('input, button, select, a'))
+            Array.from(body.rows).some(row => {
+                const control = row.cells[columnIndex]?.querySelector('input, button, select, a');
+                return Boolean(control) && !control.classList.contains('list-quick-choice');
+            })
         );
+    }
+
+    // 데이터 그리드 Studio의 동적 열: 헤더 열 순서와 스키마 열 이름을 같은 순서로 본다.
+    function studioColumnForHeader(table, columnIndex) {
+        if (typeof tableHeadTr === 'undefined' || !tableHeadTr || !table.contains?.(tableHeadTr)) return null;
+        const schema = typeof tableSchema !== 'undefined' ? tableSchema : [];
+        const offset = (typeof isAdmin === 'function' && isAdmin()) ? 1 : 0;
+        return schema[columnIndex - offset]?.name || null;
     }
 
     function enhanceSortableTable(table) {
@@ -9998,32 +10064,57 @@ document.addEventListener('DOMContentLoaded', () => {
         table.dataset.sortColumn = String(columnIndex);
         table.dataset.sortDirection = direction;
 
-        // 도서 목록은 전체 검색 결과 기준으로 정렬해야 하므로 서버에 정렬 기준을 넘긴다.
-        const bookSortColumns = { 1: 'row_id', 2: 'Title', 7: 'StudyStudentCount' };
-        if (table.querySelector('#book-cards-grid') && bookSortColumns[columnIndex]) {
+        // 도서·학습 기록·학생·수업·활동·변경 이력·납입 관리는 전체 검색 결과 기준으로 정렬한다.
+        const serverSort = serverSortTarget(table, columnIndex);
+        if (serverSort) {
             Array.from(table.tBodies).forEach(body => { if (body.rows.length) listOrderResets.set(body, body.rows[0]); });
             table.dataset.sortMode = 'server';
-            bookSortBy = bookSortColumns[columnIndex];
-            bookSortDirection = direction;
-            searchPage = 1;
-            loadBookSearchResults();
+            applyServerSort(serverSort.gridId, serverSort.key, direction);
             return;
         }
 
-        if (table.querySelector('#studylog-cards-grid')) {
+        // 데이터 그리드 Studio도 현재 페이지가 아니라 전체 행을 정렬한다.
+        const studioColumn = studioColumnForHeader(table, columnIndex);
+        if (studioColumn) {
             Array.from(table.tBodies).forEach(body => { if (body.rows.length) listOrderResets.set(body, body.rows[0]); });
             table.dataset.sortMode = 'server';
-            const studylogSortColumns = [null, 'row_id', 'StudiedDay', 'StudentName', 'TeacherName', 'BookTitle', 'IsSpecial', 'LessonContent', 'Description'];
-            if (!studylogSortColumns[columnIndex]) return;
-            studylogSortBy = studylogSortColumns[columnIndex];
-            studylogSortDirection = direction;
-            studylogSearchPage = 1;
-            loadStudyLogSearchResults();
+            studioSortBy = studioColumn;
+            studioSortDirection = direction;
+            currentPage = 1;
+            loadTableData();
             return;
         }
 
         applyTableSort(table, columnIndex, direction);
         preserveTableOrder(table);
+    }
+
+    function applyServerSort(gridId, sortKey, direction) {
+        switch (gridId) {
+            case 'book-cards-grid':
+                bookSortBy = sortKey; bookSortDirection = direction; searchPage = 1; loadBookSearchResults();
+                return;
+            case 'studylog-cards-grid':
+                studylogSortBy = sortKey; studylogSortDirection = direction; studylogSearchPage = 1; loadStudyLogSearchResults();
+                return;
+            case 'student-cards-grid':
+                studentSortBy = sortKey; studentSortDirection = direction; studentSearchPage = 1; loadStudentSearchResults();
+                return;
+            case 'class-cards-grid':
+                classSortBy = sortKey; classSortDirection = direction; classSearchPage = 1; loadClassSearchResults();
+                return;
+            case 'activity-body':
+                activitySortBy = sortKey; activitySortDirection = direction; loadActivityLogs(1);
+                return;
+            case 'audit-log-body':
+                auditSortBy = sortKey; auditSortDirection = direction; auditLogPage = 1; loadAuditLogs();
+                return;
+            case 'tc-body':
+                tuitionCollection.setSort(sortKey, direction);
+                return;
+            default:
+                return;
+        }
     }
 
     function applyTableSort(table, columnIndex, direction) {
@@ -10201,6 +10292,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams({page, limit: 30});
         for (const [id, key] of [['username','username'], ['date-from','date_from'], ['date-to','date_to'], ['event','event'], ['area','area'], ['result','result']]) {
             if (activityEl(id).value) params.set(key, activityEl(id).value);
+        }
+        if (activitySortBy) {
+            params.set('sort_by', activitySortBy);
+            params.set('sort_direction', activitySortDirection);
         }
         // 조회 중에도 기존 요약과 페이지 이동 상태를 유지한다.
         // 페이지 이동은 새 조회가 성공한 뒤 갱신한다.

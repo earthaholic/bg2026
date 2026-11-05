@@ -216,6 +216,24 @@
           "default": "",
           "title": "Result"
         },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(created_at|username|event|area|status_code|duration_ms)$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
         "page": {
           "type": "integer",
           "minimum": 1,
@@ -243,6 +261,8 @@
       "event": "query",
       "area": "query",
       "result": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
       "page": "query",
       "limit": "query"
     },
@@ -380,6 +400,22 @@
           "default": false,
           "title": "Followup Due"
         },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
         "page": {
           "type": "integer",
           "minimum": 1,
@@ -406,6 +442,8 @@
       "reminder_count": "query",
       "include_ended": "query",
       "followup_due": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
       "page": "query",
       "limit": "query"
     },
@@ -699,7 +737,7 @@
         },
         "sort_by": {
           "type": "string",
-          "pattern": "^(row_id|StudyStudentCount|Title)$",
+          "pattern": "^(row_id|StudyStudentCount|Title|Author|Publisher|Target|BookLength|HasReadingQuestion|IsPdfExist)$",
           "default": "row_id",
           "title": "Sort By"
         },
@@ -922,6 +960,24 @@
           "default": false,
           "title": "Include Ended"
         },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(row_id|Name|Sex|Grade|Referrer|Description|IsClassEnded)$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
         "page": {
           "type": "integer",
           "minimum": 1,
@@ -944,6 +1000,8 @@
       "teacher_record_state": "query",
       "content_record_state": "query",
       "include_ended": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
       "page": "query",
       "limit": "query"
     },
@@ -1633,6 +1691,24 @@
           ],
           "title": "Q"
         },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|StudentCount)$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
         "page": {
           "type": "integer",
           "minimum": 1,
@@ -1651,6 +1727,8 @@
     },
     "locations": {
       "q": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
       "page": "query",
       "limit": "query"
     },
@@ -2241,6 +2319,24 @@
             }
           ],
           "title": "Q"
+        },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
         }
       },
       "additionalProperties": false,
@@ -2252,7 +2348,9 @@
       "table_name": "path",
       "page": "query",
       "limit": "query",
-      "q": "query"
+      "q": "query",
+      "sort_by": "query",
+      "sort_direction": "query"
     },
     "encoding": "none"
   },
@@ -2404,6 +2502,24 @@
           ],
           "title": "Record Id"
         },
+        "sort_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(created_at|username|table_name|record_id|action)$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "type": "string",
+          "pattern": "^(asc|desc)$",
+          "default": "desc",
+          "title": "Sort Direction"
+        },
         "page": {
           "type": "integer",
           "minimum": 1,
@@ -2427,6 +2543,8 @@
       "table_name": "query",
       "action": "query",
       "record_id": "query",
+      "sort_by": "query",
+      "sort_direction": "query",
       "page": "query",
       "limit": "query"
     },

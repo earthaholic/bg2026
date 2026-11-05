@@ -302,6 +302,20 @@ class TuitionCollectionTests(unittest.TestCase):
         self.assertEqual([r['student_id'] for r in rows], [2, 1])
         self.assertEqual(self.listing(q='가학생')['summary']['urgent'], 1)
 
+    def test_column_sort_covers_every_page(self):
+        remaining = {1: 3, 2: -3, 3: 0}
+        tc.configure(lambda sid, *a, **kw: {'has_payment': True, 'remaining_lessons': remaining[sid], 'payments': []}, lambda *a: None)
+        # 잔여 차시는 숫자로 비교해 전체 목록을 정렬하고, 그다음에 페이지를 나눈다.
+        first = self.listing(sort_by='remaining', sort_direction='asc', limit=2, include_ended=True)
+        self.assertEqual([r['student_id'] for r in first['students']], [2, 3])
+        second = self.listing(sort_by='remaining', sort_direction='asc', limit=2, page=2, include_ended=True)
+        self.assertEqual([r['student_id'] for r in second['students']], [1])
+        # 학생 이름 정렬도 전체 목록 기준이다.
+        by_name = self.listing(sort_by='student', sort_direction='asc', include_ended=True)
+        self.assertEqual([r['name'] for r in by_name['students']], ['가학생', '나학생', '종료학생'])
+        with self.assertRaises(tc.HTTPException):
+            self.listing(sort_by='remaining DESC')
+
     def test_urgent_summary_and_filter_exclude_confirmed(self):
         tc.configure(lambda *a, **kw: {'has_payment': True, 'remaining_lessons': -1, 'payments': []}, lambda *a: None)
         self.event(kind='confirmed', paid_date='2026-01-01', amount=10000)

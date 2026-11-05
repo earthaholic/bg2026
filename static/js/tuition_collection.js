@@ -18,8 +18,12 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
     const esc = value => escapeHtml(value == null ? '' : String(value));
     const base = '/api/user/tuition-collection';
     const statuses = { pending: '안내 전', waiting: '결제 대기', confirmed: '결제 확인·등록 대기', completed: '등록 완료' };
+    // 열 정렬 중에는 결과바에 기본 순서 안내 대신 정렬된 열을 알려 준다.
+    const sortLabels = { student: '학생 이름', remaining: '잔여 차시', status: '진행 상태', reminder_count: '독촉 횟수', last_sent_at: '결제창 발송일', next_followup: '다음 확인일' };
     const kinds = { notice: '최초 안내', link_sent: '결제창 발송', reminder: '독촉', confirmed: '결제 확인', note: '메모' };
     let page = 1, listVersion = 0, detailVersion = 0, selectedId = null, currentCase = null, saving = false, dirty = false, optionsLoaded = false;
+    // 열을 누르면 현재 페이지가 아니라 전체 목록을 그 열 기준으로 정렬한다.
+    let sortBy = '', sortDirection = 'desc';
     const deleteTargets = new Map();
     const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
     const date = value => value ? esc(String(value).replace('T', ' ').slice(0, 16)) : '없음';
@@ -47,6 +51,7 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
         const query = new URLSearchParams();
         for (const [key, value] of new FormData(el('filters'))) if (value) query.set(key, value === 'on' ? 'true' : value);
         query.set('page', page); query.set('limit', 30);
+        if (sortBy) { query.set('sort_by', sortBy); query.set('sort_direction', sortDirection); }
         message('불러오는 중…');
         try {
             const data = await apiFetch(`${base}?${query}`, {signal: lookup?.signal});
@@ -55,6 +60,11 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
             if (version !== listVersion) return;
             const rows = data.students || [];
             el('count').textContent = `학생 ${data.total || 0}명`;
+            if (el('order')) {
+                el('order').textContent = sortBy
+                    ? `${sortLabels[sortBy] || sortBy} ${sortDirection === 'asc' ? '오름차순' : '내림차순'} · 결제 정보 없음은 미납 확정이 아닙니다.`
+                    : '차시 긴급도순 · 결제 정보 없음은 미납 확정이 아닙니다.';
+            }
             el('body').innerHTML = rows.length ? rows.map(row => {
                 const c = row.case || {}, p = row.progress || {};
                 const remaining = p.remaining_lessons;
@@ -137,5 +147,5 @@ function initTuitionCollection({ apiFetch, escapeHtml }) {
     el('summary').addEventListener('click', event => { const key = event.target.closest('[data-summary]')?.dataset.summary; if (!key) return; el('urgency').value = ''; el('status').value = ''; el('due').checked = false; if (key === 'urgent') el('urgency').value = 'urgent'; else if (key === 'confirmed') el('status').value = 'confirmed'; else if (key === 'followup_due') el('due').checked = true; else el('urgency').value = key; page = 1; load(); });
     el('prev').addEventListener('click', () => { page--; load(); }); el('next').addEventListener('click', () => { page++; load(); });
     window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
-    return { load, reset() { listVersion++; detailVersion++; dirty = false; selectedId = null; currentCase = null; optionsLoaded = false; el('dialog').close(); el('detail').replaceChildren(); el('body').replaceChildren(); }, canLeave() { if (saving || (dirty && !confirm('저장하지 않은 납입 관리 입력을 버리고 이동할까요?'))) return false; dirty = false; detailVersion++; return true; } };
+    return { load, setSort(key, direction) { sortBy = key; sortDirection = direction; page = 1; load(); }, reset() { listVersion++; detailVersion++; dirty = false; selectedId = null; currentCase = null; optionsLoaded = false; el('dialog').close(); el('detail').replaceChildren(); el('body').replaceChildren(); }, canLeave() { if (saving || (dirty && !confirm('저장하지 않은 납입 관리 입력을 버리고 이동할까요?'))) return false; dirty = false; detailVersion++; return true; } };
 }

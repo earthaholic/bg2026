@@ -1980,7 +1980,7 @@
                       <div class="tc-filter-footer"><label><input type="checkbox" name="unsent" id="tc-unsent"> 결제창 미발송</label><label><input type="checkbox" name="followup_due" id="tc-due"> 오늘 재확인</label><label><input type="checkbox" name="include_ended" id="tc-ended"> 수업 종료 학생 포함</label></div>
                     </form>
                     <div id="tc-message" role="status" aria-live="polite"></div><div id="tc-ended-notice"></div>
-                    <div class="results-bar"><span id="tc-count">불러오는 중</span><span>차시 긴급도순 · 결제 정보 없음은 미납 확정이 아닙니다.</span></div>
+                    <div class="results-bar"><span id="tc-count">불러오는 중</span><span id="tc-order">차시 긴급도순 · 결제 정보 없음은 미납 확정이 아닙니다.</span></div>
                     <div class="card table-card"><div class="table-responsive"><table class="modern-table"><thead><tr><th>학생·수업</th><th>잔여 차시</th><th>진행 상태</th><th>독촉</th><th>결제창 발송</th><th>다음 확인</th><th>처리</th></tr></thead><tbody id="tc-body"></tbody></table></div></div>
                     <div class="search-pagination-bar"><button id="tc-prev" class="btn btn-secondary" type="button">이전</button><span id="tc-page"></span><button id="tc-next" class="btn btn-secondary" type="button">다음</button></div>
                   </div>
@@ -2798,9 +2798,9 @@
     </dialog>
     <script src="/static/js/feedback.js?v=20261102-save-feedback"></script>
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
-    <script src="/static/js/tuition_collection.js?v=20261026-filter-stability"></script>
+    <script src="/static/js/tuition_collection.js?v=20261105-server-sort2"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261105-book-title-sort"></script>
+    <script src="/static/js/app.js?v=20261105-server-sort2"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
     <script src="/static/js/mobile.js?v=20261102-mobile11"></script>
 </body>

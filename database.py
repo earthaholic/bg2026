@@ -698,7 +698,9 @@ def fetch_table_data(
     table_name: str,
     page: int = 1,
     limit: int = 30,
-    search_query: Optional[str] = None
+    search_query: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: str = 'desc'
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Fetch paginated rows from table with optional global search across text columns."""
     conn = get_db_connection()
@@ -721,9 +723,13 @@ def fetch_table_data(
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
 
-    # Get paginated data
+    # Get paginated data — 정렬은 현재 페이지가 아니라 조건에 맞는 전체 행에 적용한다.
     offset = (page - 1) * limit
-    data_query = f'SELECT * FROM "{table_name}"{where_clause} LIMIT {limit} OFFSET {offset}'
+    order_clause = ''
+    if sort_by in col_names:
+        direction = 'asc' if str(sort_direction).lower() == 'asc' else 'desc'
+        order_clause = f' ORDER BY "{sort_by}" COLLATE NOCASE {direction}, rowid {direction}'
+    data_query = f'SELECT * FROM "{table_name}"{where_clause}{order_clause} LIMIT {limit} OFFSET {offset}'
     cursor.execute(data_query, params)
     rows = cursor.fetchall()
     
@@ -984,11 +990,25 @@ def get_class_by_id(class_id: int) -> Optional[Dict[str, Any]]:
         return dict(row)
     return None
 
+# 수업 목록 정렬 기준: 담당 선생님은 표시 이름 순으로 정렬한다.
+CLASS_SORT_COLUMNS = {
+    'Id': 'c."Id"',
+    'ClassName': 'COALESCE(c."ClassName", \'\') COLLATE NOCASE',
+    'DayOfWeek': "CASE c.\"DayOfWeek\" WHEN '월' THEN 1 WHEN '화' THEN 2 WHEN '수' THEN 3 WHEN '목' THEN 4 "
+                 "WHEN '금' THEN 5 WHEN '토' THEN 6 WHEN '일' THEN 7 ELSE 99 END",
+    'StartTime': 'COALESCE(c."StartTime", \'\') COLLATE NOCASE',
+    'TeacherUsername': 'COALESCE((SELECT u.name FROM _app_users u WHERE u.username = c."TeacherUsername"), \'\') COLLATE NOCASE',
+    'StudentCount': 'StudentCount',
+}
+
+
 def search_classes(
     q: Optional[str] = None,
     page: int = 1,
     limit: int = 30,
-    teacher_username: Optional[str] = None
+    teacher_username: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: str = 'desc'
 ) -> Tuple[List[Dict[str, Any]], int]:
     """수업 목록을 검색한다. teacher_username이 주어지면 해당 선생님 수업만 필터링."""
     conn = get_db_connection()
@@ -1021,6 +1041,11 @@ def search_classes(
     total_count = cursor.fetchone()['total']
 
     offset = (page - 1) * limit
+    # 정렬은 페이지 단위가 아니라 검색 조건에 맞는 전체 수업에 적용한다.
+    order_sql = 'c."Id" DESC'
+    if sort_by in CLASS_SORT_COLUMNS:
+        direction = 'asc' if str(sort_direction).lower() == 'asc' else 'desc'
+        order_sql = f'{CLASS_SORT_COLUMNS[sort_by]} {direction}, c."Id" DESC'
     data_query = f'''
         SELECT c."Id", c."ClassName", c."TeacherUsername", c."DayOfWeek", c."StartTime", c."CategoryId",
                cc."Name" AS "CategoryName", c."CreatedAt",
@@ -1028,7 +1053,7 @@ def search_classes(
         FROM "Classes" c
         LEFT JOIN "ClassCategories" cc ON cc."Id" = c."CategoryId"
         {where_str}
-        ORDER BY c."Id" DESC LIMIT {limit} OFFSET {offset}
+        ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}
     '''
     cursor.execute(data_query, params)
     rows = [dict(r) for r in cursor.fetchall()]
@@ -1288,6 +1313,16 @@ def get_record_snapshot(table_name: str, record_id: Any) -> Optional[Dict[str, A
         conn.close()
 
 
+# 변경 이력 정렬 기준: 노출하는 값만 SQL 열로 변환한다.
+AUDIT_SORT_COLUMNS = {
+    'created_at': 'created_at',
+    'username': "COALESCE(username, '') COLLATE NOCASE",
+    'table_name': "COALESCE(table_name, '') COLLATE NOCASE",
+    'record_id': 'record_id',
+    'action': 'action',
+}
+
+
 def get_audit_logs(
     table_name: Optional[str] = None,
     record_id: Optional[str] = None,
@@ -1296,7 +1331,9 @@ def get_audit_logs(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     page: int = 1,
-    limit: int = 30
+    limit: int = 30,
+    sort_by: Optional[str] = None,
+    sort_direction: str = 'desc'
 ) -> Tuple[List[Dict[str, Any]], int]:
     """감사 로그를 조회한다.
     
@@ -1360,11 +1397,15 @@ def get_audit_logs(
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
     
-    # 페이지네이션 조회
+    # 페이지네이션 조회 — 정렬은 현재 페이지가 아니라 조건에 맞는 전체 이력에 적용한다.
     offset = (page - 1) * limit
+    order_sql = 'id DESC'
+    if sort_by in AUDIT_SORT_COLUMNS:
+        direction = 'asc' if str(sort_direction).lower() == 'asc' else 'desc'
+        order_sql = f'{AUDIT_SORT_COLUMNS[sort_by]} {direction}, id DESC'
     data_query = f"""
         SELECT * FROM _app_audit_logs{where_clause}
-        ORDER BY id DESC
+        ORDER BY {order_sql}
         LIMIT {limit} OFFSET {offset}
     """
     cursor.execute(data_query, params)

@@ -2,6 +2,7 @@
 import json
 import logging
 import time
+from typing import Optional
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -43,7 +44,30 @@ FILTER_KEYS = {"q", "page", "limit", "sex", "grade", "date_from", "date_to", "mo
                "subject", "study_class", "include_ended", "is_special", "action", "table_name",
                "studied_day", "target", "voca_min", "voca_max", "length_min", "length_max",
                "has_quiz", "has_reading", "has_writing", "has_pdf", "pdf_status", "has_advanced", "has_debate",
-               "has_paperbook", "has_yes24", "has_millie", "unstudied_student_ids"}
+               "has_paperbook", "has_yes24", "has_millie", "unstudied_student_ids",
+               "sort_by", "sort_direction"}
+
+
+def _label_order_expression(column, labels):
+    """화면에 보이는 한글 라벨 순서로 정렬하는 CASE 식을 만든다(키는 고정 상수)."""
+    branches = ' '.join(
+        "WHEN '{}' THEN '{}'".format(key.replace("'", "''"), value.replace("'", "''"))
+        for key, value in labels.items()
+    )
+    return f"CASE {column} {branches} ELSE COALESCE({column}, '') END COLLATE NOCASE"
+
+
+# 활동 이력 정렬 기준: 화면에 보이는 순서와 같도록 계정은 표시 이름, 활동·영역은 한글 라벨로 정렬한다.
+ACTIVITY_SORT_COLUMNS = {
+    'created_at': 'created_at',
+    'username': "COALESCE((SELECT u.name FROM _app_users u WHERE u.username = _app_activity_logs.username), "
+                "_app_activity_logs.username) COLLATE NOCASE",
+    'event': _label_order_expression('event', EVENTS),
+    'area': _label_order_expression('area', AREAS),
+    'status_code': 'status_code',
+    'duration_ms': 'duration_ms',
+}
+ACTIVITY_SORT_PATTERN = '^(' + '|'.join(ACTIVITY_SORT_COLUMNS) + ')$'
 
 
 def init_activity_tables():
@@ -202,6 +226,8 @@ def activity_options(user=Depends(get_current_admin)):
 def list_activity_logs(
     username: str = Query('', max_length=200), date_from: date = Query(...), date_to: date = Query(...),
     event: str = '', area: str = '', result: str = '',
+    sort_by: Optional[str] = Query(None, regex=ACTIVITY_SORT_PATTERN),
+    sort_direction: str = Query('desc', regex='^(asc|desc)$'),
     page: int = Query(1, ge=1), limit: int = Query(30, ge=1, le=100), user=Depends(get_current_admin),
 ):
     if date_from > date_to or (date_to - date_from).days > 179:
@@ -227,8 +253,16 @@ def list_activity_logs(
             "COALESCE(SUM(status_code>=400),0) AS failures FROM _app_activity_logs" + where, params).fetchone())
         total_pages = max(1, (summary['total'] + limit - 1) // limit)
         page = min(page, total_pages)
+        # 정렬은 현재 페이지가 아니라 조건에 맞는 전체 활동 이력에 적용한다.
+        order_sql = 'created_at DESC, id DESC'
+        if isinstance(sort_by, str) and sort_by in ACTIVITY_SORT_COLUMNS:
+            if sort_by == 'status_code':
+                # 화면의 성공·실패 묶음을 먼저 나누고, 같은 묶음 안에서 상태 코드를 비교한다.
+                order_sql = f'CASE WHEN status_code < 400 THEN 0 ELSE 1 END {sort_direction}, status_code {sort_direction}, id DESC'
+            else:
+                order_sql = f'{ACTIVITY_SORT_COLUMNS[sort_by]} {sort_direction}, id DESC'
         rows = [dict(row) for row in conn.execute('SELECT * FROM _app_activity_logs' + where +
-            ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?', params + [limit, (page - 1) * limit])]
+            ' ORDER BY ' + order_sql + ' LIMIT ? OFFSET ?', params + [limit, (page - 1) * limit])]
         for row in rows:
             row['metadata'] = json.loads(row['metadata'])
         return {'items': rows, 'summary': summary, 'page': page, 'total_pages': total_pages}

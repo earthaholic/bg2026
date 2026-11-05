@@ -164,10 +164,50 @@ def _functions():
     return _get_tuition_progress, _validate_tuition_values
 
 
+# 납입 관리 정렬 기준: 화면 열 이름과 같은 의미의 값을 사용한다.
+COLLECTION_SORT_STATUS_ORDER = {'pending': 0, 'waiting': 1, 'confirmed': 2, 'completed': 3}
+COLLECTION_SORT_KEYS = ('student', 'remaining', 'status', 'reminder_count', 'last_sent_at', 'next_followup')
+
+
+def _collection_sort_key(row, key):
+    """(값 없음 여부, 비교값)을 돌려준다. 값이 없는 행은 방향과 관계없이 뒤로 보낸다."""
+    case = row.get('case') or {}
+    if key == 'student':
+        return (False, (row.get('name') or ''))
+    if key == 'remaining':
+        remaining = row['progress'].get('remaining_lessons')
+        return (remaining is None, remaining if remaining is not None else 0)
+    if key == 'status':
+        status = case.get('status') or 'pending'
+        return (False, COLLECTION_SORT_STATUS_ORDER.get(status, len(COLLECTION_SORT_STATUS_ORDER)))
+    if key == 'reminder_count':
+        return (False, int(case.get('reminder_count') or 0))
+    if key == 'last_sent_at':
+        value = case.get('last_sent_at') or ''
+        return (not value, value)
+    value = case.get('next_followup') or ''
+    return (not value, value)
+
+
+def _sort_collection_rows(rows, sort_by, sort_direction):
+    reverse = sort_direction == 'desc'
+    present = [row for row in rows if not _collection_sort_key(row, sort_by)[0]]
+    missing = [row for row in rows if _collection_sort_key(row, sort_by)[0]]
+    present.sort(key=lambda row: _collection_sort_key(row, sort_by)[1], reverse=reverse)
+    return present + missing
+
+
 @router.get('')
-def list_collection(q: str = '', class_id: Optional[int] = None, teacher: str = '', status: str = '', urgency: str = '', unsent: bool = False, reminder_count: int = Query(0, ge=0), include_ended: bool = False, followup_due: bool = False, page: int = Query(1, ge=1), limit: int = Query(30, ge=1, le=100), current_user=Depends(get_current_staff)):
+def list_collection(q: str = '', class_id: Optional[int] = None, teacher: str = '', status: str = '', urgency: str = '', unsent: bool = False, reminder_count: int = Query(0, ge=0), include_ended: bool = False, followup_due: bool = False, sort_by: Optional[str] = Query(None), sort_direction: str = Query('desc'), page: int = Query(1, ge=1), limit: int = Query(30, ge=1, le=100), current_user=Depends(get_current_staff)):
     if status not in ('', 'pending', 'waiting', 'confirmed', 'completed') or urgency not in ('', 'urgent', 'overdue', 'exhausted', 'low', 'normal', 'unknown'):
         raise HTTPException(400, '올바른 진행 상태와 차시 상태를 선택해 주세요.')
+    # 직접 호출과 HTTP 요청 모두에서 같은 기본값을 쓰도록 정규화한다.
+    sort_by = sort_by if isinstance(sort_by, str) else ''
+    sort_direction = 'asc' if sort_direction == 'asc' else 'desc'
+    if sort_by and sort_by not in COLLECTION_SORT_KEYS:
+        raise HTTPException(400, '올바른 정렬 기준을 선택해 주세요.')
+    if sort_direction not in ('asc', 'desc'):
+        raise HTTPException(400, '올바른 정렬 방향을 선택해 주세요.')
     conn = get_db_connection()
     try:
         today = date.today().isoformat()
@@ -226,6 +266,9 @@ def list_collection(q: str = '', class_id: Optional[int] = None, teacher: str = 
             rows.append(dict(student_id=s['row_id'], name=s.get('Name', ''), is_ended=ended, classes=classes, progress=p, urgency=u, upcoming_payment=dict(upcoming) if upcoming else None, case={k:v for k,v in c.items() if k != 'events'} if c else None, blocked_reason=blocked, followup_due=due))
         order = {'overdue': 0, 'exhausted': 1, 'low': 2, 'unknown': 3, 'normal': 4}
         rows.sort(key=lambda r: (int(bool(r['case'] and r['case']['status'] in ('confirmed', 'completed'))), order[r['urgency']], r['progress'].get('remaining_lessons') or 0, not r['followup_due'], (r['case'] or {}).get('last_contact_at') or '', r['name']))
+        # 열 정렬을 선택하면 긴급도 기본 순서 대신 그 열 기준으로 전체 목록을 정렬한 뒤 페이지를 나눈다.
+        if sort_by:
+            rows = _sort_collection_rows(rows, sort_by, sort_direction)
         return dict(students=rows[(page-1)*limit:page*limit], total=len(rows), page=page, summary=summary)
     finally:
         conn.close()

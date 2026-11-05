@@ -90,6 +90,15 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 도서 검색의 `pdf_status=0|1|2`는 정확한 상태를 조회하고, 기존 `has_pdf=1`은 상태 1과 2 모두를 조회한다.
 - 자료 요청의 `PdfStatus=1|2`는 `BookData.IsPdfExist`에 보관하여 승인 시 반영한다. 과거 요청에 값이 없으면 1로 처리한다.
 
+## 조회 목록의 전체 정렬
+- 서버 페이지네이션을 쓰는 조회 화면은 머리글을 누르면 현재 페이지 행만 재배열하지 않고, 검색 조건에 맞는 전체 결과를 정렬해 1페이지부터 다시 조회한다. 첫 클릭은 오름차순, 같은 열을 다시 누르면 방향이 바뀐다.
+- `static/js/app.js`의 `SERVER_SORT_COLUMNS`(tbody id → 열 인덱스 → API 정렬 키)와 `applyServerSort()`가 표를 서버 정렬로 연결한다. 새 조회 표를 추가할 때는 이 두 곳과 서버 화이트리스트를 함께 등록한다.
+- 적용 대상: 도서 검색(모든 정보 열), 학습 기록 검색, 학생 검색, 수업 목록, 활동 이력, 변경 이력, 수업료 납입 관리, 데이터 그리드 Studio(스키마 열 이름을 그대로 전달하고 서버가 스키마로 재검증). 페이지네이션이 없는 표는 지금처럼 화면에서 전체 행을 정렬한다.
+- 서버는 `sort_by`/`sort_direction`을 받고, 엔드포인트별 화이트리스트(dict 또는 정규식)로만 열 이름을 SQL 식으로 변환한다. `sort_by`가 없으면 기존 기본 순서를 유지하며, 알 수 없는 값은 422(정규식) 또는 400(납입 관리·Studio)으로 거부한다.
+- 빠른 수정 배지·학생 상세 링크처럼 셀 값 자체를 보여 주는 버튼은 정렬 가능 열을 막지 않는다(`isSortableTableHeader`가 `.list-quick-choice`만 예외 처리). `관리`/`작업`/`처리` 열은 계속 정렬하지 않는다.
+- 수업 요일은 월~일 순서로, 납입 관리의 진행 상태는 화면에 보이는 단계(안내 전 → 결제 대기 → 확인·등록 대기 → 완료) 순서로 정렬한다. 납입 관리에서 값이 없는 행은 방향과 관계없이 뒤로 보낸다. 텍스트 정렬은 SQLite 문자열 순서(빈 값·숫자·영문이 한글보다 앞)를 따른다.
+- 검증: `tests/test_server_side_sort.py`, `tests/test_book_search_sort.py`, `tests/test_tuition_collection.py`, `node --test tests/test_server_sort_ui.js`.
+
 ## 일반 선생님 학습 기록 정정 권한
 - `studylog_permissions.py`가 상세 조회와 수정·삭제 API의 공통 권한을 판별한다. 실제 진행 선생님(`ActualTeacherUsername`)을 우선하고, 비어 있으면 연결 수업의 `TeacherUsername`을 사용한다. 학생 소속이나 등록자만으로 변경 권한을 부여하지 않는다. 귀속 미확인 기록은 관리 선생님에게 요청한다.
 - 일반 선생님도 본인 기록의 `BookId`, `StudiedDay`, `IsSpecial`, `LessonContent`, `Description`을 수정하고 개별 기록을 삭제할 수 있다. 학생·수업·진행 선생님·정산 필드 변경은 허용하지 않는다.

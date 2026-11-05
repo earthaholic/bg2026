@@ -740,7 +740,14 @@ BOOK_SEARCH_SORT_COLUMNS = {
     'row_id': 'row_id',
     'StudyStudentCount': 'StudyStudentCount',
     'Title': 'COALESCE("Title", \'\') COLLATE NOCASE',
+    'Author': 'COALESCE("Author", \'\') COLLATE NOCASE',
+    'Publisher': 'COALESCE("Publisher", \'\') COLLATE NOCASE',
+    'Target': 'COALESCE("Target", \'\') COLLATE NOCASE',
+    'BookLength': 'COALESCE("BookLength", 0)',
+    'HasReadingQuestion': 'COALESCE("HasReadingQuestion", 0)',
+    'IsPdfExist': 'COALESCE("IsPdfExist", 0)',
 }
+BOOK_SEARCH_SORT_PATTERN = '^(' + '|'.join(BOOK_SEARCH_SORT_COLUMNS) + ')$'
 
 
 @app.get("/api/user/books/search")
@@ -762,7 +769,7 @@ def user_search_books(
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
     unstudied_student_ids: Optional[str] = Query(None),
-    sort_by: str = Query("row_id", regex="^(row_id|StudyStudentCount|Title)$"),
+    sort_by: str = Query("row_id", regex=BOOK_SEARCH_SORT_PATTERN),
     sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
@@ -1100,6 +1107,19 @@ def user_get_recent_students(current_user: Dict[str, Any] = Depends(get_current_
     conn.close()
     return {"students": [dict(r) for r in rows]}
 
+# 학생 검색 정렬 기준: 화면 열과 실제 정렬 열을 연결한다.
+STUDENT_SEARCH_SORT_COLUMNS = {
+    'row_id': 'rowid',
+    'Name': 'COALESCE("Name", \'\') COLLATE NOCASE',
+    'Sex': 'COALESCE("Sex", \'\') COLLATE NOCASE',
+    'Grade': 'COALESCE("Grade", \'\') COLLATE NOCASE',
+    'Referrer': 'COALESCE("Referrer", \'\') COLLATE NOCASE',
+    'Description': 'COALESCE("Description", \'\') COLLATE NOCASE',
+    'IsClassEnded': 'COALESCE("IsClassEnded", 0)',
+}
+STUDENT_SEARCH_SORT_PATTERN = '^(' + '|'.join(STUDENT_SEARCH_SORT_COLUMNS) + ')$'
+
+
 @app.get("/api/user/students/search")
 def user_search_students(
     q: Optional[str] = Query(None),
@@ -1107,6 +1127,8 @@ def user_search_students(
     teacher_record_state: Optional[Literal['empty', 'none', 'low', 'partial', 'complete']] = Query(None),
     content_record_state: Optional[Literal['empty', 'none', 'low', 'partial', 'complete']] = Query(None),
     include_ended: bool = Query(False),
+    sort_by: Optional[str] = Query(None, regex=STUDENT_SEARCH_SORT_PATTERN),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -1166,7 +1188,11 @@ def user_search_students(
 
     # Paginated data
     offset = (page - 1) * limit
-    data_query = f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY rowid DESC LIMIT {limit} OFFSET {offset}'
+    # 정렬은 페이지 단위가 아니라 검색 조건에 맞는 전체 학생에 적용한다.
+    order_sql = 'rowid DESC'
+    if isinstance(sort_by, str) and sort_by:
+        order_sql = f'{STUDENT_SEARCH_SORT_COLUMNS[sort_by]} {sort_direction}, rowid DESC'
+    data_query = f'SELECT rowid as row_id, * FROM "Students"{where_str} ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}'
     cursor.execute(data_query, params)
     rows = [dict(row) for row in cursor.fetchall()]
     _attach_student_record_coverage(conn, rows)
@@ -2541,12 +2567,15 @@ def _class_student_items(payload: ClassRequest) -> List[dict]:
 @app.get("/api/user/classes")
 def user_list_classes(
     q: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None, regex="^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|StudentCount)$"),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     teacher_username = current_user["username"] if current_user["role"] == "teacher" else None
-    rows, total_count = search_classes(q=q, page=page, limit=limit, teacher_username=teacher_username)
+    rows, total_count = search_classes(q=q, page=page, limit=limit, teacher_username=teacher_username,
+                                      sort_by=sort_by, sort_direction=sort_direction)
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
     return {
         "page": page,
@@ -5118,9 +5147,14 @@ def table_data(
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
     q: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None, max_length=100),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     current_admin: Dict[str, Any] = Depends(get_current_admin)
 ):
-    rows, total_count = fetch_table_data(table_name, page, limit, q)
+    schema = get_table_schema(table_name) or []
+    if isinstance(sort_by, str) and sort_by and sort_by not in [col['name'] for col in schema]:
+        raise HTTPException(status_code=400, detail="정렬할 수 없는 열입니다.")
+    rows, total_count = fetch_table_data(table_name, page, limit, q, sort_by=sort_by, sort_direction=sort_direction)
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
     return {
         "table_name": table_name,
@@ -5453,6 +5487,8 @@ def admin_list_audit_logs(
     table_name: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
     record_id: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None, regex="^(created_at|username|table_name|record_id|action)$"),
+    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
     current_staff: Dict[str, Any] = Depends(get_current_staff)
@@ -5466,7 +5502,9 @@ def admin_list_audit_logs(
         date_from=date_from,
         date_to=date_to,
         page=page,
-        limit=limit
+        limit=limit,
+        sort_by=sort_by,
+        sort_direction=sort_direction
     )
     for r in rows:
         r["old_data"] = _parse_json_field(r.get("old_data"))
