@@ -78,8 +78,11 @@ class BookMaterialFilterTests(unittest.TestCase):
         self.assertEqual(data['total_count'], len(titles), query)
         return titles
 
-    def test_default_shows_only_books_without_composition_materials(self):
-        self.assertEqual(self.search(), ['자료 없음', '종이책만'])
+    def test_default_searches_every_book(self):
+        self.assertEqual(self.search(), sorted(row[0] for row in BOOKS))
+
+    def test_composition_mode_shows_only_books_without_materials(self):
+        self.assertEqual(self.search('&material_mode=exact'), ['자료 없음', '종이책만'])
 
     def test_selected_material_excludes_other_composition_materials(self):
         self.assertEqual(self.search('&has_reading=1'), ['독서 답안만', '독서 문제만'])
@@ -92,7 +95,10 @@ class BookMaterialFilterTests(unittest.TestCase):
         self.assertEqual(self.search('&has_quiz=1&has_reading=1'), [])
 
     def test_holding_materials_require_only_the_selected_item(self):
-        self.assertEqual(self.search('&has_paperbook=1'), ['종이책만'])
+        # 자료 보유만 고르면 자료 구성은 제한하지 않는다.
+        self.assertEqual(self.search('&has_paperbook=1'), ['종이책만', '퀴즈와 종이책'])
+        # 자료 구성을 켜면 선택한 보유 자료와 함께 적용한다.
+        self.assertEqual(self.search('&material_mode=exact&has_paperbook=1'), ['종이책만'])
         self.assertEqual(self.search('&has_writing=1&has_yes24=1'), ['글쓰기 답안만'])
         self.assertEqual(
             self.search('&has_quiz=1&has_paperbook=1'),

@@ -1236,6 +1236,42 @@ body {
     color: var(--text-dim);
 }
 
+.material-filter-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    background: var(--bg-input);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.material-filter-switch input {
+    width: 0.9rem;
+    height: 0.9rem;
+    margin: 0;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.material-filter-switch:has(input:checked) {
+    color: var(--text-main);
+    border-color: var(--border-focus);
+    background: var(--bg-selection);
+}
+
+.material-filter-block.is-off .checkbox-filter-row {
+    opacity: 0.45;
+}
+
+.material-filter-block.is-off .checkbox-pill {
+    cursor: not-allowed;
+}
+
 .material-filter-state {
     font-size: 0.75rem;
     font-weight: 600;
@@ -5460,3 +5496,177 @@ button.class-student-badge { cursor: pointer; }
 
 .mcp-connection-actions + .mcp-connection-actions { margin-top: 0.5rem; }
 #mcp-connection-state { white-space: pre-line; }
+
+/* 도서 검색: 검색·필터를 왼쪽에 두고 목록 폭을 확보한다. */
+#view-book-search .book-search-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+}
+
+#view-book-search .book-search-side,
+#view-book-search .book-search-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+#view-book-search .search-filter-card {
+    padding: 0.7rem;
+    gap: 0.5rem;
+}
+
+#view-book-search .search-input-wrapper {
+    gap: 0.4rem;
+}
+
+#view-book-search .search-input-wrapper .filter-icon {
+    left: 0.7rem;
+    font-size: 0.8rem;
+}
+
+#view-book-search .search-input-wrapper .form-control {
+    min-height: 34px;
+    padding: 0.4rem 0.5rem 0.4rem 1.85rem;
+    font-size: 0.82rem;
+}
+
+#view-book-search .search-input-wrapper .btn {
+    min-height: 34px;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+    flex: 0 0 auto;
+}
+
+#view-book-search .book-filter-summary {
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+
+#view-book-search .book-filter-summary-hint {
+    display: none;
+}
+
+#view-book-search .book-filter-details .filter-options-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+    padding-top: 0.55rem;
+}
+
+/* 한 줄짜리 칸에서 span-full이 가상 열을 만들지 않게 한다. */
+#view-book-search .book-filter-details .filter-options-grid > * {
+    grid-column: 1 / -1;
+}
+
+#view-book-search .filter-group label {
+    font-size: 0.74rem;
+}
+
+/* 좁은 쪽 칸에서도 라벨이 한 글자씩 쪼개지도록 두지 않는다. */
+#view-book-search .filter-group > label {
+    display: block;
+}
+
+#view-book-search .filter-group > label i {
+    margin-right: 0.35rem;
+}
+
+#view-book-search .filter-group .chk-item,
+#view-book-search .checkbox-filter-row > label {
+    flex: 0 0 auto;
+}
+
+#view-book-search .checkbox-filter-row .pdf-filter {
+    flex: 1 1 100%;
+}
+
+#view-book-search .pdf-filter {
+    flex-wrap: wrap;
+}
+
+#view-book-search #filter-chk-pdf {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+}
+
+#view-book-search .results-bar > .text-muted {
+    font-size: 0.75rem;
+}
+
+#view-book-search .results-bar .book-selection-actions {
+    margin-left: auto;
+}
+
+#view-book-search.filters-collapsed .book-search-layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#view-book-search.filters-collapsed .book-filter-details {
+    display: none;
+}
+
+/* 한 화면에 더 많은 칸이 보이도록 표를 약간 조밀하게 */
+#view-book-search .book-search-main .modern-table {
+    font-size: 0.82rem;
+}
+
+#view-book-search .book-search-main .modern-table th,
+#view-book-search .book-search-main .modern-table td {
+    padding: 0.6rem 0.7rem;
+}
+
+#view-book-search .chk-item {
+    font-size: 0.78rem;
+}
+
+#view-book-search .material-filter-block {
+    padding: 0.5rem 0.6rem;
+}
+
+#view-book-search .material-filter-head strong {
+    font-size: 0.78rem;
+}
+
+#view-book-search .results-bar {
+    padding: 0 0.25rem;
+}
+
+@media (min-width: 1101px) {
+    /* 넓은 화면: 필터와 목록이 각각 스크롤되고 하단 페이지 이동은 고정된다. */
+    #view-book-search {
+        overflow: hidden;
+    }
+
+    #view-book-search .book-search-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-items: stretch;
+    }
+
+    #view-book-search .book-search-side {
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 0.2rem;
+    }
+
+    #view-book-search .book-search-main {
+        min-height: 0;
+    }
+
+    #view-book-search .table-card {
+        flex: 1 1 auto;
+        min-height: 200px;
+    }
+}
+
+@media (max-width: 1100px) {
+    #view-book-search .book-search-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #view-book-search .search-input-wrapper .form-control {
+        font-size: 0.85rem;
+    }
+}

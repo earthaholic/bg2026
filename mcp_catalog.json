@@ -691,6 +691,17 @@
           ],
           "title": "Has Debate"
         },
+        "material_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Mode"
+        },
         "has_paperbook": {
           "anyOf": [
             {
@@ -777,6 +788,7 @@
       "pdf_status": "query",
       "has_advanced": "query",
       "has_debate": "query",
+      "material_mode": "query",
       "has_paperbook": "query",
       "has_yes24": "query",
       "has_millie": "query",

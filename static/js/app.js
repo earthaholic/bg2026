@@ -201,8 +201,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterChkYes24 = document.getElementById('filter-chk-yes24');
     const filterChkMillie = document.getElementById('filter-chk-millie');
     const btnResetFilters = document.getElementById('btn-reset-filters');
+    const btnToggleBookFilters = document.getElementById('btn-toggle-book-filters');
+    const bookSearchView = document.getElementById('view-book-search');
     const materialSetState = document.getElementById('material-set-state');
     const materialHaveState = document.getElementById('material-have-state');
+    const materialSetBlock = document.getElementById('material-set-block');
+    const filterMaterialMode = document.getElementById('filter-material-mode');
     const bookStudyStudentQ = document.getElementById('book-study-student-q');
     const bookStudyClassSelect = document.getElementById('book-study-class-select');
     const bookStudyStudentResults = document.getElementById('book-study-student-results');
@@ -1153,6 +1157,15 @@ document.addEventListener('DOMContentLoaded', () => {
         filterChkQuiz.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
         filterChkReading.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
         filterChkWriting.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
+        // 조건을 끄면 선택값도 지워 '켜짐 = 적용 중'으로 상태를 분명히 한다.
+        filterMaterialMode.addEventListener('change', () => {
+            if (!filterMaterialMode.checked) {
+                document.querySelectorAll('.material-set-chk').forEach(chk => { chk.checked = false; });
+            }
+            syncMaterialCompositionMode();
+            searchPage = 1;
+            loadBookSearchResults();
+        });
         filterChkPdf.addEventListener('click', (event) => {
             const button = event.target.closest('button[data-value]');
             if (!button || button.getAttribute('aria-pressed') === 'true') return;
@@ -1162,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBookSearchResults();
         });
         [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); }));
-        updateMaterialFilterSummary();
+        syncMaterialCompositionMode();
 
         bookStudyStudentQ.addEventListener('input', () => {
             clearTimeout(bookStudentSearchTimer);
@@ -1207,6 +1220,14 @@ document.addEventListener('DOMContentLoaded', () => {
             loadBookSearchResults();
         });
 
+        // 필터 레일을 접으면 검색창만 남기고 목록에 전체 폭을 내준다.
+        btnToggleBookFilters?.addEventListener('click', () => {
+            const collapsed = bookSearchView.classList.toggle('filters-collapsed');
+            btnToggleBookFilters.setAttribute('aria-expanded', String(!collapsed));
+            const label = btnToggleBookFilters.querySelector('span');
+            if (label) label.textContent = collapsed ? '필터 보기' : '필터 숨기기';
+        });
+
         btnResetFilters.addEventListener('click', () => {
             bookSearchQ.value = '';
             document.querySelectorAll('.filter-target-chk').forEach(chk => { chk.checked = false; });
@@ -1223,9 +1244,10 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkQuiz.checked = false;
             filterChkReading.checked = false;
             filterChkWriting.checked = false;
+            if (filterMaterialMode) filterMaterialMode.checked = false;
             setPdfToggleValue(filterChkPdf, '');
             [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
-            updateMaterialFilterSummary();
+            syncMaterialCompositionMode();
             bookUnstudiedStudents.clear();
             bookStudyStudentQ.value = '';
             bookStudyStudentResults.innerHTML = '';
@@ -3671,8 +3693,17 @@ document.addEventListener('DOMContentLoaded', () => {
         bookStudyStudentChips.classList.toggle('hidden', students.length === 0);
     }
 
+    // 자료 구성은 사용자가 켰을 때만 적용한다. 끄면 전체 도서를 그대로 검색한다.
+    function syncMaterialCompositionMode() {
+        const active = Boolean(filterMaterialMode && filterMaterialMode.checked);
+        document.querySelectorAll('.material-set-chk').forEach(chk => { chk.disabled = !active; });
+        if (materialSetBlock) materialSetBlock.classList.toggle('is-off', !active);
+        updateMaterialFilterSummary();
+    }
+
     // 자료 구성은 선택한 조합과 정확히 일치하고, 자료 보유는 선택한 자료를 반드시 포함한다.
     function updateMaterialFilterSummary() {
+        const active = Boolean(filterMaterialMode && filterMaterialMode.checked);
         const selectedSet = Array.from(document.querySelectorAll('.material-set-chk'))
             .filter(chk => chk.checked).map(chk => chk.dataset.materialLabel);
         const selectedHave = Array.from(document.querySelectorAll('.material-have-chk'))
@@ -3680,9 +3711,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const pdfButton = filterChkPdf ? filterChkPdf.querySelector('button[aria-pressed="true"]') : null;
         if (pdfButton && pdfButton.dataset.value !== '') selectedHave.unshift(`PDF ${pdfButton.textContent.trim()}`);
         if (materialSetState) {
-            materialSetState.textContent = selectedSet.length
-                ? `선택: ${selectedSet.join(', ')} · 선택하지 않은 자료가 없는 도서`
-                : '선택 없음 · 위 다섯 자료가 하나도 없는 도서만 표시';
+            if (!active) {
+                materialSetState.textContent = '사용 안 함 · 자료 유무와 관계없이 전체 도서를 검색합니다';
+            } else {
+                materialSetState.textContent = selectedSet.length
+                    ? `선택: ${selectedSet.join(', ')} · 선택하지 않은 자료가 없는 도서`
+                    : '선택 없음 · 위 다섯 자료가 하나도 없는 도서만 표시';
+            }
         }
         if (materialHaveState) {
             materialHaveState.textContent = selectedHave.length
@@ -3740,6 +3775,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasWriting) queryParams.append('has_writing', 1);
             if (pdfStatus === 'owned') queryParams.append('has_pdf', 1);
             else if (pdfStatus !== '') queryParams.append('pdf_status', pdfStatus);
+            if (filterMaterialMode && filterMaterialMode.checked) queryParams.append('material_mode', 'exact');
             if (hasAdvanced) queryParams.append('has_advanced', 1);
             if (hasDebate) queryParams.append('has_debate', 1);
             if (hasPaperbook) queryParams.append('has_paperbook', 1);

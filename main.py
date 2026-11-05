@@ -765,6 +765,7 @@ def user_search_books(
     pdf_status: Optional[int] = Query(None, ge=0, le=2),
     has_advanced: Optional[int] = Query(None),
     has_debate: Optional[int] = Query(None),
+    material_mode: Optional[str] = Query(None),
     has_paperbook: Optional[int] = Query(None),
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
@@ -817,18 +818,21 @@ def user_search_books(
         params.append(length_max)
 
     # 자료 구성: 선택한 자료는 반드시 있고, 선택하지 않은 자료는 없어야 한다.
-    # 아무것도 선택하지 않으면 다섯 자료가 모두 없는 도서만 조회된다.
-    material_composition = (
-        ('"HasQuiz" = 1', 'COALESCE("HasQuiz", 0) = 0', has_quiz),
-        ('("HasReadingQuestion" = 1 OR "HasReadingAnswer" = 1)',
-         'COALESCE("HasReadingQuestion", 0) = 0 AND COALESCE("HasReadingAnswer", 0) = 0', has_reading),
-        ('("HasWritingQuestion" = 1 OR "HasWritingAnswer" = 1)',
-         'COALESCE("HasWritingQuestion", 0) = 0 AND COALESCE("HasWritingAnswer", 0) = 0', has_writing),
-        ('"HasAdvancedMaterial" = 1', 'COALESCE("HasAdvancedMaterial", 0) = 0', has_advanced),
-        ('"HasDebateMaterial" = 1', 'COALESCE("HasDebateMaterial", 0) = 0', has_debate),
-    )
-    for present_condition, absent_condition, flag in material_composition:
-        conditions.append(present_condition if flag == 1 else absent_condition)
+    # 아무것도 선택하지 않아도 전체 도서를 검색할 수 있도록 material_mode=exact를
+    # 명시했을 때만 적용하고, 자료를 하나라도 지정한 경우에는 기존 호출을 위해 적용한다.
+    composition_flags = (has_quiz, has_reading, has_writing, has_advanced, has_debate)
+    if material_mode == 'exact' or any(flag == 1 for flag in composition_flags):
+        material_composition = (
+            ('"HasQuiz" = 1', 'COALESCE("HasQuiz", 0) = 0', has_quiz),
+            ('("HasReadingQuestion" = 1 OR "HasReadingAnswer" = 1)',
+             'COALESCE("HasReadingQuestion", 0) = 0 AND COALESCE("HasReadingAnswer", 0) = 0', has_reading),
+            ('("HasWritingQuestion" = 1 OR "HasWritingAnswer" = 1)',
+             'COALESCE("HasWritingQuestion", 0) = 0 AND COALESCE("HasWritingAnswer", 0) = 0', has_writing),
+            ('"HasAdvancedMaterial" = 1', 'COALESCE("HasAdvancedMaterial", 0) = 0', has_advanced),
+            ('"HasDebateMaterial" = 1', 'COALESCE("HasDebateMaterial", 0) = 0', has_debate),
+        )
+        for present_condition, absent_condition, flag in material_composition:
+            conditions.append(present_condition if flag == 1 else absent_condition)
 
     # 자료 보유: 선택한 자료만 반드시 갖고 있어야 하며, 선택하지 않은 자료는 조건이 없다.
     if pdf_status is not None:
