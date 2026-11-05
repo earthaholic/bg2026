@@ -62,6 +62,12 @@ test('영문 요일 코드도 같은 요일 칸으로 묶는다', () => {
     assert.equal(context.normalizeClassDay('공휴일'), '');
 });
 
+test('수업 보기는 리스트·시간표 두 가지만 제공한다', () => {
+    assert.ok(source.includes("const CLASS_VIEW_MODES = ['list', 'timetable']"));
+    assert.equal(source.includes('data-class-view="card"'), false);
+    assert.equal(source.includes('renderClassCardGrid'), false);
+});
+
 test('배지 드래그 이동은 원 수업과 대상 수업을 함께 보낸다', () => {
     assert.ok(source.includes('/students/move'), '학생 이동 API 경로가 없습니다.');
     assert.ok(source.includes('data-move-student-id'), '드래그 가능한 배지 표시가 없습니다.');

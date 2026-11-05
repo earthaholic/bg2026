@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Class State
     let currentDetailClass = null;
     // 수업 목록 보기 방식(리스트·카드·시간표)과 배지 드래그 수정 모드
-    const CLASS_VIEW_MODES = ['list', 'card', 'timetable'];
+    const CLASS_VIEW_MODES = ['list', 'timetable'];
     const CLASS_VIEW_STORAGE_KEY = 'bg2026.classViewMode';
     const CLASS_DAY_ORDER = ['월', '화', '수', '목', '금', '토', '일'];
     let classViewMode = readClassViewMode();
@@ -466,8 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClassSearchNext = document.getElementById('btn-class-search-next');
     const classSearchCurrentPageSpan = document.getElementById('class-search-current-page');
     const classListView = document.getElementById('class-list-view');
-    const classCardView = document.getElementById('class-card-view');
-    const classCardGrid = document.getElementById('class-card-grid');
     const classTimetableView = document.getElementById('class-timetable-view');
     const classTimetableEl = document.getElementById('class-timetable');
     const classTimetableUnscheduled = document.getElementById('class-timetable-unscheduled');
@@ -6542,7 +6540,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 보기 방식·수정 모드 상태를 화면에 반영한다.
     function applyClassViewMode() {
         if (classListView) classListView.classList.toggle('hidden', classViewMode !== 'list');
-        if (classCardView) classCardView.classList.toggle('hidden', classViewMode !== 'card');
         if (classTimetableView) classTimetableView.classList.toggle('hidden', classViewMode !== 'timetable');
         classViewOptions.forEach(button => {
             const active = button.dataset.classView === classViewMode;
@@ -6599,68 +6596,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function classStudentBadgesHtml(students) {
         const list = Array.isArray(students) ? students : [];
         if (!list.length) return '<p class="class-card-empty">배정된 학생이 없습니다.</p>';
-        // 카드·시간표에서는 학생을 한 줄에 한 명씩 보여 주어 다른 반으로 끌어 옮기기 쉽게 하고,
+        // 시간표에서는 학생을 한 줄에 한 명씩 보여 주어 다른 반으로 끌어 옮기기 쉽게 하고,
         // 입력 현황 표시등은 목록 화면에서만 보여 준다.
         return `<div class="class-student-badges">${list.map(student => renderClassStudentBadge(student, true, false)).join('')}</div>`;
-    }
-
-    function classCardHtml(cls) {
-        const cId = Number(cls.Id);
-        const students = Array.isArray(cls.Students) ? cls.Students : [];
-        const category = cls.CategoryName
-            ? `<span class="tag-badge primary"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeHtml(cls.CategoryName)}</span>`
-            : '<span class="class-card-category-empty">카테고리 미지정</span>';
-        return `<article class="class-view-card${cls.IsEnded ? ' is-ended' : ''}" data-class-drop-id="${cId}">
-            <div class="class-card-head">
-                <span class="class-card-day"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ${formatDayOfWeek(cls.DayOfWeek)}</span>
-                <span class="class-card-time"><i class="fa-solid fa-clock" aria-hidden="true"></i> ${cls.StartTime ? escapeHtml(cls.StartTime) : '시간 미지정'}</span>
-                ${cls.IsEnded ? '<span class="class-card-ended">종강</span>' : ''}
-            </div>
-            <button type="button" class="class-name-button class-card-title btn-open-class-detail" data-class-id="${cId}">${escapeHtml(cls.ClassName || '수업명 없음')}</button>
-            <div class="class-card-meta">
-                ${category}
-                <span class="class-card-teacher"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> ${escapeHtml(userName(cls.TeacherUsername || '-'))}</span>
-            </div>
-            <div class="class-card-students">
-                <span class="class-card-student-count">수강 학생 ${students.length}명</span>
-                ${classStudentBadgesHtml(students)}
-            </div>
-            <div class="class-card-actions">
-                <button type="button" class="btn btn-xs btn-outline btn-open-class-detail" data-class-id="${cId}">
-                    <i class="fa-solid fa-eye" aria-hidden="true"></i> 상세
-                </button>
-                <button type="button" class="btn btn-xs btn-primary btn-class-batch" data-class-id="${cId}">
-                    <i class="fa-solid fa-square-plus" aria-hidden="true"></i> 일괄 등록
-                </button>
-            </div>
-        </article>`;
     }
 
     function classTimetableItemHtml(cls) {
         const cId = Number(cls.Id);
         const students = Array.isArray(cls.Students) ? cls.Students : [];
+        const category = cls.CategoryName
+            ? `<span class="class-timetable-category"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeHtml(cls.CategoryName)}</span>`
+            : '';
         return `<article class="class-view-card class-timetable-item${cls.IsEnded ? ' is-ended' : ''}" data-class-drop-id="${cId}">
             <div class="class-card-head">
                 <span class="class-card-time">${cls.StartTime ? escapeHtml(cls.StartTime) : '시간 미지정'}</span>
                 ${cls.IsEnded ? '<span class="class-card-ended">종강</span>' : ''}
             </div>
             <button type="button" class="class-name-button class-card-title btn-open-class-detail" data-class-id="${cId}">${escapeHtml(cls.ClassName || '수업명 없음')}</button>
+            ${category}
             <p class="class-card-teacher"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> ${escapeHtml(userName(cls.TeacherUsername || '-'))}</p>
             ${classStudentBadgesHtml(students)}
         </article>`;
-    }
-
-    function renderClassCardGrid(classes) {
-        if (!classCardGrid) return;
-        if (!classes.length) {
-            classCardGrid.classList.add('is-empty');
-            classCardGrid.innerHTML = classEmptyStateHtml('등록된 수업이 없습니다.');
-            return;
-        }
-        classCardGrid.classList.remove('is-empty');
-        classCardGrid.innerHTML = classes.map(classCardHtml).join('');
-        bindRecordCoverageTooltips(classCardGrid);
-        bindClassViewActions(classCardGrid);
     }
 
     function renderClassTimetable(classes) {
@@ -6697,7 +6653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         classTimetableUnscheduled.classList.remove('hidden');
         classTimetableUnscheduled.innerHTML = `
             <h4 class="class-timetable-unscheduled-title"><i class="fa-solid fa-clock" aria-hidden="true"></i> 요일 미지정 ${groups.unscheduled.length}건</h4>
-            <div class="class-card-grid">${groups.unscheduled.map(classCardHtml).join('')}</div>`;
+            <div class="class-unscheduled-grid">${groups.unscheduled.map(classTimetableItemHtml).join('')}</div>`;
         bindRecordCoverageTooltips(classTimetableUnscheduled);
         bindClassViewActions(classTimetableUnscheduled);
     }
@@ -6863,7 +6819,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 휴대폰 등 끌어놓기가 어려운 환경에서는 배지를 눌러 선택한 뒤 반을 누른다.
     function handleClassDropZoneClick(event) {
         if (!classEditMode || !classSelectedMoveStudent) return;
-        if (event.target.closest('.class-student-badge, .record-completion-button, .class-card-actions, .btn-class-batch')) return;
+        if (event.target.closest('.class-student-badge, .record-completion-button, .btn-class-batch')) return;
         requestClassStudentMove(classSelectedMoveStudent, Number(event.currentTarget.dataset.classDropId));
     }
 
@@ -6906,8 +6862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderClassCards(classes) {
         currentClassResults = Array.isArray(classes) ? classes : [];
         applyClassViewMode();
-        if (classViewMode === 'card') renderClassCardGrid(currentClassResults);
-        else if (classViewMode === 'timetable') renderClassTimetable(currentClassResults);
+        if (classViewMode === 'timetable') renderClassTimetable(currentClassResults);
         else renderClassListRows(currentClassResults);
     }
 

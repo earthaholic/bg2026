@@ -4961,7 +4961,7 @@ button.class-student-badge { cursor: pointer; }
     outline-offset: 2px;
 }
 
-/* 수업 목록 보기 방식(리스트·카드·시간표)과 배지 이동 수정 모드 */
+/* 수업 목록 보기 방식(리스트·시간표)과 배지 이동 수정 모드 */
 #view-class-list .class-results-bar {
     flex-wrap: wrap;
     align-items: center;
@@ -5057,20 +5057,17 @@ button.class-student-badge { cursor: pointer; }
 
 #view-class-list .class-view-panel { min-height: 12rem; }
 
-#view-class-list .class-card-panel,
 #view-class-list .class-timetable-panel {
     flex: 0 1 auto;
     padding: 1rem;
     overflow: auto;
 }
 
-.class-card-grid {
+.class-unscheduled-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
     gap: 0.75rem;
 }
-
-.class-card-grid.is-empty { display: block; }
 
 .class-view-card {
     display: flex;
@@ -5083,7 +5080,7 @@ button.class-student-badge { cursor: pointer; }
     min-width: 0;
 }
 
-/* 카드·시간표는 학생을 한 줄에 한 명씩 쌓아 배지를 끌어 옮기기 쉽게 한다. */
+/* 시간표는 학생을 한 줄에 한 명씩 쌓아 배지를 끌어 옮기기 쉽게 한다. */
 #view-class-list .class-view-card .class-student-badges {
     flex-direction: column;
     align-items: stretch;
@@ -5120,7 +5117,6 @@ button.class-student-badge { cursor: pointer; }
     font-size: 0.75rem;
 }
 
-.class-card-day,
 .class-card-time {
     display: inline-flex;
     align-items: center;
@@ -5144,11 +5140,18 @@ button.class-student-badge { cursor: pointer; }
     overflow-wrap: anywhere;
 }
 
-.class-card-meta {
-    display: flex;
-    flex-wrap: wrap;
+.class-timetable-category {
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.25rem;
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    overflow-wrap: anywhere;
 }
 
 .class-card-teacher {
@@ -5157,34 +5160,10 @@ button.class-student-badge { cursor: pointer; }
     font-size: 0.78rem;
 }
 
-.class-card-category-empty {
-    color: var(--text-muted);
-    font-size: 0.75rem;
-}
-
-.class-card-students {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-
-.class-card-student-count {
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
 .class-card-empty {
     margin: 0;
     color: var(--text-muted);
     font-size: 0.78rem;
-}
-
-.class-card-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: auto;
 }
 
 .class-timetable {
@@ -5319,12 +5298,12 @@ button.class-student-badge { cursor: pointer; }
 }
 
 @media (max-width: 900px) {
-    .class-card-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+    .class-unscheduled-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
     #view-class-list .class-view-controls { width: 100%; justify-content: space-between; }
 }
 
 @media (max-width: 600px) {
-    .class-card-grid { grid-template-columns: 1fr; }
+    .class-unscheduled-grid { grid-template-columns: 1fr; }
 }
 
 /* 도서 등록 요청은 공통 등록 폼과 요청 내역을 한 흐름으로 표시한다. */
