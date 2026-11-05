@@ -78,6 +78,14 @@ test('카드·시간표에서는 입력 현황 표시등을 그리지 않는다'
     assert.ok(context.renderClassStudentBadge(student(10, 10, 3)).includes('student-record-lamp'));
 });
 
+test('휴강 학생은 비활성 배지로 그리고 수업 종료가 우선한다', () => {
+    const paused = context.renderClassStudentBadge({ row_id: 7, Name: '가람', IsSpecial: 0, IsPaused: 1, RecordCoverage: { total: 1, teacher_filled: 1, content_filled: 1 } });
+    assert.ok(paused.includes('is-paused'));
+    assert.ok(paused.includes('휴강'));
+    const ended = context.renderClassStudentBadge({ row_id: 8, Name: '나래', IsClassEnded: 1, IsPaused: 1, RecordCoverage: { total: 0, teacher_filled: 0, content_filled: 0 } });
+    assert.equal(ended.includes('is-paused'), false);
+});
+
 test('학생 이름은 속성과 표시 텍스트 모두 이스케이프한다', () => {
     const html = context.renderClassStudentBadge({ ...student(0, 0, 0), Name: '<img src=x>"' });
     assert.doesNotMatch(html, /<img/);

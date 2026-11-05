@@ -472,12 +472,13 @@ def init_system_tables():
     except Exception:
         pass  # Students 테이블이 아직 없으면 스킵
 
-    # Students에 수업 종료(IsClassEnded) 컬럼 보완 (기존 DB 대응)
+    # Students에 수업 종료(IsClassEnded)·휴강(IsPaused) 컬럼 보완 (기존 DB 대응)
     try:
         cursor.execute('PRAGMA table_info("Students")')
         students_cols = [r["name"] for r in cursor.fetchall()]
         for _col, _ddl in [
             ("IsClassEnded", "INTEGER DEFAULT 0"),
+            ("IsPaused", "INTEGER DEFAULT 0"),
         ]:
             if _col not in students_cols:
                 cursor.execute(f'ALTER TABLE "Students" ADD COLUMN "{_col}" {_ddl}')
@@ -1061,7 +1062,8 @@ def search_classes(
     if rows:
         placeholders = ','.join('?' for _ in rows)
         cursor.execute(f'''
-            SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name", cs."IsSpecial"
+            SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name", cs."IsSpecial",
+                   COALESCE(s."IsPaused", 0) AS "IsPaused", COALESCE(s."IsClassEnded", 0) AS "IsClassEnded"
             FROM "ClassStudents" cs
             JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
             WHERE cs."ClassId" IN ({placeholders})
@@ -1070,7 +1072,8 @@ def search_classes(
         for student in cursor.fetchall():
             students_by_class[student['ClassId']].append({
                 'row_id': student['row_id'], 'Name': student['Name'],
-                'IsSpecial': student['IsSpecial']
+                'IsSpecial': student['IsSpecial'],
+                'IsPaused': student['IsPaused'], 'IsClassEnded': student['IsClassEnded']
             })
     all_students = [student for students in students_by_class.values() for student in students]
     _attach_student_record_coverage(conn, all_students)

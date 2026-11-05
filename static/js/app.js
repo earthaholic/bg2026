@@ -526,6 +526,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnBatchCalendarPrev = document.getElementById('btn-batch-calendar-prev');
     const btnBatchCalendarNext = document.getElementById('btn-batch-calendar-next');
     const classBatchStudentsBody = document.getElementById('class-batch-students-body');
+    const batchPausedSummary = document.getElementById('batch-paused-summary');
+    const batchPausedCount = document.getElementById('batch-paused-count');
+    const btnToggleBatchPaused = document.getElementById('btn-toggle-batch-paused');
     const classBatchResult = document.getElementById('class-batch-result');
     const batchIsCancelled = document.getElementById('batch-is-cancelled');
     const batchCancellationSection = document.getElementById('batch-cancellation-section');
@@ -1551,6 +1554,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (formClassBatchStudyLog) {
             formClassBatchStudyLog.addEventListener('submit', handleBatchStudyLogSubmit);
         }
+        if (btnToggleBatchPaused) btnToggleBatchPaused.addEventListener('click', toggleBatchPausedRows);
         if (batchIsCancelled) batchIsCancelled.addEventListener('change', updateBatchRegistrationMode);
         if (batchStudiedDay) {
             batchStudiedDay.addEventListener('change', handleBatchDateChange);
@@ -3855,12 +3859,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return isStaff() && Boolean(document.getElementById(kind + '-quick-edit')?.checked);
     }
 
-    function quickChoice(kind, id, field, value, choices, label) {
+    function quickChoice(kind, id, field, value, choices, label, extraClass = '') {
         const current = String(value ?? '');
         const options = choices.map(([value, text]) => [String(value), text]);
         const text = options.find(([value]) => value === current)?.[1] || current || '미입력';
-        return `<button type="button" class="list-quick-choice" data-kind="${kind}" data-id="${id}" data-field="${field}" data-saved="${escapeHtml(current)}" data-options="${escapeHtml(JSON.stringify(options))}" aria-label="${escapeHtml(label + ': ' + text + '. 클릭하면 다음 값, Shift와 함께 클릭하면 이전 값')}" title="클릭: 다음 값 · Shift+클릭: 이전 값" ${listQuickEditEnabled(kind) ? '' : 'disabled'}>${escapeHtml(text)}</button>`;
+        return `<button type="button" class="list-quick-choice${extraClass ? ' ' + extraClass : ''}" data-kind="${kind}" data-id="${id}" data-field="${field}" data-saved="${escapeHtml(current)}" data-options="${escapeHtml(JSON.stringify(options))}" aria-label="${escapeHtml(label + ': ' + text + '. 클릭하면 다음 값, Shift와 함께 클릭하면 이전 값')}" title="클릭: 다음 값 · Shift+클릭: 이전 값" ${listQuickEditEnabled(kind) ? '' : 'disabled'}>${escapeHtml(text)}</button>`;
     }
+
+    // 학생 상태는 재원·휴강·수업 종료 중 하나다. 휴강과 수업 종료는 동시에 두지 않는다.
+    function studentStatusValue(student) {
+        if (Number(student.IsClassEnded)) return 'ended';
+        if (Number(student.IsPaused)) return 'paused';
+        return 'active';
+    }
+
+    const STUDENT_STATUS_LABELS = [['active', '진행 중'], ['paused', '휴강'], ['ended', '수업 종료']];
+    const STUDENT_STATUS_PAYLOADS = {
+        active: { IsClassEnded: 0, IsPaused: 0 },
+        paused: { IsClassEnded: 0, IsPaused: 1 },
+        ended: { IsClassEnded: 1, IsPaused: 0 }
+    };
 
     function syncListQuickEdit(kind) {
         const view = document.getElementById('view-' + kind + '-search');
@@ -3934,7 +3952,10 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = await apiFetch(`/api/user/${input.dataset.kind}s/${input.dataset.id}`);
                 const record = data[input.dataset.kind];
-                if (String(record[input.dataset.field] ?? '') !== next) throw new Error('값이 다시 변경되어 되돌릴 수 없습니다. 목록을 새로 조회해 주세요.');
+                const recordValue = input.dataset.kind === 'student' && input.dataset.field === 'StudentStatus'
+                    ? studentStatusValue(record)
+                    : String(record[input.dataset.field] ?? '');
+                if (recordValue !== next) throw new Error('값이 다시 변경되어 되돌릴 수 없습니다. 목록을 새로 조회해 주세요.');
                 const current = Array.from(view.querySelectorAll('.list-quick-choice')).find(item => item.dataset.id === input.dataset.id && item.dataset.field === input.dataset.field) || input;
                 current.dataset.saved = next;
                 await saveListQuickChoice(current, previous, false);
@@ -3946,17 +3967,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveListQuickChoice(input, next, offerUndo = true) {
         const kind = input.dataset.kind;
-        const allowed = kind === 'student' ? ['Sex', 'Grade', 'IsClassEnded'] : ['Target', 'BookLength', 'HasReadingQuestion', 'IsPdfExist'];
+        const allowed = kind === 'student' ? ['Sex', 'Grade', 'IsClassEnded', 'StudentStatus'] : ['Target', 'BookLength', 'HasReadingQuestion', 'IsPdfExist'];
         if (!listQuickEditEnabled(kind) || input.dataset.saving === 'true' || !allowed.includes(input.dataset.field)) return;
         const previous = input.dataset.saved;
         next = String(next);
         if (next === previous) return;
         const numeric = ['IsClassEnded', 'BookLength', 'HasReadingQuestion', 'IsPdfExist'].includes(input.dataset.field);
+        // 수업 상태는 재원·휴강·수업 종료를 한 배지로 관리한다.
+        const isStatus = kind === 'student' && input.dataset.field === 'StudentStatus';
+        const payloadData = isStatus ? STUDENT_STATUS_PAYLOADS[next] : { [input.dataset.field]: numeric ? Number(next) : next };
+        if (!payloadData) return;
         const feedback = createActionFeedback();
         input.dataset.saving = 'true'; input.disabled = true;
         input.setAttribute('aria-busy', 'true');
         try {
-            await apiFetch(`/api/user/${kind}s/${input.dataset.id}`, { method: 'PUT', body: JSON.stringify({ data: { [input.dataset.field]: numeric ? Number(next) : next } }) });
+            await apiFetch(`/api/user/${kind}s/${input.dataset.id}`, { method: 'PUT', body: JSON.stringify({ data: payloadData }) });
             input.dataset.saved = next;
             input.textContent = JSON.parse(input.dataset.options).find(([value]) => value === next)?.[1] || next || '미입력';
             feedback.show(offerUndo ? '변경 내용을 저장했습니다.' : '이전 값으로 되돌렸습니다.', 'success');
@@ -4117,7 +4142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${referrer}</td>
                     <td class="text-muted text-truncate-cell" title="${desc}">${desc}</td>
                     <td class="text-center">
-                        ${quickChoice('student', studentId, 'IsClassEnded', s.IsClassEnded ? 1 : 0, [[0, '진행 중'], [1, '수업 종료']], '수업 상태')}
+                        ${quickChoice('student', studentId, 'StudentStatus', studentStatusValue(s), STUDENT_STATUS_LABELS, '수업 상태', studentStatusValue(s) === 'paused' ? 'is-paused' : '')}
                     </td>
                     <td>
                         <button type="button" class="btn btn-xs btn-outline btn-open-student-detail" data-student-id="${studentId}">
@@ -4455,6 +4480,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span><i class="fa-solid fa-school"></i> 학교: <strong>${escapeHtml(s.School || '미입력')}</strong></span>
                                 <span><i class="fa-solid fa-user-plus"></i> 추천인: <strong>${formatReferrer(s.Referrer) || '미입력'}</strong></span>
                                 ${s.IsClassEnded ? '<span class="badge badge-warning"><i class="fa-solid fa-graduation-cap"></i> 수업 종료</span>' : ''}
+                                ${!s.IsClassEnded && Number(s.IsPaused) ? '<span class="badge student-paused-badge"><i class="fa-solid fa-circle-pause"></i> 휴강</span>' : ''}
                                 <span><i class="fa-solid fa-id-card"></i> ID: <strong>#${s.row_id || s.Id}</strong></span>
                                 <span><i class="fa-solid fa-award"></i> 총 수업: <strong>${totalLogs}회</strong></span>
                             </div>
@@ -5095,6 +5121,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" name="IsClassEnded" value="1" ${s.IsClassEnded ? 'checked' : ''}>
                         <span>수업 종료</span>
                     </label>
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="IsPaused" value="1" ${s.IsPaused ? 'checked' : ''}>
+                        <span>휴강</span>
+                    </label>
+                    <p class="text-muted" style="font-size: 0.8rem; margin-top: 0.5rem;">
+                        휴강 중인 학생은 학습 이력 일괄 등록에서 기본으로 빠지고, 학생 목록·시간표에서 회색 배지로 표시됩니다.
+                    </p>
                 </div>
 
                 <div class="modal-actions">
@@ -5106,6 +5139,16 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         modalStudentDetailBody.innerHTML = html;
+
+        // 휴강과 수업 종료는 동시에 선택하지 않는다.
+        const endedCheckbox = modalStudentDetailBody.querySelector('input[name="IsClassEnded"]');
+        const pausedCheckbox = modalStudentDetailBody.querySelector('input[name="IsPaused"]');
+        endedCheckbox?.addEventListener('change', () => {
+            if (endedCheckbox.checked && pausedCheckbox) pausedCheckbox.checked = false;
+        });
+        pausedCheckbox?.addEventListener('change', () => {
+            if (pausedCheckbox.checked && endedCheckbox) endedCheckbox.checked = false;
+        });
 
         document.getElementById('btn-cancel-modal-edit-student').addEventListener('click', () => {
             openStudentDetailModal(studentId);
@@ -5132,7 +5175,8 @@ document.addEventListener('DOMContentLoaded', () => {
             School: (formData.get('School') || '').trim(),
             Referrer: (formData.get('Referrer') || '').trim(),
             Description: (formData.get('Description') || '').trim(),
-            IsClassEnded: formData.get('IsClassEnded') ? 1 : 0
+            IsClassEnded: formData.get('IsClassEnded') ? 1 : 0,
+            IsPaused: formData.get('IsPaused') ? 1 : 0
         };
 
         if (!data.Name) {
@@ -6221,8 +6265,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== 수업(Class) 관리 ====================
     const DAY_LABELS = { '월': '월요일', '화': '화요일', '수': '수요일', '목': '목요일', '금': '금요일', '토': '토요일', '일': '일요일' };
-    const BATCH_STATUS_CLASS = { created: 'res-status-created', absent: 'res-status-created', skipped: 'res-status-skipped', duplicate: 'res-status-skipped', error: 'res-status-error' };
-    const BATCH_STATUS_ICON = { created: 'fa-circle-check', absent: 'fa-circle-check', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
+    const BATCH_STATUS_CLASS = { created: 'res-status-created', absent: 'res-status-created', paused: 'res-status-skipped', skipped: 'res-status-skipped', duplicate: 'res-status-skipped', error: 'res-status-error' };
+    const BATCH_STATUS_ICON = { created: 'fa-circle-check', absent: 'fa-circle-check', paused: 'fa-circle-pause', skipped: 'fa-forward', duplicate: 'fa-circle-exclamation', error: 'fa-circle-xmark' };
 
     function formatDayOfWeek(d) {
         const key = normalizeClassDay(d);
@@ -6477,14 +6521,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = student.Name || '이름 없음';
         const special = Number(student.IsSpecial) === 1;
         const studentId = Number(student.row_id || student.Id);
+        // 휴강 중인 학생은 회색 점선 배지로 비활성을 표시한다.
+        const paused = !Number(student.IsClassEnded) && Number(student.IsPaused) === 1;
+        const pausedClass = paused ? ' is-paused' : '';
+        const pausedLabel = paused ? ' 휴강' : '';
         // 수정 모드에서는 배지를 끌어 달 반으로 옮길 수 있다.
         const movable = interactive && classEditMode && Number.isFinite(studentId);
         const moveAttrs = movable
             ? ` draggable="true" data-move-student-id="${studentId}" data-move-student-name="${escapeHtml(name)}" title="${escapeHtml(name)} 학생을 다른 반으로 끌어다 놓으세요"`
             : '';
         const nameHtml = interactive
-            ? `<button type="button" data-student-id="${studentId}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${movable ? ' is-movable' : ''}"${moveAttrs} aria-label="${escapeHtml(name + (special ? ' 특강' : '') + ' 학생 상세 정보' + (movable ? ' · 다른 반으로 끌어서 이동' : ''))}">${escapeHtml(name)}</button>`
-            : `<span class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge">${escapeHtml(name)}</span>`;
+            ? `<button type="button" data-student-id="${studentId}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${pausedClass}${movable ? ' is-movable' : ''}"${moveAttrs} aria-label="${escapeHtml(name + pausedLabel + (special ? ' 특강' : '') + ' 학생 상세 정보' + (movable ? ' · 다른 반으로 끌어서 이동' : ''))}">${escapeHtml(name)}</button>`
+            : `<span class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${pausedClass}">${escapeHtml(name)}</span>`;
         return `<span class="record-student-group">${nameHtml}${showCoverage ? recordCompletionButton(student) : ''}</span>`;
     }
 
@@ -7448,21 +7496,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const sex = formatSex(s.Sex);
         const specialChecked = s.IsSpecial ? 'checked' : '';
         const extraBadge = isExtra ? '<span class="batch-extra-badge">직접 추가</span>' : '';
+        // 휴강 중인 학생은 기본으로 제외하고, 체크하면 보강 수업으로 기록한다.
+        const paused = !isExtra && !Number(s.IsClassEnded) && Number(s.IsPaused) === 1;
+        const pausedBadge = paused ? '<span class="batch-paused-badge">휴강</span>' : '';
         const attendInput = isExtra
             ? `<input type="checkbox" class="batch-attend" data-student-id="${sId}" data-extra-student="1" checked title="수업에 배정되지 않은 학생은 참석 기록만 등록할 수 있습니다." style="width: 16px; height: 16px; accent-color: var(--success);">`
-            : `<input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">`;
+            : paused
+                ? `<input type="checkbox" class="batch-attend" data-student-id="${sId}" title="휴강 중인 학생입니다. 체크하면 보강 수업으로 기록됩니다." style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">`
+                : `<input type="checkbox" class="batch-attend" data-student-id="${sId}" checked style="width: 16px; height: 16px; accent-color: var(--success); cursor: pointer;">`;
         const removeButton = isExtra
             ? `<button type="button" class="btn btn-xs btn-outline btn-remove-batch-extra" data-student-id="${sId}" title="추가한 학생 목록에서 제외"><i class="fa-solid fa-xmark"></i> 제외</button>`
             : '';
         return `
-            <tr data-batch-row="${sId}">
+            <tr data-batch-row="${sId}"${paused ? ' class="batch-row-paused"' : ''}>
                 <td style="text-align: center;">
                     ${attendInput}
                 </td>
                 <td style="text-align: center;">
                     <input type="checkbox" class="batch-special" data-student-id="${sId}" ${specialChecked} title="특강 수업 여부" style="width: 16px; height: 16px; accent-color: var(--warning); cursor: pointer;">
                 </td>
-                <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} ${extraBadge} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
+                <td><i class="fa-solid fa-user-graduate" style="color: var(--primary);"></i> ${name} ${extraBadge}${pausedBadge} <span class="text-muted" style="font-size: 0.75rem;">(${sex})${s.Referrer ? ` · 추천: ${formatReferrer(s.Referrer)}` : ''}</span></td>
                 <td id="batch-tuition-progress-${sId}" class="text-muted">조회 중...</td>
                 <td class="batch-memo-action-cell">
                     <button type="button" class="btn btn-xs btn-outline btn-toggle-batch-memo" data-student-id="${sId}" aria-expanded="false">
@@ -7569,13 +7622,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!classBatchStudentsBody) return;
         if (batchAssignedStudents.length === 0) {
             classBatchStudentsBody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>이 수업에 배정된 학생이 없습니다.</p></td></tr>';
+            updateBatchPausedSummary();
             updateBatchStudentCount();
             return;
         }
         classBatchStudentsBody.innerHTML = batchAssignedStudents.map(s => batchStudentRowsHtml(s, false)).join('');
         bindBatchStudentRowEvents(classBatchStudentsBody);
         loadBatchTuitionProgress(batchAssignedStudents);
+        updateBatchPausedSummary();
         updateBatchStudentCount();
+    }
+
+    // 휴강 학생 수를 안내하고, 기본은 접어 두어 명단이 길어지지 않게 한다.
+    function updateBatchPausedSummary() {
+        if (!batchPausedSummary) return;
+        const pausedCount = batchAssignedStudents.filter(s => !Number(s.IsClassEnded) && Number(s.IsPaused) === 1).length;
+        batchPausedSummary.classList.toggle('hidden', !pausedCount);
+        if (batchPausedCount) batchPausedCount.textContent = String(pausedCount);
+    }
+
+    function toggleBatchPausedRows() {
+        if (!classBatchStudentsBody || !btnToggleBatchPaused) return;
+        const show = !classBatchStudentsBody.classList.contains('show-paused');
+        classBatchStudentsBody.classList.toggle('show-paused', show);
+        btnToggleBatchPaused.setAttribute('aria-expanded', String(show));
+        btnToggleBatchPaused.textContent = show ? '휴강 학생 접기' : '휴강 학생 보기';
     }
 
     function addBatchExtraStudent(student) {
@@ -7890,6 +7961,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classBatchRegCard) classBatchRegCard.classList.add('hidden');
         if (classBatchResult) classBatchResult.classList.add('hidden');
         if (classBatchStudentsBody) classBatchStudentsBody.innerHTML = '';
+        if (classBatchStudentsBody) classBatchStudentsBody.classList.remove('show-paused');
+        if (batchPausedSummary) batchPausedSummary.classList.add('hidden');
+        if (btnToggleBatchPaused) {
+            btnToggleBatchPaused.setAttribute('aria-expanded', 'false');
+            btnToggleBatchPaused.textContent = '휴강 학생 보기';
+        }
         if (formClassBatchStudyLog) formClassBatchStudyLog.reset();
         batchCalendarDays = {};
         batchCalendarCancellations = {};
@@ -7970,9 +8047,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = contentEl ? contentEl.value.trim() : '';
 
         const logs = [];
+        let pausedSkipped = 0;
         const extraStudentIds = new Set(batchExtraStudents.map(student => Number(student.row_id || student.Id)));
         (classBatchStudentsBody || document).querySelectorAll('.batch-attend').forEach(chk => {
             const sid = parseInt(chk.getAttribute('data-student-id'));
+            // 휴강 학생은 체크하지 않으면 보내지 않는다. (서버도 결석으로 저장하지 않는다)
+            if (!chk.checked && chk.closest('tr')?.classList.contains('batch-row-paused')) {
+                pausedSkipped++;
+                return;
+            }
             const specialEl = document.querySelector(`.batch-special[data-student-id="${sid}"]`);
             const descriptionEl = document.querySelector(`.batch-description[data-student-id="${sid}"]`);
             const absenceReasonEl = document.getElementById(`batch-absence-reason-${sid}`);
@@ -7981,7 +8064,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (logs.length === 0) {
             classBatchResult.className = 'alert alert-danger';
-            classBatchResult.textContent = '등록할 학생이 없습니다.';
+            classBatchResult.textContent = pausedSkipped
+                ? `휴강 중인 학생 ${pausedSkipped}명은 자동으로 제외되었습니다. 등록할 학생이 없습니다.`
+                : '등록할 학생이 없습니다.';
             classBatchResult.classList.remove('hidden');
             return;
         }

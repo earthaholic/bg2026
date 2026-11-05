@@ -3281,6 +3281,7 @@ def user_batch_register_class_studylogs(
     created_count = 0
     skipped_count = 0
     absence_count = 0
+    paused_count = 0
     results = []
 
     for item in payload.logs:
@@ -3310,6 +3311,18 @@ def user_batch_register_class_studylogs(
                                    (sid, class_id, day)).fetchone()
             old_absence = dict(old_row) if old_row else None
             if not item.include:
+                # 휴강 중인 학생의 미체크는 결석이 아니라 '휴강'이므로 아무 기록도 남기지 않는다.
+                # (체크하면 보강 수업으로 정상 등록된다.)
+                paused_row = conn.execute(
+                    'SELECT 1 FROM "Students" WHERE (rowid = ? OR "Id" = ?) AND COALESCE("IsPaused", 0) = 1 LIMIT 1',
+                    (sid, sid)
+                ).fetchone()
+                if paused_row:
+                    conn.commit()
+                    paused_count += 1
+                    results.append({"StudentId": sid, "Name": name, "status": "paused",
+                                    "message": "휴강 중인 학생이라 결석으로 저장하지 않았습니다."})
+                    continue
                 if conn.execute('SELECT 1 FROM "StudyLogs" WHERE "StudentId"=? AND "ClassId"=? AND "StudiedDay"=? LIMIT 1',
                                 (sid, class_id, day)).fetchone():
                     raise ValueError("해당 날짜에 참석 학습 기록이 있어 결석으로 등록할 수 없습니다. 기존 기록을 먼저 확인해 주세요.")
@@ -3370,12 +3383,16 @@ def user_batch_register_class_studylogs(
         finally:
             conn.close()
 
+    summary = f"학습 이력 일괄 등록이 완료되었습니다. (등록 {created_count}건 / 결석 {absence_count}건 / 건너뜀 {skipped_count}건"
+    if paused_count:
+        summary += f" / 휴강 {paused_count}건"
     return {
         "status": "success",
-        "message": f"학습 이력 일괄 등록이 완료되었습니다. (등록 {created_count}건 / 결석 {absence_count}건 / 건너뜀 {skipped_count}건)",
+        "message": summary + ")",
         "created_count": created_count,
         "absence_count": absence_count,
         "skipped_count": skipped_count,
+        "paused_count": paused_count,
         "results": results
     }
 

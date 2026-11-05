@@ -2250,6 +2250,10 @@
 
                                 <div class="form-section batch-studylog-section">
                                     <h4 class="section-title"><i class="fa-solid fa-users"></i> 4. 학생별 참석 여부 / 특강 여부</h4>
+                                    <div id="batch-paused-summary" class="batch-paused-summary hidden">
+                                        <p><i class="fa-solid fa-circle-pause" aria-hidden="true"></i> 휴강 <strong id="batch-paused-count">0</strong>명은 자동으로 빠져 있습니다.</p>
+                                        <button type="button" id="btn-toggle-batch-paused" class="btn btn-xs btn-outline" aria-expanded="false">휴강 학생 보기</button>
+                                    </div>
                                     <div id="class-batch-students" class="table-responsive">
                                         <table class="modern-table">
                                             <thead>
@@ -2264,7 +2268,7 @@
                                             <tbody id="class-batch-students-body"></tbody>
                                         </table>
                                     </div>
-                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.4rem;">결석 학생은 <strong>참석</strong> 체크를 해제한 뒤 결석 사유를 입력하세요. 결석 내역은 월말 문자에 표시할 수 있으며 강의 번호에는 포함되지 않습니다. 특강은 수업 등록 시 설정한 학생에게 미리 체크되어 있으며, 필요 시 변경할 수 있습니다 (기본값: 일반 수업).</div>
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.4rem;">결석 학생은 <strong>참석</strong> 체크를 해제한 뒤 결석 사유를 입력하세요. 결석 내역은 월말 문자에 표시할 수 있으며 강의 번호에는 포함되지 않습니다. 특강은 수업 등록 시 설정한 학생에게 미리 체크되어 있으며, 필요 시 변경할 수 있습니다 (기본값: 일반 수업). <strong>휴강</strong> 중인 학생은 자동으로 제외되며, 체크하면 보강 수업으로 등록됩니다.</div>
                                     <div id="batch-extra-student-tools" class="batch-extra-tools staff-only hidden">
                                         <div class="batch-extra-search">
                                             <label for="batch-extra-student-q"><i class="fa-solid fa-user-plus"></i> 학생 직접 추가</label>

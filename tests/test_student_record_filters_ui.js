@@ -17,6 +17,8 @@ function between(start, end) {
 const elementCode = between('    // Student Search & Filter Elements', '    // Book Detail Modal Elements');
 const code = [
     between('    // Student Search State', '    // 도서 검색의 "미학습 학생" 필터'),
+    // 학생 상태(재원·휴강·수업 종료) 계산은 목록 렌더러와 같은 코드를 사용한다.
+    between('    // 학생 상태는 재원·휴강·수업 종료 중 하나다.', '    function syncListQuickEdit(kind) {'),
     elementCode,
     between('    function buildStudentSearchParams()', '    // Open Book Detail Modal (View Mode)'),
     between('        // Student Search & Filter Events', "        btnCloseDetailModal.addEventListener"),

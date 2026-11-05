@@ -5306,6 +5306,61 @@ button.class-student-badge { cursor: pointer; }
     .class-unscheduled-grid { grid-template-columns: 1fr; }
 }
 
+/* 학생 휴강 상태: 회색 점선으로 비활성을 표시한다. */
+#view-class-list .class-student-badge.is-paused {
+    background: var(--bg-surface);
+    border: 1px dashed var(--border-color);
+    color: var(--text-muted);
+}
+
+.badge.student-paused-badge {
+    background: var(--bg-surface);
+    border: 1px dashed var(--border-color);
+    color: var(--text-muted);
+}
+
+.list-quick-choice.is-paused {
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.batch-paused-badge {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.batch-paused-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.batch-paused-summary p {
+    margin: 0;
+}
+
+#class-batch-students-body tr.batch-row-paused {
+    display: none;
+}
+
+#class-batch-students-body.show-paused tr.batch-row-paused {
+    display: table-row;
+}
+
 /* 도서 등록 요청은 공통 등록 폼과 요청 내역을 한 흐름으로 표시한다. */
 #view-book-material-request {
     overflow-y: auto;
