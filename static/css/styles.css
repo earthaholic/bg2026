@@ -1205,6 +1205,48 @@ body {
     gap: 0.6rem;
 }
 
+.material-filter {
+    gap: 0.5rem;
+}
+
+.material-filter-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.material-filter-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.5rem;
+}
+
+.material-filter-head strong {
+    font-size: 0.82rem;
+    color: var(--text-main);
+}
+
+.material-filter-hint {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.material-filter-state {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.material-filter-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
 .results-bar {
     display: flex;
     align-items: center;

@@ -189,6 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterChkYes24 = document.getElementById('filter-chk-yes24');
     const filterChkMillie = document.getElementById('filter-chk-millie');
     const btnResetFilters = document.getElementById('btn-reset-filters');
+    const materialSetState = document.getElementById('material-set-state');
+    const materialHaveState = document.getElementById('material-have-state');
     const bookStudyStudentQ = document.getElementById('book-study-student-q');
     const bookStudyClassSelect = document.getElementById('book-study-class-select');
     const bookStudyStudentResults = document.getElementById('book-study-student-results');
@@ -1136,17 +1138,19 @@ document.addEventListener('DOMContentLoaded', () => {
             filterLengthMax.addEventListener('input', handleLengthChange);
         }
 
-        filterChkQuiz.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
-        filterChkReading.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
-        filterChkWriting.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); });
+        filterChkQuiz.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
+        filterChkReading.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
+        filterChkWriting.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); });
         filterChkPdf.addEventListener('click', (event) => {
             const button = event.target.closest('button[data-value]');
             if (!button || button.getAttribute('aria-pressed') === 'true') return;
             setPdfToggleValue(filterChkPdf, button.dataset.value);
             searchPage = 1;
+            updateMaterialFilterSummary();
             loadBookSearchResults();
         });
-        [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; loadBookSearchResults(); }));
+        [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => chk.addEventListener('change', () => { searchPage = 1; updateMaterialFilterSummary(); loadBookSearchResults(); }));
+        updateMaterialFilterSummary();
 
         bookStudyStudentQ.addEventListener('input', () => {
             clearTimeout(bookStudentSearchTimer);
@@ -1209,6 +1213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filterChkWriting.checked = false;
             setPdfToggleValue(filterChkPdf, '');
             [filterChkAdvanced, filterChkDebate, filterChkPaperbook, filterChkYes24, filterChkMillie].forEach(chk => { chk.checked = false; });
+            updateMaterialFilterSummary();
             bookUnstudiedStudents.clear();
             bookStudyStudentQ.value = '';
             bookStudyStudentResults.innerHTML = '';
@@ -3652,6 +3657,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button type="button" class="btn-remove-chip" data-remove-book-study-student="${student.id}" aria-label="${escapeHtml(student.name)} 학생 제거"><i class="fa-solid fa-xmark"></i></button>
             </span>`).join('');
         bookStudyStudentChips.classList.toggle('hidden', students.length === 0);
+    }
+
+    // 자료 구성은 선택한 조합과 정확히 일치하고, 자료 보유는 선택한 자료를 반드시 포함한다.
+    function updateMaterialFilterSummary() {
+        const selectedSet = Array.from(document.querySelectorAll('.material-set-chk'))
+            .filter(chk => chk.checked).map(chk => chk.dataset.materialLabel);
+        const selectedHave = Array.from(document.querySelectorAll('.material-have-chk'))
+            .filter(chk => chk.checked).map(chk => chk.dataset.materialLabel);
+        const pdfButton = filterChkPdf ? filterChkPdf.querySelector('button[aria-pressed="true"]') : null;
+        if (pdfButton && pdfButton.dataset.value !== '') selectedHave.unshift(`PDF ${pdfButton.textContent.trim()}`);
+        if (materialSetState) {
+            materialSetState.textContent = selectedSet.length
+                ? `선택: ${selectedSet.join(', ')} · 선택하지 않은 자료가 없는 도서`
+                : '선택 없음 · 위 다섯 자료가 하나도 없는 도서만 표시';
+        }
+        if (materialHaveState) {
+            materialHaveState.textContent = selectedHave.length
+                ? `선택: ${selectedHave.join(', ')} · 반드시 보유한 도서`
+                : '선택 없음 · 자료 보유 조건 없음';
+        }
     }
 
     // Book Search Handler

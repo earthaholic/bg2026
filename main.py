@@ -801,24 +801,26 @@ def user_search_books(
         conditions.append('COALESCE("BookLength", 0) <= ?')
         params.append(length_max)
 
-    if has_quiz == 1:
-        conditions.append('"HasQuiz" = 1')
+    # 자료 구성: 선택한 자료는 반드시 있고, 선택하지 않은 자료는 없어야 한다.
+    # 아무것도 선택하지 않으면 다섯 자료가 모두 없는 도서만 조회된다.
+    material_composition = (
+        ('"HasQuiz" = 1', 'COALESCE("HasQuiz", 0) = 0', has_quiz),
+        ('("HasReadingQuestion" = 1 OR "HasReadingAnswer" = 1)',
+         'COALESCE("HasReadingQuestion", 0) = 0 AND COALESCE("HasReadingAnswer", 0) = 0', has_reading),
+        ('("HasWritingQuestion" = 1 OR "HasWritingAnswer" = 1)',
+         'COALESCE("HasWritingQuestion", 0) = 0 AND COALESCE("HasWritingAnswer", 0) = 0', has_writing),
+        ('"HasAdvancedMaterial" = 1', 'COALESCE("HasAdvancedMaterial", 0) = 0', has_advanced),
+        ('"HasDebateMaterial" = 1', 'COALESCE("HasDebateMaterial", 0) = 0', has_debate),
+    )
+    for present_condition, absent_condition, flag in material_composition:
+        conditions.append(present_condition if flag == 1 else absent_condition)
 
-    if has_reading == 1:
-        conditions.append('("HasReadingQuestion" = 1 OR "HasReadingAnswer" = 1)')
-
-    if has_writing == 1:
-        conditions.append('("HasWritingQuestion" = 1 OR "HasWritingAnswer" = 1)')
-
+    # 자료 보유: 선택한 자료만 반드시 갖고 있어야 하며, 선택하지 않은 자료는 조건이 없다.
     if pdf_status is not None:
         conditions.append('COALESCE("IsPdfExist", 0) = ?')
         params.append(pdf_status)
     elif has_pdf == 1:
         conditions.append('"IsPdfExist" IN (1, 2)')
-    if has_advanced == 1:
-        conditions.append('"HasAdvancedMaterial" = 1')
-    if has_debate == 1:
-        conditions.append('"HasDebateMaterial" = 1')
     if has_paperbook == 1:
         conditions.append('"IsPaperbookExist" = 1')
     if has_yes24 == 1:

@@ -566,42 +566,60 @@
                                     </div>
                                 </div>
 
-                                <div class="filter-group span-full">
+                                <div class="filter-group span-full material-filter">
                                     <label><i class="fa-solid fa-filter"></i> 보유 자료 조건</label>
-                                    <div class="checkbox-filter-row">
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-quiz" value="1">
-                                            <span>퀴즈</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-reading" value="1">
-                                            <span>독서 문제/답안</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-writing" value="1">
-                                            <span>글쓰기 문제/답안</span>
-                                        </label>
-                                        <div class="pdf-filter"><span>PDF</span><div id="filter-chk-pdf" class="pdf-state-toggle" role="group" aria-label="PDF 보유 상태 필터" data-value=""><button type="button" class="pdf-state-button" data-value="" aria-pressed="true">전체</button><button type="button" class="pdf-state-button" data-value="owned" aria-pressed="false">보유 전체</button><button type="button" class="pdf-state-button" data-value="0" aria-pressed="false">미보유</button><button type="button" class="pdf-state-button" data-value="1" aria-pressed="false">저작권 있음</button><button type="button" class="pdf-state-button" data-value="2" aria-pressed="false">저작권 없음</button></div></div>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-advanced" value="1">
-                                            <span>심화 자료</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-debate" value="1">
-                                            <span>토론 자료</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-paperbook" value="1">
-                                            <span>종이책 보유</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-yes24" value="1">
-                                            <span>YES24 보유</span>
-                                        </label>
-                                        <label class="checkbox-pill sm">
-                                            <input type="checkbox" id="filter-chk-millie" value="1">
-                                            <span>밀리의 서재 보유</span>
-                                        </label>
+                                    <div class="material-filter-block">
+                                        <div class="material-filter-head">
+                                            <strong>자료 구성</strong>
+                                            <span class="material-filter-hint">선택한 자료만 갖고, 선택하지 않은 자료는 없는 도서</span>
+                                        </div>
+                                        <div class="checkbox-filter-row">
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-quiz" class="material-set-chk" data-material-label="퀴즈" value="1">
+                                                <span>퀴즈</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-reading" class="material-set-chk" data-material-label="독서 문제/답안" value="1">
+                                                <span>독서 문제/답안</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-writing" class="material-set-chk" data-material-label="글쓰기 문제/답안" value="1">
+                                                <span>글쓰기 문제/답안</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-advanced" class="material-set-chk" data-material-label="심화 자료" value="1">
+                                                <span>심화 자료</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-debate" class="material-set-chk" data-material-label="토론 자료" value="1">
+                                                <span>토론 자료</span>
+                                            </label>
+                                        </div>
+                                        <span id="material-set-state" class="material-filter-state" role="status" aria-live="polite"></span>
+                                    </div>
+                                    <div class="material-filter-block">
+                                        <div class="material-filter-head">
+                                            <strong>자료 보유</strong>
+                                            <span class="material-filter-hint">선택한 자료를 반드시 갖고 있는 도서</span>
+                                        </div>
+                                        <div class="checkbox-filter-row">
+                                            <div class="pdf-filter"><span>PDF</span><div id="filter-chk-pdf" class="pdf-state-toggle" role="group" aria-label="PDF 보유 상태 필터" data-value=""><button type="button" class="pdf-state-button" data-value="" aria-pressed="true">전체</button><button type="button" class="pdf-state-button" data-value="owned" aria-pressed="false">보유 전체</button><button type="button" class="pdf-state-button" data-value="0" aria-pressed="false">미보유</button><button type="button" class="pdf-state-button" data-value="1" aria-pressed="false">저작권 있음</button><button type="button" class="pdf-state-button" data-value="2" aria-pressed="false">저작권 없음</button></div></div>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-paperbook" class="material-have-chk" data-material-label="종이책 보유" value="1">
+                                                <span>종이책 보유</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-yes24" class="material-have-chk" data-material-label="YES24 보유" value="1">
+                                                <span>YES24 보유</span>
+                                            </label>
+                                            <label class="checkbox-pill sm">
+                                                <input type="checkbox" id="filter-chk-millie" class="material-have-chk" data-material-label="밀리의 서재 보유" value="1">
+                                                <span>밀리의 서재 보유</span>
+                                            </label>
+                                        </div>
+                                        <span id="material-have-state" class="material-filter-state" role="status" aria-live="polite"></span>
+                                    </div>
+                                    <div class="material-filter-actions">
                                         <button id="btn-reset-filters" class="btn btn-sm btn-outline">
                                             <i class="fa-solid fa-rotate-left"></i> 필터 초기화
                                         </button>
