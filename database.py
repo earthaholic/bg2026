@@ -1061,9 +1061,13 @@ def search_classes(
     students_by_class = {row['Id']: [] for row in rows}
     if rows:
         placeholders = ','.join('?' for _ in rows)
+        # oracle_sync 직후처럼 컬럼이 아직 보완되지 않은 DB에서도 목록이 깨지지 않게 한다.
+        student_columns = {row["name"] for row in cursor.execute('PRAGMA table_info("Students")')}
+        paused_expr = 'COALESCE(s."IsPaused", 0)' if "IsPaused" in student_columns else '0'
+        ended_expr = 'COALESCE(s."IsClassEnded", 0)' if "IsClassEnded" in student_columns else '0'
         cursor.execute(f'''
             SELECT DISTINCT cs."ClassId", s.rowid AS row_id, s."Name", cs."IsSpecial",
-                   COALESCE(s."IsPaused", 0) AS "IsPaused", COALESCE(s."IsClassEnded", 0) AS "IsClassEnded"
+                   {paused_expr} AS "IsPaused", {ended_expr} AS "IsClassEnded"
             FROM "ClassStudents" cs
             JOIN "Students" s ON cs."StudentId" = s.rowid OR cs."StudentId" = s."Id"
             WHERE cs."ClassId" IN ({placeholders})

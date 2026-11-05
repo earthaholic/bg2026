@@ -20,7 +20,7 @@ class StudentRecordCoverageTests(unittest.TestCase):
         self.conn.executescript('''
             CREATE TABLE Students (
                 Id INTEGER UNIQUE, Name TEXT, Sex TEXT, Grade TEXT,
-                Referrer TEXT, Description TEXT, IsClassEnded INTEGER DEFAULT 0
+                Referrer TEXT, Description TEXT, IsClassEnded INTEGER DEFAULT 0, IsPaused INTEGER DEFAULT 0
             );
             CREATE TABLE StudyLogs (
                 StudentId INTEGER, ClassId INTEGER, StudiedDay TEXT,

@@ -1493,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (chkClassEditMode) {
             chkClassEditMode.addEventListener('change', () => {
-                classEditMode = chkClassEditMode.checked && isStaff();
+                classEditMode = chkClassEditMode.checked;
                 applyClassEditMode();
             });
         }
@@ -6725,7 +6725,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyClassEditMode() {
-        if (!isStaff()) classEditMode = false;
+        // 일반 선생님도 본인 수업 사이에서 학생을 옮길 수 있어 역할과 관계없이 허용한다.
+        // (이동 가능한 수업 범위는 서버가 다시 검증한다.)
         if (chkClassEditMode) chkClassEditMode.checked = classEditMode;
         classSelectedMoveStudent = null;
         document.getElementById('view-class-list')?.classList.toggle('class-edit-active', classEditMode);

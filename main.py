@@ -2847,7 +2847,7 @@ def user_update_class(
 def user_move_class_student(
     class_id: int,
     payload: ClassStudentMoveRequest,
-    current_user: Dict[str, Any] = Depends(get_current_staff)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """학생의 수업 배정을 원 수업에서 다른 수업으로 옮긴다."""
     source = get_class_by_id(class_id)
@@ -2858,6 +2858,11 @@ def user_move_class_student(
     target = get_class_by_id(payload.TargetClassId)
     if not target:
         raise HTTPException(status_code=404, detail="이동할 수업을 찾을 수 없습니다.")
+    # 일반 선생님은 본인이 담당한 두 수업 사이에서만 이동할 수 있다.
+    if current_user["role"] == "teacher":
+        for cls in (source, target):
+            if (cls.get("TeacherUsername") or "") != current_user["username"]:
+                raise HTTPException(status_code=403, detail="본인이 담당한 수업 사이에서만 학생을 이동할 수 있습니다.")
     if target.get("IsEnded"):
         raise HTTPException(status_code=400, detail="종강 처리된 수업으로는 학생을 이동할 수 없습니다.")
     try:

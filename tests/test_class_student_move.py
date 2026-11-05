@@ -87,7 +87,20 @@ class ClassStudentMoveTests(unittest.TestCase):
         self.assertIn('종강', response.json()['detail'])
         self.assertEqual(self.assignments(), {1: 0})
 
-    def test_teacher_cannot_move_students(self):
+    def test_teacher_moves_student_between_own_classes(self):
+        response = self.move(username='teacher_a')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.assignments(), {2: 0})
+
+    def test_teacher_cannot_move_into_other_teachers_class(self):
+        self.sql("INSERT INTO Classes(Id, ClassName, TeacherUsername, DayOfWeek, IsEnded) "
+                 "VALUES (4, '다른 선생님 반', 'teacher_b', '화', 0)")
+        response = self.move(target_class_id=4, username='teacher_a')
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(self.assignments(), {1: 0})
+
+    def test_teacher_cannot_move_from_other_teachers_class(self):
+        self.sql("UPDATE Classes SET TeacherUsername = 'teacher_b' WHERE Id = 1")
         response = self.move(username='teacher_a')
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(self.assignments(), {1: 0})
