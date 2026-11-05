@@ -699,7 +699,7 @@
         },
         "sort_by": {
           "type": "string",
-          "pattern": "^(row_id|StudyStudentCount)$",
+          "pattern": "^(row_id|StudyStudentCount|Title)$",
           "default": "row_id",
           "title": "Sort By"
         },

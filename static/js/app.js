@@ -9998,10 +9998,12 @@ document.addEventListener('DOMContentLoaded', () => {
         table.dataset.sortColumn = String(columnIndex);
         table.dataset.sortDirection = direction;
 
-        if (table.querySelector('#book-cards-grid') && (columnIndex === 7 || columnIndex === 1)) {
+        // 도서 목록은 전체 검색 결과 기준으로 정렬해야 하므로 서버에 정렬 기준을 넘긴다.
+        const bookSortColumns = { 1: 'row_id', 2: 'Title', 7: 'StudyStudentCount' };
+        if (table.querySelector('#book-cards-grid') && bookSortColumns[columnIndex]) {
             Array.from(table.tBodies).forEach(body => { if (body.rows.length) listOrderResets.set(body, body.rows[0]); });
             table.dataset.sortMode = 'server';
-            bookSortBy = columnIndex === 7 ? 'StudyStudentCount' : 'row_id';
+            bookSortBy = bookSortColumns[columnIndex];
             bookSortDirection = direction;
             searchPage = 1;
             loadBookSearchResults();

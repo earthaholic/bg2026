@@ -735,6 +735,14 @@ def user_get_recent_books(current_user: Dict[str, Any] = Depends(get_current_use
     conn.close()
     return {"books": [dict(r) for r in rows]}
 
+# 도서 검색 정렬 기준: 노출하는 값만 정렬 열로 변환한다(그 밖의 값은 허용하지 않는다).
+BOOK_SEARCH_SORT_COLUMNS = {
+    'row_id': 'row_id',
+    'StudyStudentCount': 'StudyStudentCount',
+    'Title': 'COALESCE("Title", \'\') COLLATE NOCASE',
+}
+
+
 @app.get("/api/user/books/search")
 def user_search_books(
     q: Optional[str] = Query(None),
@@ -754,7 +762,7 @@ def user_search_books(
     has_yes24: Optional[int] = Query(None),
     has_millie: Optional[int] = Query(None),
     unstudied_student_ids: Optional[str] = Query(None),
-    sort_by: str = Query("row_id", regex="^(row_id|StudyStudentCount)$"),
+    sort_by: str = Query("row_id", regex="^(row_id|StudyStudentCount|Title)$"),
     sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=50),
@@ -864,7 +872,8 @@ def user_search_books(
 
     # Paginated data
     offset = (page - 1) * limit
-    order_column = 'StudyStudentCount' if sort_by == 'StudyStudentCount' else 'row_id'
+    # 정렬은 페이지 단위가 아니라 검색 조건에 맞는 전체 도서에 적용한다.
+    order_column = BOOK_SEARCH_SORT_COLUMNS.get(sort_by, 'row_id')
     data_query = f'''SELECT rowid AS row_id, *,
         COALESCE((SELECT student_count FROM _app_book_student_counts c
                   WHERE c.book_rowid = Books.rowid), 0) AS StudyStudentCount
