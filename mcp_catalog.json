@@ -1707,7 +1707,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|StudentCount)$"
+              "pattern": "^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|CategoryName)$"
             },
             {
               "type": "null"

@@ -263,6 +263,9 @@ class ClassRequest(BaseModel):
 class ClassCategoryRequest(BaseModel):
     CategoryId: int
 
+class ClassEndedRequest(BaseModel):
+    IsEnded: bool
+
 class ClassStudyLogItem(BaseModel):
     StudentId: int
     include: bool = True
@@ -2571,7 +2574,7 @@ def _class_student_items(payload: ClassRequest) -> List[dict]:
 @app.get("/api/user/classes")
 def user_list_classes(
     q: Optional[str] = Query(None),
-    sort_by: Optional[str] = Query(None, regex="^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|StudentCount)$"),
+    sort_by: Optional[str] = Query(None, regex="^(Id|ClassName|DayOfWeek|StartTime|TeacherUsername|CategoryName)$"),
     sort_direction: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
@@ -2864,6 +2867,29 @@ def user_update_class_category(
     _audit_update("Classes", class_id, old_snapshot, new_snapshot,
                   current_user["username"], current_user["role"])
     return {"status": "success", "message": f"'{class_row['ClassName']}' 수업의 카테고리를 '{category['Name']}'(으)로 저장했습니다."}
+
+@app.put("/api/user/classes/{class_id}/ended")
+def user_update_class_ended(
+    class_id: int,
+    payload: ClassEndedRequest,
+    current_user: Dict[str, Any] = Depends(get_current_staff)
+):
+    """수업 종료(종강) 여부만 변경한다."""
+    class_row = get_class_by_id(class_id)
+    if not class_row:
+        raise HTTPException(status_code=404, detail="해당 수업을 찾을 수 없습니다.")
+    ended_value = 1 if payload.IsEnded else 0
+    old_snapshot = get_record_snapshot("Classes", class_id)
+    update_class(class_id, {
+        "IsEnded": ended_value,
+        "UpdatedBy": current_user["username"],
+        "UpdatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+    new_snapshot = get_record_snapshot("Classes", class_id)
+    _audit_update("Classes", class_id, old_snapshot, new_snapshot,
+                  current_user["username"], current_user["role"])
+    message = f"'{class_row['ClassName']}' 수업을 종강 처리했습니다." if ended_value else f"'{class_row['ClassName']}' 수업을 다시 진행 중으로 변경했습니다."
+    return {"status": "success", "IsEnded": ended_value, "message": message}
 
 @app.delete("/api/user/classes/{class_id}")
 def user_delete_class(

@@ -67,7 +67,7 @@ function tableFor(gridId, labels, { containsHead = false } = {}) {
 
 const BOOK_LABELS = ['', 'ID', '도서명', '저자', '출판사', '대상/난이도', '분량 단계', '수업한 학생 수', '독서문제', 'PDF', '관리'];
 const STUDENT_LABELS = ['ID', '학생 이름', '성별', '등록 학년', '추천인', '메모 / 특이사항', '수업 종료 여부', '관리'];
-const CLASS_LABELS = ['ID', '수업명', '수업 요일', '시작 시간', '담당 선생님', '소속 학생 수', '수업 종료 여부', '관리'];
+const CLASS_LABELS = ['ID', '수업명', '수업 요일', '시작 시간', '담당 선생님', '반 카테고리', '관리'];
 const ACTIVITY_LABELS = ['일시 (한국 시간)', '계정 / 역할', '활동', '업무 영역', '대상', '결과', '상세'];
 const AUDIT_LABELS = ['일시', '계정', '대상 테이블', '레코드', '액션', '변경 요약'];
 const TC_LABELS = ['학생·수업', '잔여 차시', '진행 상태', '독촉', '결제창 발송', '다음 확인', '처리'];
@@ -104,10 +104,10 @@ test('학생 목록은 이름·성별·학년·추천인·특이사항·수업 �
     assert.equal(context.calls.length, Object.keys(expected).length);
 });
 
-test('수업 목록은 요일·시작 시간·담당 선생님·소속 학생 수로 전체 정렬한다', () => {
+test('수업 목록은 요일·시작 시간·담당 선생님·반 카테고리로 전체 정렬한다', () => {
     const context = setup();
     const { headers } = tableFor('class-cards-grid', CLASS_LABELS);
-    const expected = { 0: 'Id', 1: 'ClassName', 2: 'DayOfWeek', 3: 'StartTime', 4: 'TeacherUsername', 5: 'StudentCount' };
+    const expected = { 0: 'Id', 1: 'ClassName', 2: 'DayOfWeek', 3: 'StartTime', 4: 'TeacherUsername', 5: 'CategoryName' };
     for (const [index, key] of Object.entries(expected)) {
         context.sortTableByHeader(headers[index]);
         assert.equal(context.classSortBy, key, index);

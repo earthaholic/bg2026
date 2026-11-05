@@ -2940,21 +2940,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function toggleClassEnded(classId, newVal, btnEl) {
         const feedback = createActionFeedback(btnEl);
         try {
-            await apiFetch(`/api/user/classes/${classId}`, {
+            await apiFetch(`/api/user/classes/${classId}/ended`, {
                 method: 'PUT',
-                body: JSON.stringify({ data: { IsEnded: newVal } })
+                body: JSON.stringify({ IsEnded: newVal === 1 })
             });
-            btnEl.setAttribute('data-current', newVal);
-            if (newVal === 1) {
-                btnEl.className = 'btn-toggle-status is-ended btn-toggle-class-ended';
-                btnEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> 종강/완료';
-            } else {
-                btnEl.className = 'btn-toggle-status is-active btn-toggle-class-ended';
-                btnEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> 수업 진행 중';
-            }
-            feedback.show('수업 종료 상태가 변경되었습니다.', 'success');
+            feedback.show(newVal === 1 ? '수업을 종강 처리했습니다.' : '수업을 다시 진행 중으로 변경했습니다.', 'success');
+            return true;
         } catch (err) {
             feedback.show('수업 상태 변경 실패: ' + err.message, 'error');
+            return false;
         }
     }
 
@@ -6472,7 +6466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderClassCards(classes) {
         if (!classCardsGrid) return;
         if (classes.length === 0) {
-            classCardsGrid.innerHTML = '<tr><td colspan="8" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div></td></tr>';
+            classCardsGrid.innerHTML = '<tr><td colspan="7" class="text-center p-4"><div class="empty-state"><i class="fa-solid fa-folder-open fa-2x"></i><p>등록된 수업이 없습니다.</p></div></td></tr>';
             return;
         }
         let html = '';
@@ -6482,8 +6476,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const teacher = escapeHtml(userName(c.TeacherUsername || '-'));
             const day = formatDayOfWeek(c.DayOfWeek);
             const time = c.StartTime ? escapeHtml(c.StartTime) : '미지정';
-            const count = c.StudentCount || 0;
-            const isEnded = !!c.IsEnded;
+            const category = c.CategoryName
+                ? `<span class="tag-badge primary"><i class="fa-solid fa-tag"></i> ${escapeHtml(c.CategoryName)}</span>`
+                : '<span class="text-muted">미지정</span>';
 
             html += `
                 <tr data-class-id="${cId}">
@@ -6495,12 +6490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td data-sort-value="${Object.keys(DAY_LABELS).indexOf(c.DayOfWeek) + 1}"><span class="tag-badge primary"><i class="fa-solid fa-calendar-days"></i> ${day}</span></td>
                     <td>${time}</td>
                     <td><i class="fa-solid fa-user-tie text-muted"></i> ${teacher}</td>
-                    <td><span class="badge badge-info"><i class="fa-solid fa-users"></i> ${count}명</span></td>
-                    <td class="text-center">
-                        <button type="button" class="btn-toggle-status ${isEnded ? 'is-ended' : 'is-active'} btn-toggle-class-ended" data-class-id="${cId}" data-current="${isEnded ? 1 : 0}">
-                            ${isEnded ? '<i class="fa-solid fa-circle-check"></i> 종강/완료' : '<i class="fa-solid fa-chalkboard-user"></i> 수업 진행 중'}
-                        </button>
-                    </td>
+                    <td>${category}</td>
                     <td>
                         <div class="action-btn-group" style="display: flex; gap: 0.35rem; align-items: center;">
                             <button type="button" class="btn btn-xs btn-outline btn-open-class-detail" data-class-id="${cId}">
@@ -6537,16 +6527,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 goToClassBatchReg(parseInt(btn.getAttribute('data-class-id')));
             });
         });
-
-        classCardsGrid.querySelectorAll('.btn-toggle-class-ended').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const classId = btn.getAttribute('data-class-id');
-                const currentVal = parseInt(btn.getAttribute('data-current')) || 0;
-                const newVal = currentVal === 1 ? 0 : 1;
-                await toggleClassEnded(classId, newVal, btn);
-            });
-        });
     }
 
     // 수업 상세 모달
@@ -6563,9 +6543,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isStaff()) {
                 modalClassDetailActions.innerHTML = `
+                    <button id="btn-modal-toggle-class-ended" class="btn btn-sm btn-outline">${cls.IsEnded ? '<i class="fa-solid fa-rotate-left"></i> 수업 재개' : '<i class="fa-solid fa-circle-check"></i> 종강 처리'}</button>
                     <button id="btn-modal-edit-class" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>
                     <button id="btn-modal-delete-class" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash-can"></i> 수업 삭제</button>
                 `;
+                document.getElementById('btn-modal-toggle-class-ended').addEventListener('click', async (event) => {
+                    const button = event.currentTarget;
+                    if (button.disabled) return;
+                    button.disabled = true;
+                    const changed = await toggleClassEnded(classId, cls.IsEnded ? 0 : 1, button);
+                    if (!changed) { button.disabled = false; return; }
+                    await openClassDetailModal(classId);
+                    await loadClassSearchResults();
+                });
                 document.getElementById('btn-modal-edit-class').addEventListener('click', () => renderClassDetailEditForm(cls, students, classId));
                 document.getElementById('btn-modal-delete-class').addEventListener('click', () => openClassDeleteConfirmModal(cls));
             } else {
@@ -6597,6 +6587,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span><i class="fa-solid fa-calendar-days"></i> 요일: <strong>${day}</strong></span>
                         <span><i class="fa-solid fa-clock"></i> 시간: <strong>${time}</strong></span>
                         <span><i class="fa-solid fa-users"></i> 수강 학생: <strong>${students.length}명</strong></span>
+                        <span><i class="fa-solid fa-circle-check"></i> 수업 상태: <strong>${cls.IsEnded ? '종강/완료' : '수업 진행 중'}</strong></span>
                     </div>
                 </div>
                 <div class="class-detail-students">
@@ -10020,7 +10011,7 @@ document.addEventListener('DOMContentLoaded', () => {
             6: 'IsSpecial', 7: 'LessonContent', 8: 'Description'
         },
         'student-cards-grid': { 0: 'row_id', 1: 'Name', 2: 'Sex', 3: 'Grade', 4: 'Referrer', 5: 'Description', 6: 'IsClassEnded' },
-        'class-cards-grid': { 0: 'Id', 1: 'ClassName', 2: 'DayOfWeek', 3: 'StartTime', 4: 'TeacherUsername', 5: 'StudentCount' },
+        'class-cards-grid': { 0: 'Id', 1: 'ClassName', 2: 'DayOfWeek', 3: 'StartTime', 4: 'TeacherUsername', 5: 'CategoryName' },
         'activity-body': { 0: 'created_at', 1: 'username', 2: 'event', 3: 'area', 5: 'status_code' },
         'audit-log-body': { 0: 'created_at', 1: 'username', 2: 'table_name', 3: 'record_id', 4: 'action' },
         'tc-body': { 0: 'student', 1: 'remaining', 2: 'status', 3: 'reminder_count', 4: 'last_sent_at', 5: 'next_followup' }

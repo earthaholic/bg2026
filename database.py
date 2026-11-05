@@ -998,7 +998,7 @@ CLASS_SORT_COLUMNS = {
                  "WHEN '금' THEN 5 WHEN '토' THEN 6 WHEN '일' THEN 7 ELSE 99 END",
     'StartTime': 'COALESCE(c."StartTime", \'\') COLLATE NOCASE',
     'TeacherUsername': 'COALESCE((SELECT u.name FROM _app_users u WHERE u.username = c."TeacherUsername"), \'\') COLLATE NOCASE',
-    'StudentCount': 'StudentCount',
+    'CategoryName': 'COALESCE(cc."Name", \'\') COLLATE NOCASE',
 }
 
 

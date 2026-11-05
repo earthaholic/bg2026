@@ -340,3 +340,8 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 저장 시 직접 추가한 학생에만 `allow_not_assigned=true`를 보내고, `POST /api/user/classes/{id}/studylogs`는 staff 역할·플래그·학생 실재·참석 여부를 다시 검증한다. 학생의 `ClassStudents` 배정은 변경하지 않으며 기록의 수업·담당 선생님·정산 카테고리·단가는 선택한 수업 기준을 따른다.
 - 수업에 배정되지 않은 학생은 결석으로 등록할 수 없고, 미래 날짜·휴강일·중복·정산 마감 보호는 기존과 같다. 이미 배정된 학생은 후보 목록에서 제외해 같은 학생이 중복 행으로 나타나지 않는다.
 - 검증: `tests/test_class_extra_students.py`, `node --test tests/test_class_extra_students_ui.js`.
+
+## 수업 목록의 반 카테고리 열
+- 수업 목록 표는 `소속 학생 수`·`수업 종료 여부` 열 대신 `반 카테고리`를 표시한다. 값이 없으면 `미지정`으로 보이며, 다른 열과 같이 머리글을 누르면 검색 조건에 맞는 전체 수업을 서버에서 정렬한다(`/api/user/classes`의 `sort_by=CategoryName`).
+- 수업 종료 여부는 목록 열이 아니라 수업 상세 모달에서 변경한다. staff는 상세 상단의 `종강 처리`/`수업 재개` 버튼과 요약의 `수업 상태`로 확인하며, `PUT /api/user/classes/{class_id}/ended`가 `{IsEnded: bool}`만 받아 변경과 감사 기록을 한 트랜잭션에 남긴다.
+- 검증: `tests/test_class_ended.py`, `tests/test_server_side_sort.py`, `node --test tests/test_server_sort_ui.js`.

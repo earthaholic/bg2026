@@ -101,13 +101,23 @@ class ServerSideSortTests(unittest.TestCase):
         response = self.client.get('/api/user/students/search?sort_by=Name%20DESC', headers=self.headers)
         self.assertEqual(response.status_code, 422, response.text)
 
-    def test_class_list_sorts_by_weekday_and_student_count(self):
+    def test_class_list_sorts_by_weekday_across_pages(self):
         rows = self.get('/api/user/classes?sort_by=DayOfWeek&sort_direction=asc&limit=2&page=1')
         self.assertEqual([c['ClassName'] for c in rows['classes']], ['가반', '나반'])
         second = self.get('/api/user/classes?sort_by=DayOfWeek&sort_direction=asc&limit=2&page=2')
         self.assertEqual([c['ClassName'] for c in second['classes']], ['다반'])
         by_name = self.get('/api/user/classes?sort_by=ClassName&sort_direction=asc&limit=30&page=1')
         self.assertEqual([c['ClassName'] for c in by_name['classes']], ['가반', '나반', '다반'])
+
+    def test_class_list_sorts_by_category_name(self):
+        self.sql("INSERT INTO ClassCategories(Id, Name, IsActive) VALUES (7, '가나다', 1)")
+        self.sql("INSERT INTO ClassCategories(Id, Name, IsActive) VALUES (8, '하하하', 1)")
+        self.sql("UPDATE Classes SET CategoryId = 8 WHERE ClassName = '가반'")
+        self.sql("UPDATE Classes SET CategoryId = 7 WHERE ClassName = '다반'")
+        rows = self.get('/api/user/classes?sort_by=CategoryName&sort_direction=asc&limit=30&page=1')
+        # 카테고리가 없는 수업이 먼저 오고, 그 뒤에 카테고리 이름 순으로 정렬된다.
+        self.assertEqual([c['ClassName'] for c in rows['classes']], ['나반', '다반', '가반'])
+        self.assertEqual(rows['classes'][1]['CategoryName'], '가나다')
 
     def test_audit_log_sorts_by_record_across_pages(self):
         asc = self.get('/api/admin/audit-logs?sort_by=record_id&sort_direction=asc&limit=2&page=1')
