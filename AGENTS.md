@@ -147,6 +147,8 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 결제 이력 조회는 `GET /api/user/tuition-payments?include_progress=true`로 학생별 현재 결제의 `TuitionProgress`와 행별 `ProgressState`(`current`/`previous`/`upcoming`/`unknown`)를 받는다. 기본 조회는 집계를 생략한다.
 - 현재 결제는 오늘 이하의 최신 시작일, 동일 시작일이면 최신 rowid 기준이다. 이름·반 필터로 현재 결제가 제외되어도 과거 건을 현재로 간주하지 않는다. 기존 `_get_tuition_progress()` 계산을 재사용하며 결제+서비스 합계에서 일반 수업을 차감한다. 특강·휴일·휴강 제외와 같은 날짜·내용의 복수 도서 중복 제거 기준은 유지한다.
 - `결제/서비스` 셀에서 1~4회는 주황색 `결제 확인 필요`, 0회 이하는 빨간색 `차시 소진`과 초과 사용 횟수를 표시한다. 5회 이상은 일반 표시, 과거·미래 결제는 `이전 결제`·`시작 예정`으로 구분한다. 조회마다 학생별 한 번만 집계하며 늦은 이전 검색 응답은 무시한다.
+- 결제 차시를 모두 쓴 뒤에 진행한 수업은 **새 주기**로 보고 1차시부터 다시 센다. `_get_tuition_progress()`가 `overage_lessons`(새 주기에서 이미 진행한 차시)와 `next_cycle_lesson`(다음 수업의 새 주기 번호)을 함께 반환하고, 결제 이력 조회·월말보고 결제 패널·학생 상세·수업 일괄 등록의 차시 표시가 이 값을 쓴다. 예) 2회 결제 후 3번째 수업 진행 → `차시 소진 · 새 주기 1차시`, 다음 수업은 `새 주기 2차시`. `remaining_lessons` 음수값과 `progress_state` 필터·정렬 기준은 기존과 같다.
+- 회귀 검증: `tests/test_tuition_payment_progress.py`(`test_overage_lessons_restart_count_from_one`), `tests/test_tuition_payment_progress_ui.js`.
 - 회귀 검증: `tests/test_tuition_payment_progress.py`, `tests/test_tuition_payment_progress_ui.js`.
 - 차시 상태 필터는 `progress_state=normal|low|exhausted|previous|upcoming|unknown`을 전달한다. 각각 현재 결제 5회 이상·1~4회·0회 이하·이전 결제·시작 예정·확인 불가에 해당하며 빈 값은 전체다. 이름·반·학생 조건과 AND로 결합하고 현재 결제 판정 후 필터링한다. 상태를 지정하면 `include_progress=false`여도 집계하며 잘못된 상태는 400으로 거부한다. 화면에서는 선택 즉시 재조회하고 전체 상태 선택 시 이 필터만 해제한다.
 - 결제 이력 조회의 `수업 종료 학생 포함` 체크박스는 기본 해제다. API `include_ended=false`(기본)는 `COALESCE(Students.IsClassEnded, 0)=0` 조건으로 종료 학생의 모든 결제를 차시 집계 전에 제외한다. `true`는 진행·종료 학생을 함께 조회한다. 이름·반·차시 상태와 AND로 적용하고 체크 변경 시 즉시 재조회한다. 별도 결제 관리 화면은 `include_ended=true`로 기존 전체 이력을 유지한다.
@@ -260,6 +262,20 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 프런트는 `static/js/tuition_collection.js`에 분리되며 `app.js`에서 초기화한다. 저장 실패 시 입력을 유지하고 오래된 조회 응답과 중복 클릭을 방지한다. 일정은 현재값을 미리 채워 저장하며 지우면 해제된다.
 - 검증: `tests/test_tuition_collection.py`, `tests/test_tuition_collection_routes.py`, `tests/test_tuition_collection_ui.js` 및 기존 `test_tuition_payment_progress` 회귀 테스트.
 
+
+## 월말보고 선택 학생 결제 이력 요약
+- 월말보고 화면에서 학생을 고르면 1번 학생 선택과 `2. 문구 세부 설정` 사이에 `#monthly-report-tuition-summary` 패널이 나타난다. 결제 이력 조회와 같은 항목(`결제 시작일 · 결제일 · 반 · 결제/서비스 차시 + 잔여 배지 · 수업료`)을 최근 결제 순으로 최대 5건 보여 주고, 잔여 차시는 특강을 제외한 일반 수업 수강 기준임을 안내한다.
+- 데이터는 `GET /api/user/tuition-payments?student_id=&include_progress=true&include_ended=true`를 재사용하므로 결제 이력 조회와 같은 staff 권한(admin/subadmin/manager)에서만 보이고, 일반 선생님 화면에는 패널이 표시되지 않는다.
+- 학생 변경·화면 진입(상세에서 넘어온 학생 포함)마다 `loadMonthlyReportTuitionSummary()`가 다시 조회하며, `monthlyTuitionRequestSeq`로 늦게 도착한 이전 응답을 무시한다. 패널의 새로고침 버튼으로 결제 등록 후 다시 불러온다.
+- 잔여 차시 배지 스타일은 `:is(#view-tuition-payment-search, #view-monthly-report)` 선택자로 두 화면이 공유한다.
+- 검증: `node --test tests/test_monthly_report_tuition_summary_ui.js`.
+
+## 월말보고 완료 문서 잠금
+- `POST /api/user/monthly-reports`는 기존 행이 `Status='completed'`이면 사이트 관리자(`MONTHLY_REPORT_LOCK_BYPASS_ROLES` = `admin`만)가 아닌 한 다시 저장할 수 없다. 부관리자(`subadmin`)도 포함해 그 밖의 역할은 403과 `MONTHLY_REPORT_LOCK_MESSAGE`를 받고, 감사 이력도 남기지 않는다.
+- 임시 저장 문서는 지금처럼 누구나 계속 수정할 수 있고, 임시 → 완료 전환도 제한하지 않는다. 잠기는 것은 한 번 완료로 저장된 같은 학생·같은 보고 월 문서이며, 완료 문서를 임시로 되돌리는 저장도 막힌다.
+- 화면은 완료 문서를 불러오거나 완료로 저장한 직후에 `applyMonthlyReportLock()`으로 설정·필터·기록 체크박스·수업 구분·저장 버튼을 잠그고(`isSiteAdmin()` 기준, `isAdmin()` 아님) `#monthly-report-lock-notice`로 사이트 관리자만 수정할 수 있음을 안내한다. 문자 내용은 읽기 전용이며 `클립보드에 복사`는 그대로 쓸 수 있다. 학생을 바꾸면 잠금이 풀린다.
+- 잠금은 권한 때문에 원래 비활성이던 수업 구분 선택을 되살리지 않도록 `dataset.lockDisabled`로만 해제한다.
+- 검증: `tests/test_monthly_report_lock.py`, `node --test tests/test_monthly_report_lock_ui.js`.
 
 ## 월말보고 학생 선택 정렬
 - 월말보고 문자 양식 생성의 학생 드롭다운만 `/api/user/students-options?monthly_report_order=true`를 사용한다. 학생별 저장 보고의 마지막 `UpdatedAt`(빈 값은 `CreatedAt`)이 오래된 순서, 이름순, rowid순으로 정렬한다. 저장 기록 없는 학생은 맨 위이며 임시·완료 저장 모두 포함한다.

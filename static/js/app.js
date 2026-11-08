@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthlyLogs = []; // 월말보고용 로드된 학습 기록 목록
     let monthlyLogTypeSavingCount = 0;
     let currentMonthlyReportId = null;
+    let monthlyReportLocked = false; // 완료로 저장한 월말보고 잠금 상태(관리자는 잠그지 않는다)
     let monthlyLectureRequestSeq = 0;
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
@@ -710,6 +711,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function isAdmin() {
         return !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'subadmin'));
+    }
+
+    // 사이트 관리자(admin)만 해당하는 권한 (부관리자는 포함하지 않는다)
+    function isSiteAdmin() {
+        return !!(currentUser && currentUser.role === 'admin');
     }
 
     function isStaff() {
@@ -2260,7 +2266,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const progresses = await Promise.all(students.map(s => apiFetch(`/api/user/students/${s.id}/tuition-progress`)));
             box.className = 'alert alert-info';
             box.innerHTML = progresses.map((p, i) => p.has_payment
-                ? `<div><strong>${escapeHtml(students[i].name)}</strong>: 총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째 수업</strong> 등록 · 등록 후 잔여 ${p.remaining_lessons - 1}회</div>`
+                ? (p.next_lesson > p.total_lessons
+                    ? `<div><strong>${escapeHtml(students[i].name)}</strong>: 결제 ${p.total_lessons}회를 모두 사용해 <strong>새 주기 ${p.next_lesson - p.total_lessons}차시</strong> 수업을 등록합니다.</div>`
+                    : `<div><strong>${escapeHtml(students[i].name)}</strong>: 총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째 수업</strong> 등록 · 등록 후 잔여 ${p.remaining_lessons - 1}회</div>`)
                 : `<div><strong>${escapeHtml(students[i].name)}</strong>: 유효한 결제 정보가 없습니다.</div>`).join('');
             box.classList.remove('hidden');
         } catch (_) { box.classList.add('hidden'); }
@@ -4422,8 +4430,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalLogs = data.total_studylogs || 0;
             const referredStudents = data.referred_students || [];
             const tuitionProgress = data.tuition_progress;
+            const tuitionCycle = tuitionCycleStatus(tuitionProgress);
             const tuitionHtml = isStaff() ? (tuitionProgress?.has_payment
-                ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 현재 결제 수강 현황</div><div class="detail-meta-row"><span>현재 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? '<span class="badge badge-warning">차시 소진</span>' : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">${escapeHtml(tuitionProgress.payment_start || '')} 시작 결제 기준이며, 특강은 수강 차시에서 차감하지 않습니다.</p></div>`
+                ? `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 현재 결제 수강 현황</div><div class="detail-meta-row"><span>현재 결제 차시: <strong>${tuitionProgress.total_lessons}회</strong></span><span>일반 수업 수강: <strong>${tuitionProgress.used_lessons}회</strong></span><span>잔여 차시: <strong>${tuitionProgress.remaining_lessons}회</strong></span>${tuitionProgress.is_exhausted ? `<span class="badge badge-warning">차시 소진</span><span>다음 수업: <strong>새 주기 ${tuitionCycle.nextCycleLesson}차시</strong></span>` : `<span>다음 수업: <strong>${tuitionProgress.next_lesson}번째</strong></span>`}</div><p class="text-muted">${escapeHtml(tuitionProgress.payment_start || '')} 시작 결제 기준이며, 특강은 수강 차시에서 차감하지 않습니다.${tuitionCycle.overage ? ` 결제 차시를 넘긴 수업은 새 주기로 1차시부터 셉니다(현재 새 주기 ${tuitionCycle.overage}차시 진행).` : ''}</p></div>`
                 : `<div class="detail-desc-box student-tuition-summary"><div class="detail-section-title"><i class="fa-solid fa-won-sign"></i> 결제 및 누적 수강 현황</div><p class="text-muted">등록된 결제 정보가 없습니다.</p></div>`) : '';
 
             const referredStudentsHtml = referredStudents.length
@@ -7587,7 +7596,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!cell) return;
             try {
                 const p = await apiFetch(`/api/user/students/${sId}/tuition-progress`);
-                cell.innerHTML = p.has_payment ? `총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째</strong><br><span class="text-muted">등록 후 잔여 ${p.remaining_lessons - 1}회</span>` : '<span class="text-warning">결제 정보 없음</span>';
+                cell.innerHTML = p.has_payment
+                    ? (p.next_lesson > p.total_lessons
+                        ? `결제 ${p.total_lessons}회 모두 사용<br><strong>새 주기 ${p.next_lesson - p.total_lessons}차시</strong> 등록`
+                        : `총 ${p.total_lessons}회 중 <strong>${p.next_lesson}번째</strong><br><span class="text-muted">등록 후 잔여 ${p.remaining_lessons - 1}회</span>`)
+                    : '<span class="text-warning">결제 정보 없음</span>';
             } catch (_) { cell.textContent = '-'; }
         });
     }
@@ -8158,6 +8171,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateMonthlyReportText(skipAutoLecture = false) {
+        // 완료로 저장한 월말보고는 불러온 문구를 보호하기 위해 자동 작성하지 않는다.
+        if (monthlyReportLocked) return;
         const studentSelect = document.getElementById('monthly-report-student-select');
         const periodLabelInput = document.getElementById('monthly-report-period-label');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
@@ -8374,6 +8389,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    const MONTHLY_REPORT_LOCKABLE_IDS = [
+        'monthly-report-period-label', 'monthly-report-year-month', 'monthly-report-month-label',
+        'monthly-report-start-lecture', 'monthly-report-special-teacher', 'monthly-report-log-date-from',
+        'monthly-report-log-date-to', 'btn-apply-monthly-log-period', 'btn-monthly-select-all',
+        'btn-monthly-deselect-all', 'btn-fetch-monthly-logs', 'btn-save-monthly-draft', 'btn-save-monthly-completed'
+    ];
+    const MONTHLY_REPORT_LOCK_HINT = '완료로 저장한 월말보고는 사이트 관리자만 수정할 수 있습니다.';
+
+    // 완료로 저장한 월말보고는 관리자를 제외하고 잠가 실수로 덮어쓰는 것을 막는다.
+    function applyMonthlyReportLock(report) {
+        const locked = !!(report && report.Status === 'completed' && !isSiteAdmin());
+        monthlyReportLocked = locked;
+        const setLocked = el => {
+            if (!el) return;
+            if (locked) {
+                if (!el.disabled) el.dataset.lockDisabled = '1';
+                el.disabled = true;
+            } else if (el.dataset.lockDisabled === '1') {
+                el.disabled = false;
+                delete el.dataset.lockDisabled;
+            }
+        };
+        MONTHLY_REPORT_LOCKABLE_IDS.forEach(id => setLocked(document.getElementById(id)));
+        document.querySelectorAll('#monthly-report-logs-container .chk-log-include, #monthly-report-logs-container .report-log-type-select')
+            .forEach(setLocked);
+        const textarea = document.getElementById('monthly-report-result-text');
+        if (textarea) {
+            textarea.readOnly = locked;
+            textarea.classList.toggle('is-locked', locked);
+        }
+        ['btn-save-monthly-draft', 'btn-save-monthly-completed'].forEach(id => {
+            const button = document.getElementById(id);
+            if (!button) return;
+            if (locked) button.title = MONTHLY_REPORT_LOCK_HINT;
+            else button.removeAttribute('title');
+        });
+        const notice = document.getElementById('monthly-report-lock-notice');
+        if (notice) notice.classList.toggle('hidden', !locked);
+        return locked;
+    }
+
     function setMonthlyReportSaveState(report) {
         const state = document.getElementById('monthly-report-save-state');
         const badge = document.getElementById('monthly-report-status-badge');
@@ -8382,6 +8438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!report) {
             state.textContent = currentMonthlyReportId ? '저장 후 내용이 변경되었습니다.' : '아직 저장되지 않은 문서입니다.';
             badge.classList.add('hidden');
+            applyMonthlyReportLock(null);
             return;
         }
         currentMonthlyReportId = report.Id;
@@ -8389,7 +8446,9 @@ document.addEventListener('DOMContentLoaded', () => {
         badge.textContent = completed ? '저장 완료' : '임시 저장';
         badge.classList.toggle('completed', completed);
         badge.classList.remove('hidden');
-        state.textContent = `${userName(report.UpdatedBy || report.CreatedBy)} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
+        const locked = applyMonthlyReportLock(report);
+        const updatedAt = `${userName(report.UpdatedBy || report.CreatedBy)} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
+        state.textContent = locked ? `${updatedAt} · 사이트 관리자만 수정할 수 있습니다.` : updatedAt;
     }
 
     function renderMonthlyReportLogItems(logs, selectAll = false) {
@@ -8403,14 +8462,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const isSpecial = !!(log.IsSpecial || log.is_special);
             const canChangeType = log.CanEdit === true && Number(log.row_id) > 0;
             const blockedReason = log.MutationBlockedReason || '원본 기록의 수정 권한을 확인하려면 기록을 다시 불러와 주세요.';
+            const typeDisabledReason = monthlyReportLocked
+                ? '완료로 저장한 월말보고는 수업 구분을 바꿀 수 없습니다.'
+                : (canChangeType ? '' : blockedReason);
             return `
                 <div class="report-log-item" data-index="${idx}">
-                    <input type="checkbox" class="chk-log-include" id="chk-log-${idx}" ${selectAll ? 'checked' : ''}>
+                    <input type="checkbox" class="chk-log-include" id="chk-log-${idx}" ${selectAll ? 'checked' : ''}${monthlyReportLocked ? ' disabled' : ''}>
                     <div class="report-log-info">
                         <div class="report-log-header"><span class="report-log-date">${formatDateKorean(log.StudiedDay || log.studied_day)}</span>
                             ${log.IsAbsence ? '<span class="tag-badge warning">결석 · 강의 번호 제외</span>' : isMonthlyReportBreak(log) ? '<span class="tag-badge warning">휴일·휴강 · 강의 번호 제외</span>' : `
                                 <label class="report-log-type-control" for="report-log-type-${idx}">수업 구분
-                                    <select id="report-log-type-${idx}" class="form-control report-log-type-select" ${canChangeType ? '' : `disabled title="${escapeHtml(blockedReason)}"`}>
+                                    <select id="report-log-type-${idx}" class="form-control report-log-type-select" ${typeDisabledReason ? `disabled title="${escapeHtml(typeDisabledReason)}"` : ''}>
                                         <option value="general" ${isSpecial ? '' : 'selected'}>일반강의</option>
                                         <option value="special" ${isSpecial ? 'selected' : ''}>특강</option>
                                     </select>
@@ -8424,6 +8486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.querySelectorAll('.chk-log-include').forEach(chk => chk.addEventListener('change', () => generateMonthlyReportText()));
         container.querySelectorAll('.report-log-type-select').forEach(select => select.addEventListener('change', () => updateMonthlyReportLogType(select)));
         container.querySelectorAll('.report-log-item').forEach(item => item.addEventListener('click', e => {
+            if (monthlyReportLocked) return;
             if (!e.target.closest('input, select, option, label')) {
                 const chk = item.querySelector('.chk-log-include');
                 chk.checked = !chk.checked;
@@ -8556,6 +8619,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let monthlyTuitionRequestSeq = 0;
+
+    // 선택 학생의 수업료 결제 이력을 결제 이력 조회와 같은 항목으로 보여 준다(staff 전용).
+    async function loadMonthlyReportTuitionSummary() {
+        const panel = document.getElementById('monthly-report-tuition-summary');
+        const body = document.getElementById('monthly-report-tuition-body');
+        if (!panel || !body) return;
+        const studentSelect = document.getElementById('monthly-report-student-select');
+        const studentId = studentSelect ? studentSelect.value : '';
+        const seq = ++monthlyTuitionRequestSeq;
+        if (!studentId || !isStaff()) {
+            panel.classList.add('hidden');
+            body.innerHTML = '';
+            return;
+        }
+        panel.classList.remove('hidden');
+        body.innerHTML = '<p class="monthly-tuition-summary-note">결제 이력을 불러오는 중입니다.</p>';
+        try {
+            const data = await apiFetch(`/api/user/tuition-payments?student_id=${encodeURIComponent(studentId)}&include_progress=true&include_ended=true`);
+            if (seq !== monthlyTuitionRequestSeq) return;
+            const payments = data.payments || [];
+            if (!payments.length) {
+                body.innerHTML = '<p class="monthly-tuition-summary-note">등록된 결제 이력이 없습니다.</p>';
+                return;
+            }
+            const rows = payments.slice(0, 5).map(payment => `
+                <tr>
+                    <td class="monthly-tuition-date">${escapeHtml(payment.StartDate || '-')}</td>
+                    <td class="monthly-tuition-date">${escapeHtml(payment.PaidDate || '-')}</td>
+                    <td>${escapeHtml(payment.ClassType || '미지정')}</td>
+                    <td><div class="tuition-lesson-status"><span>${Number(payment.PaidLessons) || 0}회 / ${Number(payment.ServiceLessons) || 0}회</span>${tuitionPaymentProgressDisplay(payment)}</div></td>
+                    <td class="monthly-tuition-fee">${formatWon(payment.FeeAmount)}</td>
+                </tr>`).join('');
+            body.innerHTML = `
+                <div class="monthly-tuition-table-wrap">
+                    <table class="monthly-tuition-table">
+                        <thead><tr><th>결제 시작일</th><th>결제일</th><th>반</th><th>결제 / 서비스</th><th>수업료</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <p class="monthly-tuition-summary-note">잔여 차시는 특강을 제외한 일반 수업 수강 기준입니다.${payments.length > 5 ? ' 최근 5건만 보여 주며 전체 이력은 결제 이력 조회에서 볼 수 있습니다.' : ''}</p>`;
+        } catch (err) {
+            if (seq !== monthlyTuitionRequestSeq) return;
+            body.innerHTML = `<p class="monthly-tuition-summary-note">결제 이력을 불러오지 못했습니다: ${escapeHtml(err.message)}</p>`;
+        }
+    }
+
     async function setMonthlyReportDefaultLogPeriod() {
         const dateFromInput = document.getElementById('monthly-report-log-date-from');
         const dateToInput = document.getElementById('monthly-report-log-date-to');
@@ -8578,6 +8688,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const periodLabelInput = document.getElementById('monthly-report-period-label');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
         const startLectureInput = document.getElementById('monthly-report-start-lecture');
+
+        applyMonthlyReportLock(null);
 
         if (periodLabelInput) {
             periodLabelInput.value = '';
@@ -8623,6 +8735,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (preselectStudentId) {
             await loadMonthlyReportLogs();
         }
+        await loadMonthlyReportTuitionSummary();
         await loadSavedMonthlyReports();
     }
 
@@ -8638,6 +8751,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveMonthlyReport(status) {
         const feedback = createActionFeedback();
+        if (monthlyReportLocked) return feedback.show(MONTHLY_REPORT_LOCK_HINT, 'warning');
         if (monthlyLogTypeSavingCount) return feedback.show('수업 구분 저장이 끝난 후 월말 보고를 저장해 주세요.', 'warning');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
         const yearMonth = document.getElementById('monthly-report-year-month')?.value;
@@ -8666,7 +8780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             feedback.show(`월말보고 저장 실패: ${err.message}`, 'error');
         } finally {
-            buttons.forEach(button => { if (button) button.disabled = false; });
+            buttons.forEach(button => { if (button) button.disabled = monthlyReportLocked; });
         }
     }
 
@@ -8715,9 +8829,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('monthly-report-start-lecture').value = report.StartLectureNum || 1;
             document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
             currentMonthlyLogs = report.StudyLogSnapshot || [];
+            setMonthlyReportSaveState(report);
             renderMonthlyReportLogItems(currentMonthlyLogs, true);
             document.getElementById('monthly-report-result-text').value = report.Content || '';
-            setMonthlyReportSaveState(report);
             feedback.show('저장된 월말보고를 불러왔습니다.', 'success');
         } catch (err) {
             feedback.show(`월말보고 불러오기 실패: ${err.message}`, 'error');
@@ -8745,6 +8859,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 generateMonthlyReportText();
             }
             loadSavedMonthlyReports();
+            loadMonthlyReportTuitionSummary();
         });
     }
 
@@ -8780,6 +8895,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 generateMonthlyReportText();
             }
         });
+    }
+
+    const btnRefreshMonthlyTuition = document.getElementById('btn-refresh-monthly-tuition');
+    if (btnRefreshMonthlyTuition) {
+        btnRefreshMonthlyTuition.addEventListener('click', () => loadMonthlyReportTuitionSummary());
     }
 
     const btnCopyMonthlyReport = document.getElementById('btn-copy-monthly-report');
@@ -9088,8 +9208,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const p = await apiFetch(`/api/user/students/${studentId}/tuition-progress`);
             box.className = `alert ${p.has_payment && !p.is_exhausted ? 'alert-info' : 'alert-warning'}`;
+            const cycle = tuitionCycleStatus(p);
             box.innerHTML = p.has_payment
-                ? `<i class="fa-solid fa-chart-line"></i> 현재 결제 수강 현황: <strong>총 ${p.total_lessons}회 중 ${p.used_lessons}회 사용</strong> · 잔여 ${p.remaining_lessons}회${p.is_exhausted ? ' (차시 소진)' : ` · 다음 수업은 ${p.next_lesson}번째`} · ${escapeHtml(p.payment_start || '')} 시작 기준`
+                ? `<i class="fa-solid fa-chart-line"></i> 현재 결제 수강 현황: <strong>총 ${p.total_lessons}회 중 ${p.used_lessons}회 사용</strong>${p.is_exhausted ? ` · 차시 소진${cycle.overage ? ` · 새 주기 ${cycle.overage}차시 진행` : ''} · 다음 수업은 새 주기 ${cycle.nextCycleLesson}차시` : ` · 잔여 ${p.remaining_lessons}회 · 다음 수업은 ${p.next_lesson}번째`} · ${escapeHtml(p.payment_start || '')} 시작 기준`
                 : '<i class="fa-solid fa-circle-exclamation"></i> 유효한 결제 이력이 없습니다.';
             box.classList.remove('hidden');
         } catch (_) { box.classList.add('hidden'); }
@@ -9156,6 +9277,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 최신 적용 결제에만 잔여 차시를 표시해 과거 결제의 중복 경고를 방지한다.
+    // 결제 차시를 모두 쓴 뒤에 진행한 수업은 새 주기로 보고 1차시부터 다시 센다.
+    function tuitionCycleStatus(progress) {
+        const source = progress || {};
+        const total = Number(source.total_lessons) || 0;
+        const used = Number(source.used_lessons) || 0;
+        const remaining = Number(source.remaining_lessons);
+        const supplied = Number(source.overage_lessons);
+        const overage = Number.isFinite(supplied) ? Math.max(0, supplied) : Math.max(0, used - total);
+        return {
+            total,
+            used,
+            overage,
+            nextCycleLesson: overage + 1,
+            exhausted: Number.isFinite(remaining) ? remaining <= 0 : used >= total,
+        };
+    }
+
     function tuitionPaymentProgressDisplay(payment) {
         const progress = payment.TuitionProgress;
         if (payment.ProgressState !== 'current' || !progress ||
@@ -9166,11 +9304,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const remaining = progress.remaining_lessons;
         const state = remaining <= 0 ? 'exhausted' : remaining < 5 ? 'low' : 'normal';
-        const label = remaining < 0 ? `차시 소진 · ${Math.abs(remaining)}회 초과` :
+        const cycle = tuitionCycleStatus(progress);
+        const label = remaining < 0 ? `차시 소진 · 새 주기 ${cycle.overage}차시` :
             remaining === 0 ? '차시 소진 · 잔여 0회' :
                 `잔여 ${remaining}회${state === 'low' ? ' · 결제 확인 필요' : ''}`;
         const icon = state === 'normal' ? 'fa-circle-check' : 'fa-triangle-exclamation';
-        return `<span class="tuition-remaining-badge is-${state}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</span><span class="tuition-progress-note">현재 결제 총 ${progress.total_lessons}회 · ${progress.used_lessons}회 사용</span>`;
+        const cycleNote = cycle.exhausted ? ` · 다음 수업은 새 주기 ${cycle.nextCycleLesson}차시` : '';
+        return `<span class="tuition-remaining-badge is-${state}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</span><span class="tuition-progress-note">현재 결제 총 ${progress.total_lessons}회 · ${progress.used_lessons}회 사용${cycleNote}</span>`;
     }
 
     let tuitionPaymentSearchVersion = 0;

@@ -80,10 +80,13 @@ class TuitionPaymentProgressTests(unittest.TestCase):
 
     def assert_progress(self, payment, total, used, remaining):
         self.assertEqual(payment['ProgressState'], 'current')
+        overage = max(0, used - total)
         self.assertEqual(payment['TuitionProgress'], {
             'total_lessons': total,
             'used_lessons': used,
             'remaining_lessons': remaining,
+            'overage_lessons': overage,
+            'next_cycle_lesson': overage + 1,
         })
         for value in payment['TuitionProgress'].values():
             self.assertIs(type(value), int)
@@ -216,7 +219,8 @@ class TuitionPaymentProgressTests(unittest.TestCase):
 
     def test_missing_student_and_no_payment_return_empty_helper_result(self):
         expected = {'has_payment': False, 'total_lessons': 0, 'used_lessons': 0,
-                    'next_lesson': None, 'remaining_lessons': 0, 'payments': []}
+                    'next_lesson': None, 'remaining_lessons': 0, 'overage_lessons': 0,
+                    'next_cycle_lesson': None, 'payments': []}
         self.assertEqual(main._get_tuition_progress(999), expected)
         self.assertEqual(main._get_tuition_progress(1), expected)
 
@@ -295,6 +299,31 @@ class TuitionPaymentProgressTests(unittest.TestCase):
         self.assertTrue(progress['is_exhausted'])
         with self.assertRaises(sqlite3.ProgrammingError):
             owned.execute('SELECT 1')
+
+    def test_overage_lessons_restart_count_from_one(self):
+        # 2회 결제 후 2회를 모두 쓰고 추가 결제 없이 3·4번째 수업을 진행한 경우
+        self.add_payment(paid=0, service=2, start='2026-09-01')
+        self.add_log(day='2026-09-03')
+        self.add_log(day='2026-09-10')
+        progress = main._get_tuition_progress(1)
+        self.assertEqual(progress['total_lessons'], 2)
+        self.assertEqual(progress['used_lessons'], 2)
+        self.assertEqual(progress['remaining_lessons'], 0)
+        self.assertTrue(progress['is_exhausted'])
+        self.assertEqual(progress['overage_lessons'], 0)
+        self.assertEqual(progress['next_cycle_lesson'], 1)
+
+        self.add_log(day='2026-09-12')
+        progress = main._get_tuition_progress(1)
+        self.assertEqual(progress['remaining_lessons'], -1)
+        self.assertEqual(progress['overage_lessons'], 1)
+        self.assertEqual(progress['next_cycle_lesson'], 2)
+
+        self.add_log(day='2026-09-17')
+        progress = main._get_tuition_progress(1)
+        self.assertEqual(progress['remaining_lessons'], -2)
+        self.assertEqual(progress['overage_lessons'], 2)
+        self.assertEqual(progress['next_cycle_lesson'], 3)
 
     def test_empty_search_does_not_calculate_progress(self):
         self.add_payment()

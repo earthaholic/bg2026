@@ -405,7 +405,11 @@ def _count_general_lesson_sessions(
     return len(seen_sessions)
 
 def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, connection: Any = None) -> Dict[str, Any]:
-    """조회일에 적용되는 최신 결제 건을 기준으로 수강 차시와 잔여 차시를 계산한다."""
+    """조회일에 적용되는 최신 결제 건을 기준으로 수강 차시와 잔여 차시를 계산한다.
+
+    결제 차시를 모두 쓴 뒤에 진행한 수업은 새 주기로 보고 1차시부터 다시 센다.
+    (overage_lessons = 새 주기에서 이미 진행한 차시, next_cycle_lesson = 다음 수업의 새 주기 번호)
+    """
     conn = connection if connection is not None else get_db_connection()
     try:
         cursor = conn.cursor()
@@ -413,7 +417,8 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
         student_row = cursor.fetchone()
         if not student_row:
             return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
-                    "next_lesson": None, "remaining_lessons": 0, "payments": []}
+                    "next_lesson": None, "remaining_lessons": 0, "overage_lessons": 0,
+                    "next_cycle_lesson": None, "payments": []}
         student = dict(student_row)
         reference_day = as_of or datetime.now().strftime("%Y-%m-%d")
         cursor.execute('''SELECT rowid as row_id, * FROM "TuitionPayments"
@@ -423,15 +428,18 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
         payments = [dict(r) for r in cursor.fetchall()]
         if not payments:
             return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
-                    "next_lesson": None, "remaining_lessons": 0, "payments": []}
+                    "next_lesson": None, "remaining_lessons": 0, "overage_lessons": 0,
+                    "next_cycle_lesson": None, "payments": []}
         current_payment = payments[0]
         used = _count_general_lesson_sessions(
             cursor, student["row_id"], student.get("Id", student["row_id"]), student.get("Name", ""),
             current_payment["StartDate"], reference_day
         )
         total = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
+        overage = max(0, used - total)
         return {"has_payment": True, "total_lessons": total, "used_lessons": used,
                 "next_lesson": used + 1, "remaining_lessons": total - used,
+                "overage_lessons": overage, "next_cycle_lesson": overage + 1,
                 "is_exhausted": used >= total, "payments": payments,
                 "payment_start": current_payment["StartDate"]}
     finally:
@@ -1674,7 +1682,8 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
                         payment["ProgressState"] = "current"
                         payment["TuitionProgress"] = {
                             key: progress[key] for key in (
-                                "total_lessons", "used_lessons", "remaining_lessons"
+                                "total_lessons", "used_lessons", "remaining_lessons",
+                                "overage_lessons", "next_cycle_lesson"
                             )
                         }
                     else:
@@ -2085,6 +2094,10 @@ def user_get_studylog_detail(
 
 # --- 월말 보고 문자 양식 생성 APIs ---
 
+# 완료(completed)로 저장한 월말보고는 실수로 덮어쓰지 않도록 잠그고, 사이트 관리자(admin)만 수정할 수 있다.
+MONTHLY_REPORT_LOCK_BYPASS_ROLES = ("admin",)
+MONTHLY_REPORT_LOCK_MESSAGE = "완료로 저장한 월말보고는 사이트 관리자만 수정할 수 있습니다. 문구를 고쳐야 하면 사이트 관리자에게 요청해 주세요."
+
 class MonthlyReportPreviewPayload(BaseModel):
     student_name: str
     period_label: Optional[str] = ""
@@ -2485,6 +2498,9 @@ def user_save_monthly_report(payload: MonthlyReportSavePayload, current_user: Di
     student_id = student["row_id"]
     cursor.execute('SELECT * FROM "MonthlyReports" WHERE "StudentId" = ? AND "ReportYearMonth" = ?', (student_id, payload.report_year_month))
     old_row = cursor.fetchone()
+    if old_row and (old_row["Status"] or "").strip() == "completed" and current_user.get("role") not in MONTHLY_REPORT_LOCK_BYPASS_ROLES:
+        conn.close()
+        raise HTTPException(status_code=403, detail=MONTHLY_REPORT_LOCK_MESSAGE)
     old_data = dict(old_row) if old_row else None
     snapshot = json.dumps(payload.logs, ensure_ascii=False)
     username = current_user["username"]

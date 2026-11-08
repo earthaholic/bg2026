@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../static/js/app.js'), 'utf8');
-const start = source.indexOf('    function tuitionPaymentProgressDisplay(');
+const start = source.indexOf('    function tuitionCycleStatus(');
 const end = source.indexOf('    function renderTuitionPaymentDetail(', start);
 assert.ok(start >= 0 && end > start);
 function fixture(fetcher = async () => ({ payments: [] })) {
@@ -55,7 +55,9 @@ test('0회와 초과 사용은 소진 상태를 표시한다', () => {
     const { render } = fixture();
     assert.match(render(payment(0)), /is-exhausted/);
     assert.match(render(payment(0)), /차시 소진 · 잔여 0회/);
-    assert.match(render(payment(-3)), /차시 소진 · 3회 초과/);
+    assert.match(render(payment(0)), /다음 수업은 새 주기 1차시/);
+    assert.match(render(payment(-3)), /차시 소진 · 새 주기 3차시/);
+    assert.match(render(payment(-3)), /다음 수업은 새 주기 4차시/);
 });
 test('과거·예정·미확인 결제는 경고하지 않는다', () => {
     const { render } = fixture();

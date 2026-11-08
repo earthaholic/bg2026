@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261102-payroll-summary3">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261108-monthly-report">
     <!-- 모바일 화면 지원 (styles.css 뒤에 로드) -->
     <link rel="stylesheet" href="/static/css/mobile.css?v=20261102-mobile11">
     <!-- Chart.js Library -->
@@ -1401,6 +1401,17 @@
                                         </div>
                                     </div>
 
+                                    <!-- 선택 학생의 수업료 결제 이력(결제 이력 조회와 같은 항목) -->
+                                    <div id="monthly-report-tuition-summary" class="monthly-tuition-summary hidden">
+                                        <div class="monthly-tuition-summary-header">
+                                            <span><i class="fa-solid fa-won-sign"></i> 수업료 결제 이력</span>
+                                            <button type="button" id="btn-refresh-monthly-tuition" class="btn btn-xs btn-outline" title="결제 이력 새로고침">
+                                                <i class="fa-solid fa-rotate"></i><span class="sr-only">새로고침</span>
+                                            </button>
+                                        </div>
+                                        <div id="monthly-report-tuition-body" class="monthly-tuition-summary-body"></div>
+                                    </div>
+
                                     <hr style="border-top: 1px dashed var(--border-color); margin: 1rem 0;">
 
                                     <h4 class="sub-title" style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--primary);">
@@ -1512,6 +1523,9 @@
                                     <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
                                         <i class="fa-solid fa-lightbulb"></i> 아래의 미리보기 텍스트를 직접 수정하거나 필요시 문구를 조정할 수 있습니다.
                                     </div>
+                                    <p id="monthly-report-lock-notice" class="monthly-report-lock-notice hidden" role="status">
+                                        <i class="fa-solid fa-lock"></i> 완료로 저장한 월말보고입니다. 문구 수정과 다시 저장은 사이트 관리자만 할 수 있습니다.
+                                    </p>
                                     <textarea id="monthly-report-result-text" class="monthly-report-textarea" rows="22" placeholder="기록을 선택하면 월말 보고 문자 양식이 이곳에 자동으로 작성됩니다..."></textarea>
                                     <div class="monthly-report-actions">
                                         <button type="button" id="btn-save-monthly-draft" class="btn btn-outline btn-lg">
@@ -2860,7 +2874,7 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261105-server-sort2"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261105-class-category-column"></script>
+    <script src="/static/js/app.js?v=20261108-monthly-report"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
     <script src="/static/js/mobile.js?v=20261102-mobile11"></script>
 </body>

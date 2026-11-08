@@ -3653,6 +3653,97 @@ body {
     color: var(--success);
 }
 
+.monthly-report-lock-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: var(--radius-md);
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--warning);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.monthly-report-textarea.is-locked {
+    background: var(--bg-section);
+    color: var(--text-muted);
+}
+
+#view-monthly-report .btn:disabled,
+#view-monthly-report .form-control:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 월말보고: 선택 학생의 결제 이력 요약(결제 이력 조회와 같은 항목) */
+.monthly-tuition-summary {
+    margin: 0 0 1rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+}
+
+.monthly-tuition-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.monthly-tuition-summary-header > span i {
+    margin-right: 0.35rem;
+    color: var(--primary);
+}
+
+.monthly-tuition-table-wrap {
+    overflow-x: auto;
+}
+
+.monthly-tuition-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.monthly-tuition-table th,
+.monthly-tuition-table td {
+    padding: 0.35rem 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+}
+
+.monthly-tuition-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.monthly-tuition-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.monthly-tuition-table .monthly-tuition-date,
+.monthly-tuition-table .monthly-tuition-fee,
+.monthly-tuition-table th:nth-child(3),
+.monthly-tuition-table td:nth-child(3) {
+    white-space: nowrap;
+}
+
+.monthly-tuition-summary-note {
+    margin: 0.4rem 0 0;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
 .monthly-report-actions {
     justify-content: flex-end;
     flex-wrap: wrap;
@@ -5497,18 +5588,18 @@ button.class-student-badge { cursor: pointer; }
     font-size: 0.85rem;
     line-height: 1.6;
 }
-#view-tuition-payment-search .tuition-lesson-status {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-lesson-status {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.4rem;
 }
-#view-tuition-payment-search .tuition-progress-note {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-progress-note {
     display: block;
     color: var(--text-muted);
     font-size: 0.78rem;
 }
-#view-tuition-payment-search .tuition-remaining-badge {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-remaining-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -5520,16 +5611,16 @@ button.class-student-badge { cursor: pointer; }
     line-height: 1.5;
     white-space: nowrap;
 }
-#view-tuition-payment-search .tuition-remaining-badge.is-normal {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-remaining-badge.is-normal {
     color: var(--text-muted);
     border-color: var(--border-color);
 }
-#view-tuition-payment-search .tuition-remaining-badge.is-low {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-remaining-badge.is-low {
     color: #92400e;
     background: #fef3c7;
     border-color: #f59e0b;
 }
-#view-tuition-payment-search .tuition-remaining-badge.is-exhausted {
+:is(#view-tuition-payment-search, #view-monthly-report) .tuition-remaining-badge.is-exhausted {
     color: #991b1b;
     background: #fee2e2;
     border-color: #ef4444;
