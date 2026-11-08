@@ -108,6 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthlyReportId = null;
     let monthlyReportLocked = false; // 완료로 저장한 월말보고 잠금 상태(관리자는 잠그지 않는다)
     let monthlyLectureRequestSeq = 0;
+    let monthlyLectureCycleLength = 0; // 결제 총 차시·강의 번호를 새 주기로 되돌리는 기준
+    let monthlyLectureStartIsAuto = false; // 시작 강의 번호가 결제 이력 자동 계산값인지
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
     const payrollRecordRows = new Map();
@@ -8194,6 +8196,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const reportMonth = monthLabelInput ? monthLabelInput.value.trim() : `${new Date().getMonth() + 1}월`;
         let startLectureNum = startLectureInput ? parseInt(startLectureInput.value, 10) : 1;
         if (isNaN(startLectureNum) || startLectureNum < 1) startLectureNum = 1;
+        // 자동 계산된 번호는 결제 차시를 넘으면 1강부터 다시 센다. 직접 입력한 번호는 그대로 둔다.
+        const lectureCycle = monthlyLectureStartIsAuto && monthlyLectureCycleLength > 0 ? monthlyLectureCycleLength : 0;
+        if (lectureCycle > 0 && startLectureNum > lectureCycle) {
+            startLectureNum = ((startLectureNum - 1) % lectureCycle) + 1;
+        }
 
         let specialTeacherName = specialTeacherInput ? specialTeacherInput.value.trim() : '';
 
@@ -8306,6 +8313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 lines.push(`<${currentLecture}강>`);
                 currentLecture++;
+                if (lectureCycle > 0 && currentLecture > lectureCycle) currentLecture = 1;
             }
 
             lines.push(`도서 : ${log._bookTitles.join(', ')}`);
@@ -8350,6 +8358,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .sort();
         const requestSeq = ++monthlyLectureRequestSeq;
         if (!studentId || !generalDates.length) {
+            monthlyLectureCycleLength = 0;
+            monthlyLectureStartIsAuto = false;
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide';
                 guide.textContent = '학생과 일반 학습 기록을 선택하면 결제 이력에 맞춰 자동 계산됩니다.';
@@ -8365,6 +8375,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const progress = await apiFetch(`/api/user/monthly-report/start-lecture?${params.toString()}`);
             if (requestSeq !== monthlyLectureRequestSeq) return;
             if (!progress.has_payment) {
+                monthlyLectureCycleLength = 0;
+                monthlyLectureStartIsAuto = false;
                 if (guide) {
                     guide.className = 'monthly-report-lecture-guide is-warning';
                     guide.textContent = '해당 수업일 이전의 결제 정보가 없어 입력값을 유지합니다.';
@@ -8372,16 +8384,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const nextNumber = Number(progress.start_lecture_num) || 1;
+            const cycleLength = Number(progress.total_lessons) || 0;
+            const cycleChanged = monthlyLectureCycleLength !== cycleLength || !monthlyLectureStartIsAuto;
+            monthlyLectureCycleLength = cycleLength;
+            monthlyLectureStartIsAuto = true;
             if (input && Number(input.value) !== nextNumber) {
                 input.value = String(nextNumber);
+                generateMonthlyReportText(true);
+            } else if (cycleChanged) {
                 generateMonthlyReportText(true);
             }
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide is-calculated';
-                guide.textContent = `현재 결제 시작일 ${progress.payment_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작`;
+                const cycleNote = cycleLength > 0 ? ` · 결제 ${cycleLength}회 기준이라 ${cycleLength}강 다음은 1강으로 다시 셈` : '';
+                guide.textContent = `현재 결제 시작일 ${progress.payment_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작${cycleNote}`;
             }
         } catch (err) {
             if (requestSeq !== monthlyLectureRequestSeq) return;
+            monthlyLectureStartIsAuto = false;
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide is-warning';
                 guide.textContent = '강의 번호를 자동 계산하지 못해 입력값을 유지합니다.';
@@ -8827,6 +8847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('monthly-report-period-label').value = report.PeriodLabel || '';
             document.getElementById('monthly-report-month-label').value = report.ReportMonthLabel || '';
             document.getElementById('monthly-report-start-lecture').value = report.StartLectureNum || 1;
+            monthlyLectureStartIsAuto = false; // 저장된 문서의 강의 번호를 그대로 유지한다.
             document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
             currentMonthlyLogs = report.StudyLogSnapshot || [];
             setMonthlyReportSaveState(report);
@@ -9261,7 +9282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('input', (e) => {
         if (e.target.classList.contains('currency-input')) formatCurrencyInput(e.target);
     });
-    document.getElementById('monthly-report-start-lecture')?.addEventListener('input', () => generateMonthlyReportText(true));
+    document.getElementById('monthly-report-start-lecture')?.addEventListener('input', () => { monthlyLectureStartIsAuto = false; generateMonthlyReportText(true); });
     let tuitionStudentSearchTimer = null;
     document.getElementById('tuition-student-search')?.addEventListener('input', () => {
         document.getElementById('tuition-student').value = '';

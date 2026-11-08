@@ -15,7 +15,7 @@ function between(start, end) {
 }
 
 const code = [
-    'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false;',
+    'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false; let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false;',
     between('    function formatDateKorean', '    function generateMonthlyReportText'),
     between('    function generateMonthlyReportText', '    function formatMonthlyAbsenceReason'),
     between('    function formatMonthlyAbsenceReason', '    function isMonthlyReportBreak'),

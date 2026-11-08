@@ -270,6 +270,13 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 잔여 차시 배지 스타일은 `:is(#view-tuition-payment-search, #view-monthly-report)` 선택자로 두 화면이 공유한다.
 - 검증: `node --test tests/test_monthly_report_tuition_summary_ui.js`.
 
+## 월말보고 강의 번호의 새 주기 계산
+- 결제 차시를 모두 쓴 뒤의 수업은 문자 양식의 강의 번호도 **새 주기 1강부터** 다시 센다. 예) 2회 결제 학생이 4번 수업하면 `<1강> <2강> <1강> <2강>`.
+- `updateMonthlyStartLecture()`가 `/api/user/monthly-report/start-lecture`의 `total_lessons`를 `monthlyLectureCycleLength`에 보관하고 자동 계산값임을 `monthlyLectureStartIsAuto`로 표시한다. `generateMonthlyReportText()`는 자동 계산일 때만 시작 번호와 이후 번호를 결제 차시로 나머지 연산해 감싼다.
+- 강의 번호를 직접 입력하거나 저장된 월말보고를 불러온 경우에는 자동 계산 상태를 해제해 기존 번호를 그대로 유지한다. 결제 정보가 없으면 기존처럼 이어진다. 특강·결석·휴강은 강의 번호를 소비하지 않는 규칙을 유지한다.
+- 자동 계산 안내 문구는 `결제 N회 기준이라 N강 다음은 1강으로 다시 셈`을 추가로 보여 준다.
+- 검증: `node --test tests/test_monthly_report_lecture_cycle_ui.js`.
+
 ## 월말보고 완료 문서 잠금
 - `POST /api/user/monthly-reports`는 기존 행이 `Status='completed'`이면 사이트 관리자(`MONTHLY_REPORT_LOCK_BYPASS_ROLES` = `admin`만)가 아닌 한 다시 저장할 수 없다. 부관리자(`subadmin`)도 포함해 그 밖의 역할은 403과 `MONTHLY_REPORT_LOCK_MESSAGE`를 받고, 감사 이력도 남기지 않는다.
 - 임시 저장 문서는 지금처럼 누구나 계속 수정할 수 있고, 임시 → 완료 전환도 제한하지 않는다. 잠기는 것은 한 번 완료로 저장된 같은 학생·같은 보고 월 문서이며, 완료 문서를 임시로 되돌리는 저장도 막힌다.
