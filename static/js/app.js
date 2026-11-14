@@ -8780,7 +8780,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body.innerHTML = `
                 <div class="monthly-tuition-table-wrap">
                     <table class="monthly-tuition-table">
-                        <thead><tr><th>결제 시작일</th><th>결제일</th><th>반</th><th>결제 / 서비스</th></tr></thead>
+                        <thead><tr><th>차시 시작일</th><th>결제일</th><th>반</th><th>결제 / 서비스</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>

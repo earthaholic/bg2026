@@ -59,7 +59,7 @@ test('선택 학생의 결제 이력을 요약해 보여 주고 수업료 열은
 
     assert.equal(built.panel.hidden, false);
     assert.equal(built.calls[0], '/api/user/tuition-payments?student_id=7&include_progress=true&include_ended=true');
-    ['결제 시작일', '결제일', '반', '결제 / 서비스'].forEach(label => {
+    ['차시 시작일', '결제일', '반', '결제 / 서비스'].forEach(label => {
         assert.ok(built.body.innerHTML.includes(label), `${label} 열이 있어야 한다`);
     });
     assert.ok(built.body.innerHTML.includes('2026-10-01'));
