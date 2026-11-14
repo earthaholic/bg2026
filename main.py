@@ -268,6 +268,9 @@ class ClassStudentMoveRequest(BaseModel):
     StudentId: int
     TargetClassId: int
 
+class StudentPauseRequest(BaseModel):
+    IsPaused: bool
+
 class ClassEndedRequest(BaseModel):
     IsEnded: bool
 
@@ -4843,6 +4846,50 @@ def user_delete_book(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"도서 삭제 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/user/students/{student_id}/pause")
+def user_set_student_pause(
+    student_id: int,
+    payload: StudentPauseRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """학생 휴강 여부를 바꿉니다. 일반 선생님은 본인 수업에 배정된 학생만 바꿀 수 있다."""
+    row_id = _resolve_domain_pk("Students", student_id)
+    if row_id is None:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    if current_user["role"] == "teacher":
+        conn = get_db_connection()
+        try:
+            allowed = conn.execute('''
+                SELECT 1 FROM "ClassStudents" cs
+                JOIN "Classes" c ON c."Id" = cs."ClassId"
+                WHERE (cs."StudentId" = ? OR cs."StudentId" = ?)
+                  AND c."TeacherUsername" = ?
+                LIMIT 1
+            ''', (row_id, student_id, current_user["username"])).fetchone()
+        finally:
+            conn.close()
+        if not allowed:
+            raise HTTPException(status_code=403, detail="본인 수업에 배정된 학생만 휴강을 바꿀 수 있습니다.")
+    paused = 1 if payload.IsPaused else 0
+    old_snapshot = get_record_snapshot("Students", row_id)
+    if not old_snapshot:
+        raise HTTPException(status_code=404, detail="해당 학생을 찾을 수 없습니다.")
+    update_table_row("Students", "rowid", row_id, {
+        "IsPaused": paused,
+        "UpdatedBy": current_user["username"],
+        "UpdatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+    new_snapshot = get_record_snapshot("Students", row_id)
+    _audit_update("Students", row_id, old_snapshot, new_snapshot,
+                  current_user["username"], current_user["role"])
+    name = (new_snapshot or {}).get("Name") or "학생"
+    return {
+        "status": "success",
+        "student_row_id": row_id,
+        "IsPaused": paused,
+        "message": f"「{name}」 학생을 휴강으로 바꿨습니다." if paused else f"「{name}」 학생의 휴강을 해제했습니다."
+    }
 
 @app.put("/api/user/students/{student_id}")
 def user_update_student(

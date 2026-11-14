@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261114-report-reference14">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261114-class-pause">
     <!-- 모바일 화면 지원 (styles.css 뒤에 로드) -->
     <link rel="stylesheet" href="/static/css/mobile.css?v=20261102-mobile11">
     <!-- Chart.js Library -->
@@ -1888,6 +1888,15 @@
 
                         <p id="class-edit-mode-hint" class="class-edit-mode-hint hidden" role="status" aria-live="polite"></p>
 
+                        <div id="class-pause-zone" class="class-pause-zone hidden" role="button" tabindex="0"
+                             aria-label="휴강 보관함. 학생 배지를 끌어다 놓으면 휴강이 바뀝니다.">
+                            <i class="fa-solid fa-circle-pause" aria-hidden="true"></i>
+                            <div class="class-pause-zone-text">
+                                <strong>휴강 보관함</strong>
+                                <p>학생 배지를 여기로 끌어다 놓으면 휴강이 되고, 휴강 중인 배지를 놓으면 다시 진행 중으로 돌아옵니다.</p>
+                            </div>
+                        </div>
+
                         <!-- Class List Table Card -->
                         <div id="class-list-view" class="card table-card class-view-panel">
                             <div class="table-responsive">
@@ -2903,7 +2912,7 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261105-server-sort2"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261114-report-reference9"></script>
+    <script src="/static/js/app.js?v=20261114-class-pause"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
     <script src="/static/js/mobile.js?v=20261102-mobile11"></script>
 </body>

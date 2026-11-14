@@ -5281,6 +5281,48 @@ button.class-student-badge { cursor: pointer; }
     line-height: 1.6;
 }
 
+/* 수정 모드에서 학생 배지를 끌어다 놓는 휴강 보관함 */
+.class-pause-zone {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.class-pause-zone > i {
+    font-size: 1.2rem;
+}
+
+.class-pause-zone strong {
+    display: block;
+    color: var(--text-main);
+    font-size: 0.85rem;
+}
+
+.class-pause-zone p {
+    margin: 0.1rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.class-pause-zone:hover,
+.class-pause-zone:focus-visible {
+    border-color: var(--primary);
+    color: var(--primary);
+    outline: none;
+}
+
+.class-pause-zone.class-pause-zone-active {
+    border-color: var(--primary);
+    background: var(--bg-selection);
+    color: var(--primary);
+}
+
 #view-class-list .class-view-panel { min-height: 12rem; }
 
 #view-class-list .class-timetable-panel {

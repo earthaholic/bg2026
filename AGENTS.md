@@ -368,3 +368,10 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 수업 목록 표는 `소속 학생 수`·`수업 종료 여부` 열 대신 `반 카테고리`를 표시한다. 값이 없으면 `미지정`으로 보이며, 다른 열과 같이 머리글을 누르면 검색 조건에 맞는 전체 수업을 서버에서 정렬한다(`/api/user/classes`의 `sort_by=CategoryName`).
 - 수업 종료 여부는 목록 열이 아니라 수업 상세 모달에서 변경한다. staff는 상세 상단의 `종강 처리`/`수업 재개` 버튼과 요약의 `수업 상태`로 확인하며, `PUT /api/user/classes/{class_id}/ended`가 `{IsEnded: bool}`만 받아 변경과 감사 기록을 한 트랜잭션에 남긴다.
 - 검증: `tests/test_class_ended.py`, `tests/test_server_side_sort.py`, `node --test tests/test_server_sort_ui.js`.
+
+## 학생 휴강 상태와 수업 화면 토글
+- `Students.IsPaused`(기본 0)는 휴강 중인 학생을 뜻하며 `IsClassEnded`와 별개다. 휴강 학생은 수업 학생 배지가 회색 점선(`.class-student-badge.is-paused`)으로 표시되고, 일괄 등록에서 자동으로 빠지며, 학생 검색의 수업 상태 필터가 이 값을 쓴다.
+- `POST /api/user/students/{student_id}/pause`는 `{IsPaused: bool}`만 받고 값 갱신과 `Students` UPDATE 감사 로그를 함께 남긴다. 일반 선생님은 본인 수업(`Classes.TeacherUsername`)에 배정된 학생만 바꿀 수 있고 그 밖의 학생은 403, 관리 선생님 이상은 전체 학생을 바꿀 수 있다. 응답 메시지에 바뀐 학생 이름과 상태를 담는다.
+- 수업 목록의 수정 모드에서만 `#class-pause-zone`(휴강 보관함)이 보인다. 학생 배지를 보관함에 끌어다 놓으면 휴강과 진행 중이 토글되고, 휴대폰에서는 배지를 눌러 선택한 뒤 보관함을 누르며, 키보드는 보관함에 초점을 두고 Enter·Space를 쓴다. 학생을 선택하지 않고 보관함만 누르면 안내만 표시한다.
+- 토글 후 수업 목록을 다시 조회해 배지 상태와 토스트를 갱신한다. 화면은 편의만 제공하고 최종 권한은 서버가 다시 검증한다.
+- 검증: `tests/test_student_pause.py`, `node --test tests/test_class_view_modes_ui.js`.

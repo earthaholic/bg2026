@@ -28,6 +28,10 @@ class StudentPauseTests(unittest.TestCase):
         self.sql("INSERT INTO Classes(Id, ClassName, TeacherUsername, DayOfWeek, IsEnded) "
                  "VALUES (1, '월요일 반', 'teacher_a', '월', 0)")
         self.sql('INSERT INTO ClassStudents(ClassId, StudentId, IsSpecial) VALUES (1, 1, 0)')
+        # 둘째 학생은 다른 선생님 반에만 배정되어 있다.
+        self.sql("INSERT INTO Classes(Id, ClassName, TeacherUsername, DayOfWeek, IsEnded) "
+                 "VALUES (2, '다른 선생님 반', 'teacher_b', '수', 0)")
+        self.sql('INSERT INTO ClassStudents(ClassId, StudentId, IsSpecial) VALUES (2, 2, 0)')
         self.client = TestClient(main.app, raise_server_exceptions=False)
 
     def tearDown(self):
@@ -53,6 +57,40 @@ class StudentPauseTests(unittest.TestCase):
             headers=self.headers_for(username),
             json={'data': {'IsPaused': value}}
         )
+
+    def pause_via_endpoint(self, value=1, student_id=1, username='manager_a'):
+        return self.client.post(
+            f'/api/user/students/{student_id}/pause',
+            headers=self.headers_for(username),
+            json={'IsPaused': bool(value)}
+        )
+
+    def test_teacher_toggles_pause_for_own_class_student(self):
+        response = self.pause_via_endpoint(1, student_id=1, username='teacher_a')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.sql('SELECT "IsPaused" FROM "Students" WHERE rowid = 1')[0]['IsPaused'], 1)
+        again = self.pause_via_endpoint(0, student_id=1, username='teacher_a')
+        self.assertEqual(again.status_code, 200, again.text)
+        self.assertEqual(self.sql('SELECT "IsPaused" FROM "Students" WHERE rowid = 1')[0]['IsPaused'], 0)
+
+    def test_teacher_cannot_toggle_pause_for_other_class_student(self):
+        response = self.pause_via_endpoint(1, student_id=2, username='teacher_a')
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(self.sql('SELECT "IsPaused" FROM "Students" WHERE rowid = 2')[0]['IsPaused'], 0)
+
+    def test_manager_toggles_pause_for_any_student(self):
+        response = self.pause_via_endpoint(1, student_id=2, username='manager_a')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.sql('SELECT "IsPaused" FROM "Students" WHERE rowid = 2')[0]['IsPaused'], 1)
+
+    def test_pause_toggle_is_audited(self):
+        self.assertEqual(self.pause_via_endpoint(1, student_id=1, username='teacher_a').status_code, 200)
+        rows = self.sql(
+            "SELECT table_name, record_id, action FROM _app_audit_logs "
+            "WHERE table_name = 'Students' ORDER BY id DESC LIMIT 1"
+        )
+        self.assertEqual(rows[0]['record_id'], '1')
+        self.assertEqual(rows[0]['action'], 'UPDATE')
 
     def batch(self, include, username='manager_a', day='2026-07-11'):
         return self.client.post(

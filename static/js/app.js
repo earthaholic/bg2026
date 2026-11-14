@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let classDragPayload = null;
     let classPendingMove = null;
     let classMoveSaving = false;
+    let classPauseSaving = false;
     let pendingClassDeleteId = null;
     let pendingClassDeleteName = '';
     let classAllStudentsCache = []; // 수업 등록/편집 폼의 전체 학생 목록 캐시
@@ -476,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const classTimetableEl = document.getElementById('class-timetable');
     const classTimetableUnscheduled = document.getElementById('class-timetable-unscheduled');
     const classEditModeHint = document.getElementById('class-edit-mode-hint');
+    const classPauseZone = document.getElementById('class-pause-zone');
     const chkClassEditMode = document.getElementById('chk-class-edit-mode');
     const classViewOptions = document.querySelectorAll('[data-class-view]');
     const modalClassStudentMove = document.getElementById('modal-class-student-move');
@@ -1506,6 +1508,18 @@ document.addEventListener('DOMContentLoaded', () => {
             chkClassEditMode.addEventListener('change', () => {
                 classEditMode = chkClassEditMode.checked;
                 applyClassEditMode();
+            });
+        }
+        if (classPauseZone) {
+            classPauseZone.addEventListener('dragover', handlePauseZoneDragOver);
+            classPauseZone.addEventListener('dragleave', handlePauseZoneDragLeave);
+            classPauseZone.addEventListener('drop', handlePauseZoneDrop);
+            classPauseZone.addEventListener('click', handlePauseZoneClick);
+            classPauseZone.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                if (!classEditMode || !classSelectedMoveStudent) return;
+                event.preventDefault();
+                toggleClassStudentPause(classSelectedMoveStudent);
             });
         }
         if (btnCancelClassStudentMove) btnCancelClassStudentMove.addEventListener('click', closeClassStudentMoveModal);
@@ -6542,10 +6556,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // 수정 모드에서는 배지를 끌어 달 반으로 옮길 수 있다.
         const movable = interactive && classEditMode && Number.isFinite(studentId);
         const moveAttrs = movable
-            ? ` draggable="true" data-move-student-id="${studentId}" data-move-student-name="${escapeHtml(name)}" title="${escapeHtml(name)} 학생을 다른 반으로 끌어다 놓으세요"`
+            ? ` draggable="true" data-move-student-id="${studentId}" data-move-student-name="${escapeHtml(name)}" title="${escapeHtml(name)} 학생을 다른 반이나 휴강 보관함으로 끌어다 놓으세요"`
             : '';
         const nameHtml = interactive
-            ? `<button type="button" data-student-id="${studentId}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${pausedClass}${movable ? ' is-movable' : ''}"${moveAttrs} aria-label="${escapeHtml(name + pausedLabel + (special ? ' 특강' : '') + ' 학생 상세 정보' + (movable ? ' · 다른 반으로 끌어서 이동' : ''))}">${escapeHtml(name)}</button>`
+            ? `<button type="button" data-student-id="${studentId}" class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${pausedClass}${movable ? ' is-movable' : ''}"${moveAttrs} aria-label="${escapeHtml(name + pausedLabel + (special ? ' 특강' : '') + ' 학생 상세 정보' + (movable ? ' · 다른 반이나 휴강 보관함으로 끌어서 이동' : ''))}">${escapeHtml(name)}</button>`
             : `<span class="tag-badge ${special ? 'warning' : 'primary'} class-student-badge${pausedClass}">${escapeHtml(name)}</span>`;
         return `<span class="record-student-group">${nameHtml}${showCoverage ? recordCompletionButton(student) : ''}</span>`;
     }
@@ -6734,14 +6748,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         classEditModeHint.classList.remove('hidden');
         classEditModeHint.innerHTML = classSelectedMoveStudent
-            ? `<i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i> 「${escapeHtml(classSelectedMoveStudent.studentName || '학생')}」 학생을 옮길 반을 눌러 주세요. 같은 배지를 다시 누르면 취소됩니다.`
-            : '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> 수정 모드: 학생 배지를 다른 반으로 끌어다 놓으면 이동합니다. 휴대폰에서는 배지를 누른 뒤 옮길 반을 눌러 주세요.';
+            ? `<i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i> 「${escapeHtml(classSelectedMoveStudent.studentName || '학생')}」 학생을 옮길 반이나 휴강 보관함을 눌러 주세요. 같은 배지를 다시 누르면 취소됩니다.`
+            : '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> 수정 모드: 학생 배지를 다른 반으로 끌어다 놓으면 이동하고, 휴강 보관함에 놓으면 휴강이 바뀝니다. 휴대폰에서는 배지를 누른 뒤 반이나 보관함을 눌러 주세요.';
     }
 
     function applyClassEditMode() {
         // 일반 선생님도 본인 수업 사이에서 학생을 옮길 수 있어 역할과 관계없이 허용한다.
         // (이동 가능한 수업 범위는 서버가 다시 검증한다.)
         if (chkClassEditMode) chkClassEditMode.checked = classEditMode;
+        if (classPauseZone) classPauseZone.classList.toggle('hidden', !classEditMode);
         classSelectedMoveStudent = null;
         document.getElementById('view-class-list')?.classList.toggle('class-edit-active', classEditMode);
         updateClassEditHint();
@@ -6854,6 +6869,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.remove('class-drag-active');
         document.querySelectorAll('.class-student-badge.is-dragging').forEach(el => el.classList.remove('is-dragging'));
         document.querySelectorAll('.class-drop-active').forEach(el => el.classList.remove('class-drop-active'));
+        classPauseZone?.classList.remove('class-pause-zone-active');
     }
 
     function handleClassDragOver(event) {
@@ -6884,6 +6900,67 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!classEditMode || !classSelectedMoveStudent) return;
         if (event.target.closest('.class-student-badge, .record-completion-button, .btn-class-batch')) return;
         requestClassStudentMove(classSelectedMoveStudent, Number(event.currentTarget.dataset.classDropId));
+    }
+
+    // 휴강 보관함: 배지를 끌어다 놓으면 휴강/진행 중을 토글한다.
+    function findCurrentClassStudent(studentId) {
+        for (const cls of currentClassResults) {
+            const found = (cls.Students || []).find(s => Number(s.row_id || s.Id) === Number(studentId));
+            if (found) return found;
+        }
+        return null;
+    }
+
+    async function toggleClassStudentPause(payload) {
+        if (!payload || classPauseSaving) return;
+        const student = findCurrentClassStudent(payload.studentId);
+        const next = !(student && Number(student.IsPaused));
+        const feedback = createActionFeedback();
+        classPauseSaving = true;
+        classPauseZone?.classList.remove('class-pause-zone-active');
+        try {
+            const result = await apiFetch(`/api/user/students/${payload.studentId}/pause`, {
+                method: 'POST',
+                body: JSON.stringify({ IsPaused: next })
+            });
+            classSelectedMoveStudent = null;
+            updateClassEditHint();
+            await loadClassSearchResults();
+            feedback.show(result.message || (next ? '휴강으로 바꿨습니다.' : '휴강을 해제했습니다.'), 'success');
+        } catch (err) {
+            feedback.show(err.message, 'error');
+        } finally {
+            classPauseSaving = false;
+        }
+    }
+
+    function handlePauseZoneDragOver(event) {
+        if (!classEditMode || !classDragPayload) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        classPauseZone?.classList.add('class-pause-zone-active');
+    }
+
+    function handlePauseZoneDragLeave(event) {
+        if (event.relatedTarget && classPauseZone?.contains(event.relatedTarget)) return;
+        classPauseZone?.classList.remove('class-pause-zone-active');
+    }
+
+    function handlePauseZoneDrop(event) {
+        if (!classDragPayload) return;
+        event.preventDefault();
+        const payload = classDragPayload;
+        clearClassDragState();
+        toggleClassStudentPause(payload);
+    }
+
+    function handlePauseZoneClick() {
+        if (!classEditMode) return;
+        if (!classSelectedMoveStudent) {
+            createActionFeedback().show('휴강을 바꿀 학생 배지를 먼저 눌러 주세요.', 'warning');
+            return;
+        }
+        toggleClassStudentPause(classSelectedMoveStudent);
     }
 
     function bindClassViewActions(container) {

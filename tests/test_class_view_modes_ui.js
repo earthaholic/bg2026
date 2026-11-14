@@ -68,6 +68,16 @@ test('수업 보기는 리스트·시간표 두 가지만 제공한다', () => {
     assert.equal(source.includes('renderClassCardGrid'), false);
 });
 
+test('수정 모드 휴강 보관함은 드래그와 탭 모두 지원한다', () => {
+    const template = fs.readFileSync('templates/index.html', 'utf8');
+    assert.ok(template.includes('id="class-pause-zone"'));
+    assert.ok(source.includes("'class-pause-zone'"));
+    assert.ok(source.includes('/pause`'), '휴강 토글 API 경로가 없습니다.');
+    assert.ok(source.includes('function toggleClassStudentPause('));
+    assert.ok(source.includes('function handlePauseZoneDrop('));
+    assert.ok(source.includes('function handlePauseZoneClick('));
+});
+
 test('배지 드래그 이동은 원 수업과 대상 수업을 함께 보낸다', () => {
     assert.ok(source.includes('/students/move'), '학생 이동 API 경로가 없습니다.');
     assert.ok(source.includes('data-move-student-id'), '드래그 가능한 배지 표시가 없습니다.');
