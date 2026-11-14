@@ -1251,6 +1251,29 @@
     "encoding": "none"
   },
   {
+    "name": "read_list_tuition_refunds",
+    "method": "GET",
+    "path": "/api/user/tuition-refunds",
+    "description": "조회 전용: /api/user/tuition-refunds. 기존 로그인 계정 권한과 조회 범위를 적용합니다. ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "payment_id": {
+          "type": "integer",
+          "title": "Payment Id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "payment_id"
+      ]
+    },
+    "locations": {
+      "payment_id": "query"
+    },
+    "encoding": "none"
+  },
+  {
     "name": "read_get_tuition_payments",
     "method": "GET",
     "path": "/api/user/tuition-payments",

@@ -9655,7 +9655,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/tuition-payments?include_ended=true');
             const rows = data.payments || [];
             tuitionPaymentsCache = rows;
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
+            body.querySelectorAll('.btn-refund-tuition').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id, false, true)));
             body.querySelectorAll('.btn-edit-tuition').forEach(btn => btn.addEventListener('click', () => editTuitionPayment(btn.dataset.id)));
             body.querySelectorAll('.btn-delete-tuition').forEach(btn => btn.addEventListener('click', async () => {
                 const feedback = createActionFeedback();
@@ -9763,7 +9764,8 @@ document.addEventListener('DOMContentLoaded', () => {
             lookup?.success();
             if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}</td><td><button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.querySelectorAll('.btn-refund-tuition').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id, false, true)));
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
         } catch (err) {
             if (lookup) { lookup.fail(err); return; }
@@ -9771,10 +9773,119 @@ document.addEventListener('DOMContentLoaded', () => {
             feedback.show(err.message, 'error'); body.innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`; }
     }
 
+    function tuitionRefundNote(payment) {
+        const lessons = Number(payment.RefundLessons || 0);
+        const amount = Number(payment.RefundAmount || 0);
+        if (!lessons && !amount) return '';
+        const parts = [];
+        if (amount) parts.push(formatWon(amount));
+        if (lessons) parts.push(`${lessons}차시`);
+        return `<div class="tuition-refund-note"><i class="fa-solid fa-rotate-left"></i> 환불 ${parts.join(' · ')}</div>`;
+    }
+
+    async function refreshTuitionViewsAfterRefund() {
+        try { await loadTuitionPayments(); } catch (_) { /* 결제 관리 화면이 아니면 무시한다. */ }
+        if (document.getElementById('tuition-search-body')) {
+            try { await loadTuitionPaymentSearch(); } catch (_) { /* 조회 화면이 아니면 무시한다. */ }
+        }
+        try { await showTuitionProgress(); } catch (_) { /* 진행 현황이 없으면 무시한다. */ }
+    }
+
+    async function showTuitionRefundPanel(payment, id) {
+        modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 환불 관리';
+        modalTuitionDetailActions.innerHTML = '<button id="btn-modal-refund-back" class="btn btn-sm btn-outline">결제 상세로</button>';
+        modalTuitionDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 환불 내역을 불러오는 중입니다.</div>';
+        try {
+            const data = await apiFetch(`/api/user/tuition-refunds?payment_id=${id}`);
+            renderTuitionRefundPanel(payment, id, data);
+        } catch (err) {
+            modalTuitionDetailBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    function renderTuitionRefundPanel(payment, id, data) {
+        const refunds = data.refunds || [];
+        const totalLessons = Number(payment.PaidLessons || 0) + Number(payment.ServiceLessons || 0);
+        const refundedLessons = Number(data.total_lessons || 0);
+        const refundedAmount = Number(data.total_amount || 0);
+        const remainingAmount = Math.max(0, Number(payment.FeeAmount || 0) - refundedAmount);
+        const remainingLessons = Math.max(0, totalLessons - refundedLessons);
+        const today = new Date().toISOString().slice(0, 10);
+        modalTuitionDetailBody.innerHTML = `
+            <div class="detail-header-block">
+                <div class="detail-title">${escapeHtml(payment.StudentName || '학생 미상')} · ${escapeHtml(payment.ClassType || '')}</div>
+                <div class="detail-meta-row">
+                    <span><i class="fa-solid fa-calendar-day"></i> 차시 시작일: <strong>${escapeHtml(payment.StartDate || '-')}</strong></span>
+                    <span><i class="fa-solid fa-money-check-dollar"></i> 납부일: <strong>${escapeHtml(payment.PaidDate || '-')}</strong></span>
+                </div>
+            </div>
+            <div class="tuition-detail-summary-grid">
+                <div class="detail-info-item"><div class="label">결제 수업료</div><div class="val">${formatWon(payment.FeeAmount)}</div></div>
+                <div class="detail-info-item"><div class="label">환불 누계</div><div class="val tuition-refund-amount">${formatWon(refundedAmount)}</div></div>
+                <div class="detail-info-item"><div class="label">남은 금액</div><div class="val">${formatWon(remainingAmount)}</div></div>
+                <div class="detail-info-item"><div class="label">환불 / 남은 차시</div><div class="val">${refundedLessons}회 / ${remainingLessons}회</div></div>
+            </div>
+            <div class="tuition-refund-history">
+                <h4><i class="fa-solid fa-clock-rotate-left"></i> 환불 내역</h4>
+                ${refunds.length ? refunds.map(refund => `
+                    <div class="tuition-refund-row">
+                        <div class="tuition-refund-body">
+                            <div class="tuition-refund-line"><strong>${escapeHtml(refund.refund_date || '')}</strong><span>${formatWon(refund.refund_amount)} · ${Number(refund.refund_lessons || 0)}차시</span></div>
+                            ${refund.reason ? `<div class="tuition-refund-reason">${escapeHtml(refund.reason)}</div>` : ''}
+                            <div class="tuition-refund-meta">${escapeHtml(refund.created_by || '')} 등록</div>
+                        </div>
+                        <button type="button" class="btn btn-xs btn-danger btn-delete-refund" data-id="${refund.id}">삭제</button>
+                    </div>`).join('') : '<p class="tuition-refund-empty">등록된 환불이 없습니다.</p>'}
+            </div>
+            <form id="form-tuition-refund" class="modal-edit-form">
+                <div class="form-group"><label for="refund-date">환불일 <span class="required">*</span></label><input id="refund-date" class="form-control" type="date" value="${today}" required></div>
+                <div class="form-group"><label for="refund-lessons">환불 차시</label><input id="refund-lessons" class="form-control" type="number" min="0" max="${remainingLessons}" value="0"></div>
+                <div class="form-group span-2"><label for="refund-amount">환불 금액</label><div class="currency-input-wrap"><input id="refund-amount" class="form-control currency-input" type="text" inputmode="numeric" value="0"><span>원</span></div><p class="form-help">남은 금액 ${formatWon(remainingAmount)}까지 등록할 수 있습니다.</p></div>
+                <div class="form-group span-2"><label for="refund-reason">사유</label><textarea id="refund-reason" class="form-control" rows="3" placeholder="예: 중도 퇴원으로 남은 5차시 환불"></textarea></div>
+                <div class="form-group span-2"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> 환불 등록</button></div>
+            </form>`;
+        document.getElementById('btn-modal-refund-back')?.addEventListener('click', () => showTuitionPaymentDetail(id));
+        modalTuitionDetailBody.querySelectorAll('.btn-delete-refund').forEach(btn => btn.addEventListener('click', async () => {
+            const feedback = createActionFeedback();
+            if (!(await feedback.confirm('이 환불 기록을 삭제하시겠습니까?'))) return;
+            try {
+                await apiFetch(`/api/user/tuition-refunds/${btn.dataset.id}`, { method: 'DELETE' });
+                feedback.show('환불 기록을 삭제했습니다.', 'success');
+                await refreshTuitionViewsAfterRefund();
+                showTuitionRefundPanel(payment, id);
+            } catch (err) { feedback.show(err.message, 'error'); }
+        }));
+        document.getElementById('form-tuition-refund')?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const feedback = createActionFeedback();
+            const amountInput = document.getElementById('refund-amount');
+            const lessonsInput = document.getElementById('refund-lessons');
+            const refundAmount = Number(String(amountInput?.value || '').replace(/[^0-9]/g, '')) || 0;
+            const refundLessons = Number(lessonsInput?.value || 0) || 0;
+            const refundDate = document.getElementById('refund-date')?.value || '';
+            const reason = document.getElementById('refund-reason')?.value.trim() || '';
+            if (!refundDate) return feedback.show('환불일을 선택해 주세요.', 'warning');
+            if (!refundAmount && !refundLessons) return feedback.show('환불 금액이나 차시를 하나 이상 입력해 주세요.', 'warning');
+            if (refundLessons > remainingLessons) {
+                const proceed = await feedback.confirm(`이 결제의 남은 차시(${remainingLessons}회)보다 많이 환불합니다. 그래도 등록할까요?`);
+                if (!proceed) return;
+            }
+            try {
+                const result = await apiFetch('/api/user/tuition-refunds', {
+                    method: 'POST',
+                    body: JSON.stringify({ payment_id: Number(id), refund_date: refundDate, refund_lessons: refundLessons, refund_amount: refundAmount, reason })
+                });
+                feedback.show(result.message || '환불을 등록했습니다.', 'success');
+                await refreshTuitionViewsAfterRefund();
+                showTuitionRefundPanel(payment, id);
+            } catch (err) { feedback.show(err.message, 'error'); }
+        });
+    }
+
     function renderTuitionPaymentDetail(payment, id) {
         modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-receipt"></i> 결제 상세 정보';
         modalTuitionDetailActions.innerHTML = isStaff()
-            ? '<button id="btn-modal-edit-tuition" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>'
+            ? '<button id="btn-modal-refund-tuition" class="btn btn-sm btn-outline"><i class="fa-solid fa-rotate-left"></i> 환불 관리</button> <button id="btn-modal-edit-tuition" class="btn btn-sm btn-primary"><i class="fa-solid fa-pen-to-square"></i> 수정</button>'
             : '';
         modalTuitionDetailBody.innerHTML = `
             <div class="detail-header-block">
@@ -9791,9 +9902,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="detail-info-item"><div class="label">서비스 차시</div><div class="val">${Number(payment.ServiceLessons || 0)}회</div></div>
                 <div class="detail-info-item"><div class="label">총 제공 차시</div><div class="val">${Number(payment.PaidLessons || 0) + Number(payment.ServiceLessons || 0)}회</div></div>
                 <div class="detail-info-item"><div class="label">수업료</div><div class="val tuition-detail-fee">${formatWon(payment.FeeAmount)}</div></div>
+                <div class="detail-info-item"><div class="label">환불 누계</div><div class="val">${Number(payment.RefundAmount || 0) ? `${formatWon(payment.RefundAmount)} · ${Number(payment.RefundLessons || 0)}차시` : "없음"}</div></div>
             </div>
             <div class="detail-desc-box"><strong><i class="fa-solid fa-note-sticky"></i> 비고</strong><p>${escapeHtml(payment.Memo || '입력된 비고가 없습니다.')}</p></div>
         `;
+        document.getElementById('btn-modal-refund-tuition')?.addEventListener('click', () => showTuitionRefundPanel(payment, id));
         document.getElementById('btn-modal-edit-tuition')?.addEventListener('click', () => renderTuitionPaymentEditForm(payment, id));
     }
 
@@ -9851,14 +9964,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function showTuitionPaymentDetail(id, openEdit = false) {
+    async function showTuitionPaymentDetail(id, openEdit = false, openRefund = false) {
         modalTuitionDetail.classList.remove('hidden');
         modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-receipt"></i> 결제 상세 정보';
         modalTuitionDetailActions.innerHTML = '';
         modalTuitionDetailBody.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 상세 정보를 불러오는 중입니다.</div>';
         try {
             const p = (await apiFetch(`/api/user/tuition-payments/${id}`)).payment;
-            if (openEdit && isStaff()) renderTuitionPaymentEditForm(p, id);
+            if (openRefund && isStaff()) showTuitionRefundPanel(p, id);
+            else if (openEdit && isStaff()) renderTuitionPaymentEditForm(p, id);
             else renderTuitionPaymentDetail(p, id);
         } catch (err) { modalTuitionDetailBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`; }
     }

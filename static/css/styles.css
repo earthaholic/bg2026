@@ -6338,3 +6338,66 @@ button.class-student-badge { cursor: pointer; }
         font-size: 0.85rem;
     }
 }
+
+/* 결제 이력의 환불 표시와 환불 관리 패널 */
+.tuition-refund-note {
+    margin-top: 0.15rem;
+    font-size: 0.78rem;
+    color: var(--danger);
+    white-space: nowrap;
+}
+
+.tuition-refund-amount {
+    color: var(--danger);
+}
+
+.tuition-refund-history {
+    margin: 1rem 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-section);
+}
+
+.tuition-refund-history h4 {
+    margin: 0 0 0.6rem;
+    font-size: 0.9rem;
+}
+
+.tuition-refund-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-top: 1px dashed var(--border-color);
+}
+
+.tuition-refund-row:first-of-type {
+    border-top: 0;
+}
+
+.tuition-refund-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.tuition-refund-reason {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.tuition-refund-meta {
+    margin-top: 0.15rem;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.tuition-refund-empty {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}

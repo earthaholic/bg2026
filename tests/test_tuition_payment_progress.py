@@ -218,7 +218,7 @@ class TuitionPaymentProgressTests(unittest.TestCase):
         self.assertEqual(progress['payments'], [])
 
     def test_missing_student_and_no_payment_return_empty_helper_result(self):
-        expected = {'has_payment': False, 'total_lessons': 0, 'used_lessons': 0,
+        expected = {'has_payment': False, 'total_lessons': 0, 'refunded_lessons': 0, 'used_lessons': 0,
                     'next_lesson': None, 'remaining_lessons': 0, 'overage_lessons': 0,
                     'next_cycle_lesson': None, 'payments': []}
         self.assertEqual(main._get_tuition_progress(999), expected)
@@ -239,6 +239,7 @@ class TuitionPaymentProgressTests(unittest.TestCase):
             'ClassType': self.CLASS_TYPE, 'PaidLessons': 10, 'ServiceLessons': 2,
             'StartDate': '2026-09-01', 'PaidDate': self.TODAY, 'FeeAmount': 100000,
             'Memo': '테스트 결제', 'StudentName': '가 학생', 'StudentRowId': 1,
+            'RefundAmount': 0, 'RefundLessons': 0, 'RefundCount': 0,
         }]})
 
     def test_progress_is_cached_once_per_student_using_shared_connection(self):

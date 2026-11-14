@@ -110,6 +110,7 @@ def on_startup():
     init_mcp_token_tables()
     init_activity_tables()
     init_tuition_collection_tables()
+    init_tuition_refund_tables()
     advance_student_grades()
 
 # Pydantic Schemas
@@ -271,6 +272,13 @@ class ClassStudentMoveRequest(BaseModel):
 class StudentPauseRequest(BaseModel):
     IsPaused: bool
 
+class TuitionRefundRequest(BaseModel):
+    payment_id: int
+    refund_date: str
+    refund_lessons: int = 0
+    refund_amount: int = 0
+    reason: str = ""
+
 class ClassEndedRequest(BaseModel):
     IsEnded: bool
 
@@ -419,7 +427,7 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
         cursor.execute('SELECT rowid AS row_id, * FROM "Students" WHERE rowid = ? OR "Id" = ?', (student_id, student_id))
         student_row = cursor.fetchone()
         if not student_row:
-            return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
+            return {"has_payment": False, "total_lessons": 0, "refunded_lessons": 0, "used_lessons": 0,
                     "next_lesson": None, "remaining_lessons": 0, "overage_lessons": 0,
                     "next_cycle_lesson": None, "payments": []}
         student = dict(student_row)
@@ -430,7 +438,7 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
                        (student["row_id"], student.get("Id", student["row_id"]), reference_day))
         payments = [dict(r) for r in cursor.fetchall()]
         if not payments:
-            return {"has_payment": False, "total_lessons": 0, "used_lessons": 0,
+            return {"has_payment": False, "total_lessons": 0, "refunded_lessons": 0, "used_lessons": 0,
                     "next_lesson": None, "remaining_lessons": 0, "overage_lessons": 0,
                     "next_cycle_lesson": None, "payments": []}
         current_payment = payments[0]
@@ -439,8 +447,19 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
             current_payment["StartDate"], reference_day
         )
         total = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
+        # 환불한 차시는 현재 결제의 제공 차시에서 빼고 잔여 차시와 새 주기를 계산한다.
+        refunded = 0
+        try:
+            refund_row = cursor.execute(
+                'SELECT COALESCE(SUM(refund_lessons), 0) AS lessons FROM "TuitionRefunds" WHERE payment_id = ?',
+                (current_payment["row_id"],)
+            ).fetchone()
+            refunded = int((refund_row["lessons"] if refund_row else 0) or 0)
+        except Exception:
+            refunded = 0
+        total = max(0, total - refunded)
         overage = max(0, used - total)
-        return {"has_payment": True, "total_lessons": total, "used_lessons": used,
+        return {"has_payment": True, "total_lessons": total, "refunded_lessons": refunded, "used_lessons": used,
                 "next_lesson": used + 1, "remaining_lessons": total - used,
                 "overage_lessons": overage, "next_cycle_lesson": overage + 1,
                 "is_exhausted": used >= total, "payments": payments,
@@ -1642,7 +1661,139 @@ def _tuition_payment_stage(payment: Dict[str, Any]) -> str:
     return "exhausted" if remaining <= 0 else "low" if remaining < 5 else "normal"
 
 
+TUITION_REFUND_AGGREGATE_SQL = '''COALESCE((SELECT SUM(r."refund_amount") FROM "TuitionRefunds" r WHERE r."payment_id" = p.rowid), 0) AS "RefundAmount",
+                           COALESCE((SELECT SUM(r."refund_lessons") FROM "TuitionRefunds" r WHERE r."payment_id" = p.rowid), 0) AS "RefundLessons",
+                           COALESCE((SELECT COUNT(*) FROM "TuitionRefunds" r WHERE r."payment_id" = p.rowid), 0) AS "RefundCount"'''
+
+
+def init_tuition_refund_tables(connection: Any = None) -> None:
+    """결제 건에 붙는 환불 이력 테이블을 보완한다."""
+    conn = connection if connection is not None else get_db_connection()
+    try:
+        conn.executescript('''
+        CREATE TABLE IF NOT EXISTS TuitionRefunds (
+          id INTEGER PRIMARY KEY,
+          payment_id INTEGER NOT NULL,
+          student_id INTEGER NOT NULL DEFAULT 0,
+          refund_date TEXT NOT NULL,
+          refund_lessons INTEGER NOT NULL DEFAULT 0,
+          refund_amount INTEGER NOT NULL DEFAULT 0,
+          reason TEXT NOT NULL DEFAULT '',
+          created_by TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT '',
+          updated_by TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT '');
+        CREATE INDEX IF NOT EXISTS idx_refund_payment ON TuitionRefunds(payment_id);
+        ''')
+        conn.commit()
+    finally:
+        if connection is None:
+            conn.close()
+
+
+def _tuition_refund_columns(cursor: Any) -> str:
+    """조회 시점에 환불 테이블이 있으면 집계 열을, 없으면 0을 돌려준다(조회는 DB를 바꾸지 않는다)."""
+    exists = cursor.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'TuitionRefunds'").fetchone()
+    if exists:
+        return TUITION_REFUND_AGGREGATE_SQL
+    return '0 AS "RefundAmount", 0 AS "RefundLessons", 0 AS "RefundCount"'
+
+
+def _payment_refund_totals(cursor: Any, payment_row_id: int) -> Dict[str, int]:
+    row = cursor.execute(
+        'SELECT COALESCE(SUM(refund_lessons), 0) AS lessons, COALESCE(SUM(refund_amount), 0) AS amount, COUNT(*) AS cnt FROM TuitionRefunds WHERE payment_id = ?',
+        (payment_row_id,)
+    ).fetchone()
+    if not row:
+        return {"lessons": 0, "amount": 0, "count": 0}
+    return {"lessons": int(row["lessons"] or 0), "amount": int(row["amount"] or 0), "count": int(row["cnt"] or 0)}
+
+
+@app.get("/api/user/tuition-refunds")
+def list_tuition_refunds(payment_id: int = Query(...), current_user: Dict[str, Any] = Depends(get_current_user)):
+    conn = get_db_connection()
+    try:
+        init_tuition_refund_tables(connection=conn)
+        rows = conn.execute(
+            'SELECT * FROM TuitionRefunds WHERE payment_id = ? ORDER BY refund_date, id', (payment_id,)
+        ).fetchall()
+        refunds = [dict(r) for r in rows]
+        return {
+            "refunds": refunds,
+            "total_lessons": sum(int(r.get("refund_lessons") or 0) for r in refunds),
+            "total_amount": sum(int(r.get("refund_amount") or 0) for r in refunds),
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/user/tuition-refunds")
+def create_tuition_refund(payload: TuitionRefundRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    refund_date = (payload.refund_date or "").strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", refund_date):
+        raise HTTPException(status_code=400, detail="환불일을 올바르게 입력해 주세요.")
+    lessons = max(0, int(payload.refund_lessons or 0))
+    amount = max(0, int(payload.refund_amount or 0))
+    if lessons == 0 and amount == 0:
+        raise HTTPException(status_code=400, detail="환불 차시나 환불 금액을 하나 이상 입력해 주세요.")
+    conn = get_db_connection()
+    try:
+        init_tuition_refund_tables(connection=conn)
+        cursor = conn.cursor()
+        payment_row = cursor.execute('SELECT rowid AS row_id, * FROM "TuitionPayments" WHERE rowid = ? OR "Id" = ?', (payload.payment_id, payload.payment_id)).fetchone()
+        if not payment_row:
+            raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
+        payment = dict(payment_row)
+        paid_date = (payment.get("PaidDate") or payment.get("StartDate") or "").strip()[:10]
+        if paid_date and refund_date < paid_date:
+            raise HTTPException(status_code=400, detail="환불일은 납부일보다 이를 수 없습니다.")
+        totals = _payment_refund_totals(cursor, payment["row_id"])
+        total_lessons = int(payment.get("PaidLessons") or 0) + int(payment.get("ServiceLessons") or 0)
+        fee_amount = int(payment.get("FeeAmount") or 0)
+        if amount + totals["amount"] > fee_amount:
+            remaining_amount = fee_amount - totals["amount"]
+            raise HTTPException(status_code=400, detail=f"환불 금액이 결제 금액을 넘습니다. 남은 금액은 {remaining_amount:,}원입니다.")
+        if lessons + totals["lessons"] > total_lessons:
+            remaining_lessons = total_lessons - totals["lessons"]
+            raise HTTPException(status_code=400, detail=f"환불 차시가 결제 차시를 넘습니다. 남은 차시는 {remaining_lessons}회입니다.")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            '''INSERT INTO TuitionRefunds (payment_id, student_id, refund_date, refund_lessons, refund_amount, reason, created_by, created_at, updated_by, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)''',
+            (payment["row_id"], int(payment.get("StudentId") or 0), refund_date, lessons, amount,
+             (payload.reason or "").strip(), current_user["username"], now, current_user["username"], now)
+        )
+        refund_id = cursor.lastrowid
+        conn.commit()
+        _audit_insert("TuitionRefunds", refund_id, get_record_snapshot("TuitionRefunds", refund_id),
+                      current_user["username"], current_user["role"])
+    finally:
+        conn.close()
+    return {"status": "success", "refund_id": refund_id,
+            "remaining_lessons": total_lessons - totals["lessons"] - lessons,
+            "message": "환불을 등록했습니다."}
+
+
+@app.delete("/api/user/tuition-refunds/{refund_id}")
+def delete_tuition_refund(refund_id: int, current_user: Dict[str, Any] = Depends(get_current_staff)):
+    conn = get_db_connection()
+    try:
+        init_tuition_refund_tables(connection=conn)
+        row = conn.execute('SELECT * FROM TuitionRefunds WHERE id = ?', (refund_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="해당 환불 기록을 찾을 수 없습니다.")
+        old_snapshot = get_record_snapshot("TuitionRefunds", refund_id)
+        conn.execute('DELETE FROM TuitionRefunds WHERE id = ?', (refund_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    _audit_delete("TuitionRefunds", refund_id, old_snapshot, current_user["username"], current_user["role"])
+    return {"status": "success", "message": "환불 기록을 삭제했습니다."}
+
+
 @app.get("/api/user/tuition-payments")
+
+
 def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = None, student_id: Optional[int] = None, current_user: Dict[str, Any] = Depends(get_current_staff), include_progress: bool = False, progress_state: Optional[str] = None, include_ended: bool = False):
     if progress_state and progress_state not in {"normal", "low", "exhausted", "previous", "upcoming", "unknown"}:
         raise HTTPException(status_code=400, detail="올바른 차시 상태를 선택해 주세요.")
@@ -1659,7 +1810,8 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
         if not include_ended:
             conditions.append('COALESCE(s."IsClassEnded", 0) = 0')
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ''
-        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s.rowid AS "StudentRowId"
+        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s.rowid AS "StudentRowId",
+                           {_tuition_refund_columns(cursor)}
                            FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                            {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
         payments = [dict(r) for r in cursor.fetchall()]
@@ -1726,7 +1878,8 @@ def get_tuition_payment_detail(payment_id: int, current_user: Dict[str, Any] = D
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute('''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s."Grade" AS "StudentGrade"
+        cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s."Grade" AS "StudentGrade",
+                          {_tuition_refund_columns(cursor)}
                           FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                           WHERE p.rowid = ? OR p."Id" = ?''', (payment_id, payment_id))
         row = cursor.fetchone()

@@ -375,3 +375,12 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 수업 목록의 수정 모드에서만 `#class-pause-zone`(휴강 보관함)이 보인다. 학생 배지를 보관함에 끌어다 놓으면 휴강과 진행 중이 토글되고, 휴대폰에서는 배지를 눌러 선택한 뒤 보관함을 누르며, 키보드는 보관함에 초점을 두고 Enter·Space를 쓴다. 학생을 선택하지 않고 보관함만 누르면 안내만 표시한다.
 - 토글 후 수업 목록을 다시 조회해 배지 상태와 토스트를 갱신한다. 화면은 편의만 제공하고 최종 권한은 서버가 다시 검증한다.
 - 검증: `tests/test_student_pause.py`, `node --test tests/test_class_view_modes_ui.js`.
+
+## 수업료 환불
+- 환불은 결제 건에 붙는 별도 이력(`TuitionRefunds`: payment_id, refund_date, refund_lessons, refund_amount, reason, 등록자·시각)으로 쌓는다. 결제 행의 금액·차시를 고쳐 이력을 지우지 않는다.
+- `GET /api/user/tuition-refunds?payment_id=`는 조회(로그인 사용자), `POST /api/user/tuition-refunds`와 `DELETE /api/user/tuition-refunds/{id}`는 staff 전용이며 변경과 감사 로그를 함께 남긴다. 한 결제에 부분 환불을 여러 번 등록할 수 있다.
+- 검증: 환불 금액 합계는 결제 금액을, 환불 차시 합계는 결제+서비스 차시를 넘을 수 없고, 환불일은 납부일보다 이를 수 없다. 남은 차시보다 많은 차시 환불은 막지 않고 화면에서 확인을 한 번 받는다.
+- 잔여 차시는 현재 결제의 `결제+서비스 − 환불 차시 − 사용 차시`로 계산하고, 환불로 제공 차시가 줄면 새 주기 계산도 그 기준을 따른다. 조회 응답의 결제 행에는 `RefundAmount`·`RefundLessons`·`RefundCount`가 함께 온다.
+- 화면: 결제 이력 표(결제 관리·결제 이력 조회)의 수업료 칸에 `환불 금액 · 차시`를 덧붙이고, 상세 모달의 `환불 관리`에서 내역·등록·삭제를 처리한다. 월급 정산과 월말보고 문자는 수업 기준이라 환불의 영향을 받지 않는다.
+- 조회 경로는 환불 테이블을 만들지 않는다(`_tuition_refund_columns()`가 테이블 존재 여부에 따라 집계 열을 고른다). 테이블 생성은 시작 시 `init_tuition_refund_tables()`와 등록·삭제 요청에서만 한다.
+- 검증: `tests/test_tuition_refund.py`, `node --test tests/test_tuition_refund_ui.js`.
