@@ -6401,3 +6401,17 @@ button.class-student-badge { cursor: pointer; }
     font-size: 0.82rem;
     color: var(--text-muted);
 }
+
+/* 결제 이력·납입 관리에서 환불 반영을 함께 보여 주는 칩 */
+.tuition-refund-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.2rem;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--danger);
+    border-radius: 999px;
+    font-size: 0.74rem;
+    color: var(--danger);
+    white-space: nowrap;
+}

@@ -9725,13 +9725,19 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    function tuitionRefundChip(payment) {
+        const lessons = Number(payment.RefundLessons || 0);
+        if (!lessons) return '';
+        return `<span class="tuition-refund-chip"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> 환불 ${lessons}차시</span>`;
+    }
+
     function tuitionPaymentProgressDisplay(payment) {
         const progress = payment.TuitionProgress;
         if (payment.ProgressState !== 'current' || !progress ||
             !Number.isFinite(progress.remaining_lessons)) {
             const label = payment.ProgressState === 'previous' ? '이전 결제' :
                 payment.ProgressState === 'upcoming' ? '시작 예정' : '잔여 차시 확인 불가';
-            return `<span class="tuition-progress-note">${label}</span>`;
+            return `<span class="tuition-progress-note">${label}</span>${tuitionRefundChip(payment)}`;
         }
         const remaining = progress.remaining_lessons;
         const state = remaining <= 0 ? 'exhausted' : remaining < 5 ? 'low' : 'normal';
@@ -9741,7 +9747,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `잔여 ${remaining}회${state === 'low' ? ' · 결제 확인 필요' : ''}`;
         const icon = state === 'normal' ? 'fa-circle-check' : 'fa-triangle-exclamation';
         const cycleNote = cycle.exhausted ? ` · 다음 수업은 새 주기 ${cycle.nextCycleLesson}차시` : '';
-        return `<span class="tuition-remaining-badge is-${state}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</span><span class="tuition-progress-note">현재 결제 총 ${progress.total_lessons}회 · ${progress.used_lessons}회 사용${cycleNote}</span>`;
+        return `<span class="tuition-remaining-badge is-${state}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</span><span class="tuition-progress-note">현재 결제 총 ${progress.total_lessons}회 · ${progress.used_lessons}회 사용${cycleNote}</span>${tuitionRefundChip(payment)}`;
     }
 
     let tuitionPaymentSearchVersion = 0;
@@ -9776,11 +9782,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function tuitionRefundNote(payment) {
         const lessons = Number(payment.RefundLessons || 0);
         const amount = Number(payment.RefundAmount || 0);
-        if (!lessons && !amount) return '';
-        const parts = [];
-        if (amount) parts.push(formatWon(amount));
-        if (lessons) parts.push(`${lessons}차시`);
-        return `<div class="tuition-refund-note"><i class="fa-solid fa-rotate-left"></i> 환불 ${parts.join(' · ')}</div>`;
+        if (!amount) return '';
+        return `<div class="tuition-refund-note"><i class="fa-solid fa-rotate-left"></i> 환불 ${formatWon(amount)}</div>`;
     }
 
     async function refreshTuitionViewsAfterRefund() {
