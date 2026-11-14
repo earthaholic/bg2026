@@ -9915,7 +9915,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTuitionPaymentEditForm(payment, id) {
         modalTuitionDetailTitle.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 결제 정보 수정';
-        modalTuitionDetailActions.innerHTML = '';
+        // 결제를 고치다가 바로 환불로 넘어갈 수 있게 관리 화면에서도 진입점을 둔다.
+        modalTuitionDetailActions.innerHTML = isStaff()
+            ? '<button id="btn-modal-refund-from-edit" class="btn btn-sm btn-outline"><i class="fa-solid fa-rotate-left"></i> 환불 관리</button>'
+            : '';
         modalTuitionDetailBody.innerHTML = `
             <form id="form-edit-tuition-payment" class="modal-edit-form">
                 <div class="form-section">
@@ -9943,6 +9946,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </form>
         `;
         document.getElementById('btn-cancel-edit-tuition').addEventListener('click', () => renderTuitionPaymentDetail(payment, id));
+        document.getElementById('btn-modal-refund-from-edit')?.addEventListener('click', () => showTuitionRefundPanel(payment, id));
         document.getElementById('form-edit-tuition-payment').addEventListener('submit', async event => {
             const feedback = createActionFeedback(event);
             event.preventDefault();
