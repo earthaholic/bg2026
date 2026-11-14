@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261108-monthly-report">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261114-report-reference14">
     <!-- 모바일 화면 지원 (styles.css 뒤에 로드) -->
     <link rel="stylesheet" href="/static/css/mobile.css?v=20261102-mobile11">
     <!-- Chart.js Library -->
@@ -1388,16 +1388,18 @@
                                         <label for="monthly-report-student-select" class="form-label required">
                                             <i class="fa-solid fa-user-graduate"></i> 학생 선택
                                         </label>
-                                        <div class="input-group">
+                                        <div class="monthly-report-student-field">
                                             <select id="monthly-report-student-select" class="form-control">
                                                 <option value="">-- 학생을 선택하세요 --</option>
                                             </select>
-                                            <button type="button" id="btn-open-picker-monthly-student" class="btn btn-outline">
-                                                <i class="fa-solid fa-magnifying-glass"></i> 검색
-                                            </button>
-                                            <button type="button" id="btn-fetch-monthly-logs" class="btn btn-primary">
-                                                <i class="fa-solid fa-download"></i> 전체 기록 불러오기
-                                            </button>
+                                            <div class="monthly-report-student-actions">
+                                                <button type="button" id="btn-open-picker-monthly-student" class="btn btn-sm btn-outline">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 검색
+                                                </button>
+                                                <button type="button" id="btn-fetch-monthly-logs" class="btn btn-sm btn-primary">
+                                                    <i class="fa-solid fa-download"></i> 기록 불러오기
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1489,7 +1491,7 @@
                                     <div id="monthly-report-logs-container" class="report-logs-list">
                                         <div class="empty-state-sm">
                                             <i class="fa-solid fa-arrow-up"></i>
-                                            <p>학생을 선택한 후 기간을 설정하고 [기록 불러오기]를 눌러주세요.</p>
+                                            <p>학생을 선택하고 기간을 확인한 뒤 [기록 불러오기]를 눌러 주세요.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1502,29 +1504,56 @@
                                 <div class="card-header-styled monthly-report-preview-header">
                                     <div>
                                         <h3><i class="fa-solid fa-file-lines"></i> 문자 양식 미리보기</h3>
+                                        <p id="monthly-report-document-label" class="monthly-report-document-label">새 보고서</p>
                                         <p id="monthly-report-save-state" class="monthly-report-save-state">아직 저장되지 않은 문서입니다.</p>
                                     </div>
                                     <span id="monthly-report-status-badge" class="monthly-report-status-badge hidden"></span>
                                 </div>
                                 <div class="card-body">
-                                    <div class="monthly-report-history-picker">
-                                        <label for="monthly-report-history-select">
-                                            <i class="fa-solid fa-clock-rotate-left"></i> 이전 기록 불러오기
-                                        </label>
-                                        <div class="monthly-report-history-control">
+                                    <div id="monthly-report-reference" class="monthly-report-reference">
+                                        <div class="monthly-report-reference-header">
+                                            <span class="monthly-report-reference-title">
+                                                <i class="fa-solid fa-clock-rotate-left"></i> 지난 보고 참고
+                                            </span>
+                                            <div class="monthly-report-reference-actions">
+                                                <button type="button" id="btn-new-monthly-report" class="btn btn-xs btn-primary" disabled>
+                                                    <i class="fa-solid fa-plus"></i> 이번 달 보고 작성
+                                                </button>
+                                                <button type="button" id="btn-resume-monthly-draft" class="btn btn-xs btn-outline hidden" disabled>
+                                                    <i class="fa-solid fa-pen-to-square"></i> 임시 저장 이어서 쓰기
+                                                </button>
+                                                <button type="button" id="btn-edit-monthly-report" class="btn btn-xs btn-outline" disabled>
+                                                    <i class="fa-solid fa-pen"></i> 지난 보고 수정
+                                                </button>
+                                                <button type="button" id="btn-copy-monthly-reference" class="btn btn-xs btn-outline" disabled>
+                                                    <i class="fa-regular fa-copy"></i> 문구 복사
+                                                </button>
+                                                <button type="button" id="btn-refresh-monthly-reports" class="btn btn-xs btn-outline" title="저장 목록 새로고침">
+                                                    <i class="fa-solid fa-rotate"></i><span class="sr-only">새로고침</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="monthly-report-reference-body" class="monthly-report-reference-body">
+                                            <p class="monthly-report-reference-note">학생을 선택하면 가장 최근에 저장한 보고를 여기에 보여 줍니다.</p>
+                                        </div>
+                                        <div id="monthly-report-history-picker" class="monthly-report-history-picker hidden">
+                                            <label for="monthly-report-history-select">
+                                                <i class="fa-solid fa-list"></i> 다른 저장 기록 보기
+                                            </label>
                                             <select id="monthly-report-history-select" class="form-control" disabled>
                                                 <option value="">학생을 선택해 주세요.</option>
                                             </select>
-                                            <button type="button" id="btn-refresh-monthly-reports" class="btn btn-outline" title="저장 목록 새로고침">
-                                                <i class="fa-solid fa-rotate"></i><span class="sr-only">새로고침</span>
-                                            </button>
                                         </div>
                                     </div>
                                     <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 0.85rem;">
                                         <i class="fa-solid fa-lightbulb"></i> 아래의 미리보기 텍스트를 직접 수정하거나 필요시 문구를 조정할 수 있습니다.
                                     </div>
                                     <p id="monthly-report-lock-notice" class="monthly-report-lock-notice hidden" role="status">
-                                        <i class="fa-solid fa-lock"></i> 완료로 저장한 월말보고입니다. 문구 수정과 다시 저장은 사이트 관리자만 할 수 있습니다.
+                                        <i class="fa-solid fa-lock"></i> 완료로 저장한 월말보고입니다. 문구 수정과 다시 저장은 사이트 관리자만 할 수 있습니다. 다음 달 보고서는 [이번 달 보고 작성]으로 새로 시작하세요.
+                                    </p>
+                                    <p id="monthly-report-regenerate-notice" class="monthly-report-regenerate-notice hidden" role="status">
+                                        <i class="fa-solid fa-circle-info"></i> 기록 선택이 바뀌었지만 직접 수정한 문구를 그대로 두었습니다.
+                                        <button type="button" id="btn-regenerate-monthly-text" class="btn btn-xs btn-outline">문구 다시 생성</button>
                                     </p>
                                     <textarea id="monthly-report-result-text" class="monthly-report-textarea" rows="22" placeholder="기록을 선택하면 월말 보고 문자 양식이 이곳에 자동으로 작성됩니다..."></textarea>
                                     <div class="monthly-report-actions">
@@ -2874,7 +2903,7 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261105-server-sort2"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261108-lecture-cycle"></script>
+    <script src="/static/js/app.js?v=20261114-report-reference9"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
     <script src="/static/js/mobile.js?v=20261102-mobile11"></script>
 </body>

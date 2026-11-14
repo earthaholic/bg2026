@@ -15,7 +15,7 @@ function between(start, end) {
 }
 
 const code = [
-    'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false; let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false;',
+    'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false; let monthlyReportManualEdit = false; let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false;',
     between('    function formatDateKorean', '    function generateMonthlyReportText'),
     between('    function generateMonthlyReportText', '    function formatMonthlyAbsenceReason'),
     between('    function formatMonthlyAbsenceReason', '    function isMonthlyReportBreak'),
@@ -57,6 +57,9 @@ function fixture(logs, { startLecture = '1', apiFetch = async () => ({ has_payme
         URLSearchParams, Map, JSON, String, Number, Array, Date, parseInt, isNaN,
         getKoreanNameWithYi: name => name,
         setMonthlyReportSaveState() {},
+        updateMonthlyReportSaveAvailability() {},
+        showMonthlyReportRegenerateNotice() {},
+        hideMonthlyReportRegenerateNotice() {},
         apiFetch,
         generateMonthlyReportText() {},
     });

@@ -3478,10 +3478,126 @@ body {
     }
 }
 
+/* 좁은 화면에서도 카드가 화면 폭을 넘지 않게 한다(1fr은 min-content에 밀린다). */
+.monthly-report-layout > * {
+    min-width: 0;
+}
+
+.monthly-report-student-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.monthly-report-student-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
 @media (max-width: 1024px) {
     .monthly-report-layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
+
+    /* 좁은 화면에서는 입력·표를 줄이는 대신 자르거나 가로 스크롤로 읽는다. */
+    #view-monthly-report .input-group > .form-control,
+    #view-monthly-report .input-group > .btn {
+        min-width: 0;
+    }
+
+    #monthly-report-student-select {
+        white-space: normal;
+        text-overflow: ellipsis;
+    }
+}
+
+.monthly-report-reference {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+}
+
+.monthly-report-reference-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.monthly-report-reference-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.monthly-report-reference-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.monthly-report-reference-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.monthly-report-reference-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.monthly-report-reference-content {
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    max-height: 14rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    background: var(--bg-input);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.monthly-report-reference-note {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.monthly-report-document-label {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.monthly-report-regenerate-notice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 0 0 0.6rem;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.82rem;
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: var(--radius-sm);
+    background: rgba(245, 158, 11, 0.12);
 }
 
 .report-logs-list {
@@ -3713,12 +3829,33 @@ body {
     font-size: 0.78rem;
 }
 
+
+/* 폰에서는 표를 줄이는 대신 칸 너비를 지키고 가로 스크룰로 읽는다. */
+@media (max-width: 1024px) {
+    #view-monthly-report .monthly-tuition-table td,
+    #view-monthly-report .monthly-tuition-table .tuition-lesson-status,
+    #view-monthly-report .monthly-tuition-table .tuition-remaining-badge {
+        white-space: nowrap;
+    }
+
+    #view-monthly-report .monthly-tuition-table .tuition-lesson-status {
+        min-width: 7.5rem;
+    }
+}
+
 .monthly-tuition-table th,
 .monthly-tuition-table td {
     padding: 0.35rem 0.4rem;
     border-bottom: 1px solid var(--border-color);
     text-align: left;
     vertical-align: top;
+}
+
+/* 좁은 화면용 가로 스크롤은 @media 안에서만 적용한다. */
+
+/* 요약 표에서는 긴 안내 문장을 접고 숫자와 잔여 배지만 보여 준다(전체 내용은 결제 이력 조회에 있다). */
+#view-monthly-report .monthly-tuition-table .tuition-progress-note {
+    display: none;
 }
 
 .monthly-tuition-table th {
@@ -3732,7 +3869,6 @@ body {
 }
 
 .monthly-tuition-table .monthly-tuition-date,
-.monthly-tuition-table .monthly-tuition-fee,
 .monthly-tuition-table th:nth-child(3),
 .monthly-tuition-table td:nth-child(3) {
     white-space: nowrap;
@@ -3752,11 +3888,10 @@ body {
 }
 
 .monthly-report-history-picker {
-    margin-bottom: 0.85rem;
-    padding: 0.8rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background: var(--bg-section);
+    margin-top: 0.15rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
 }
 
 .monthly-report-history-picker > label {

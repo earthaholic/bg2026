@@ -48,7 +48,7 @@ test('학생을 선택하지 않았거나 staff가 아니면 결제 이력 패�
     assert.equal(teacher.calls.length, 0);
 });
 
-test('선택 학생의 결제 이력을 결제 이력 조회와 같은 항목으로 보여 준다', async () => {
+test('선택 학생의 결제 이력을 요약해 보여 주고 수업료 열은 싣지 않는다', async () => {
     const payments = [{
         StartDate: '2026-10-01', PaidDate: '2026-09-28', ClassType: '독서반',
         PaidLessons: 8, ServiceLessons: 0, FeeAmount: 340000,
@@ -59,7 +59,7 @@ test('선택 학생의 결제 이력을 결제 이력 조회와 같은 항목으
 
     assert.equal(built.panel.hidden, false);
     assert.equal(built.calls[0], '/api/user/tuition-payments?student_id=7&include_progress=true&include_ended=true');
-    ['결제 시작일', '결제일', '반', '결제 / 서비스', '수업료'].forEach(label => {
+    ['결제 시작일', '결제일', '반', '결제 / 서비스'].forEach(label => {
         assert.ok(built.body.innerHTML.includes(label), `${label} 열이 있어야 한다`);
     });
     assert.ok(built.body.innerHTML.includes('2026-10-01'));
@@ -67,7 +67,7 @@ test('선택 학생의 결제 이력을 결제 이력 조회와 같은 항목으
     assert.ok(built.body.innerHTML.includes('독서반'));
     assert.ok(built.body.innerHTML.includes('8회 / 0회'));
     assert.ok(built.body.innerHTML.includes('[current]'));
-    assert.ok(built.body.innerHTML.includes('340,000원'));
+    assert.ok(!built.body.innerHTML.includes('수업료'), '수업료 열은 요약에서 빼고 결제 이력 조회에서 본다');
 });
 
 test('결제 이력이 없으면 안내 문구만 보여 준다', async () => {

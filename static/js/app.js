@@ -107,6 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let monthlyLogTypeSavingCount = 0;
     let currentMonthlyReportId = null;
     let monthlyReportLocked = false; // 완료로 저장한 월말보고 잠금 상태(관리자는 잠그지 않는다)
+    let monthlyReportManualEdit = false; // 사용자가 미리보기 문구를 직접 고친 상태
+    let monthlyReportReference = null; // 학생의 최근 저장 보고(참고 전용, 편집 대상이 아니다)
+    let monthlyReportReferenceList = [];
     let monthlyLectureRequestSeq = 0;
     let monthlyLectureCycleLength = 0; // 결제 총 차시·강의 번호를 새 주기로 되돌리는 기준
     let monthlyLectureStartIsAuto = false; // 시작 강의 번호가 결제 이력 자동 계산값인지
@@ -8172,9 +8175,14 @@ document.addEventListener('DOMContentLoaded', () => {
             String(log.LessonContent || log.lesson_content || '').trim()];
     }
 
-    function generateMonthlyReportText(skipAutoLecture = false) {
+    function generateMonthlyReportText(skipAutoLecture = false, force = false) {
         // 완료로 저장한 월말보고는 불러온 문구를 보호하기 위해 자동 작성하지 않는다.
         if (monthlyReportLocked) return;
+        // 직접 수정한 문구는 기록 선택이 바뀌어도 자동으로 덮어쓰지 않는다.
+        if (monthlyReportManualEdit && !force) {
+            showMonthlyReportRegenerateNotice();
+            return;
+        }
         const studentSelect = document.getElementById('monthly-report-student-select');
         const periodLabelInput = document.getElementById('monthly-report-period-label');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
@@ -8220,8 +8228,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if (!studentName && checkedLogItems.length === 0) {
+        // 포함할 기록이 없으면 머리말만 있는 문구를 만들지 않는다.
+        if (checkedLogItems.length === 0) {
             resultTextarea.value = '';
+            monthlyReportManualEdit = false;
+            hideMonthlyReportRegenerateNotice();
+            setMonthlyReportSaveState(null);
+            updateMonthlyReportSaveAvailability();
             return;
         }
 
@@ -8330,7 +8343,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         resultTextarea.value = lines.join('\n');
+        monthlyReportManualEdit = false;
+        hideMonthlyReportRegenerateNotice();
         setMonthlyReportSaveState(null);
+        updateMonthlyReportSaveAvailability();
         if (!skipAutoLecture) updateMonthlyStartLecture(checkedLogItems);
     }
 
@@ -8459,6 +8475,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.textContent = currentMonthlyReportId ? '저장 후 내용이 변경되었습니다.' : '아직 저장되지 않은 문서입니다.';
             badge.classList.add('hidden');
             applyMonthlyReportLock(null);
+            updateMonthlyReportDocumentLabel(null);
             return;
         }
         currentMonthlyReportId = report.Id;
@@ -8469,6 +8486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const locked = applyMonthlyReportLock(report);
         const updatedAt = `${userName(report.UpdatedBy || report.CreatedBy)} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
         state.textContent = locked ? `${updatedAt} · 사이트 관리자만 수정할 수 있습니다.` : updatedAt;
+        updateMonthlyReportDocumentLabel(report);
     }
 
     function renderMonthlyReportLogItems(logs, selectAll = false) {
@@ -8552,7 +8570,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadMonthlyReportLogs() {
+    async function loadMonthlyReportLogs(options = {}) {
+        const selectAll = options.selectAll !== false;
         const feedback = createActionFeedback();
         const studentSelect = document.getElementById('monthly-report-student-select');
         const container = document.getElementById('monthly-report-logs-container');
@@ -8577,6 +8596,16 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학습 기록 불러오는 중...</div>';
         currentMonthlyLogs = [];
 
+        // 새 보고서는 조회 기간의 달을 저장·문구 월로 사용해 세 개의 달이 어긋나지 않게 한다.
+        if (options.syncMonth !== false && !currentMonthlyReportId && dateTo && /^\d{4}-\d{2}$/.test(dateTo.slice(0, 7))) {
+            const monthKey = dateTo.slice(0, 7);
+            const yearMonthInput = document.getElementById('monthly-report-year-month');
+            const monthLabelInput = document.getElementById('monthly-report-month-label');
+            if (yearMonthInput) yearMonthInput.value = monthKey;
+            if (monthLabelInput) monthLabelInput.value = `${Number(monthKey.slice(5, 7))}월`;
+            updateMonthlyReportDocumentLabel(null);
+        }
+
         try {
             const params = new URLSearchParams({ student_id: studentId });
             if (dateFrom) params.set('date_from', dateFrom);
@@ -8594,13 +8623,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p>선택한 기간에 등록된 학습 기록이나 결석 내역이 없습니다.</p>
                     </div>
                 `;
-                generateMonthlyReportText();
+                generateMonthlyReportText(false, true);
                 return;
             }
 
-            renderMonthlyReportLogItems(currentMonthlyLogs);
+            renderMonthlyReportLogItems(currentMonthlyLogs, selectAll);
 
-            generateMonthlyReportText();
+            generateMonthlyReportText(false, true);
 
         } catch (err) {
             feedback.show(err.message, 'error');
@@ -8670,12 +8699,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="monthly-tuition-date">${escapeHtml(payment.PaidDate || '-')}</td>
                     <td>${escapeHtml(payment.ClassType || '미지정')}</td>
                     <td><div class="tuition-lesson-status"><span>${Number(payment.PaidLessons) || 0}회 / ${Number(payment.ServiceLessons) || 0}회</span>${tuitionPaymentProgressDisplay(payment)}</div></td>
-                    <td class="monthly-tuition-fee">${formatWon(payment.FeeAmount)}</td>
                 </tr>`).join('');
             body.innerHTML = `
                 <div class="monthly-tuition-table-wrap">
                     <table class="monthly-tuition-table">
-                        <thead><tr><th>결제 시작일</th><th>결제일</th><th>반</th><th>결제 / 서비스</th><th>수업료</th></tr></thead>
+                        <thead><tr><th>결제 시작일</th><th>결제일</th><th>반</th><th>결제 / 서비스</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>
@@ -8715,12 +8743,6 @@ document.addEventListener('DOMContentLoaded', () => {
             periodLabelInput.value = '';
         }
 
-        if (monthLabelInput && !monthLabelInput.value) {
-            const now = new Date();
-            const m = now.getMonth() + 1;
-            monthLabelInput.value = `${m}월`;
-        }
-
         if (startLectureInput && !startLectureInput.value) {
             startLectureInput.value = '1';
         }
@@ -8729,6 +8751,16 @@ document.addEventListener('DOMContentLoaded', () => {
             loadMonthlyReportStudentOptions(preselectStudentId),
             setMonthlyReportDefaultLogPeriod()
         ]);
+
+        // 본문의 보고 월은 조회 기간의 달을 따른다(기본 기간은 지난달).
+        if (monthLabelInput && !monthLabelInput.value) {
+            const yearMonth = document.getElementById('monthly-report-year-month')?.value || '';
+            monthLabelInput.value = /^\d{4}-\d{2}$/.test(yearMonth)
+                ? `${Number(yearMonth.slice(5, 7))}월`
+                : `${new Date().getMonth() + 1}월`;
+        }
+        updateMonthlyReportDocumentLabel(null);
+        updateMonthlyReportSaveAvailability();
 
         // 수업 종료 학생은 students-options(기본 exclude)에 없으므로,
         // 상세 모달에서 넘어온 preselectStudentId가 셀렉트에 없으면
@@ -8779,6 +8811,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
         if (!yearMonth) return feedback.show('저장할 보고 월을 선택해 주세요.', 'warning');
         if (!content) return feedback.show('저장할 문자 내용을 입력해 주세요.', 'warning');
+        if (!getSelectedMonthlyLogs().length && !currentMonthlyReportId) return feedback.show('포함할 학습 기록이나 결석 내역을 선택해 주세요.', 'warning');
         const buttons = [document.getElementById('btn-save-monthly-draft'), document.getElementById('btn-save-monthly-completed')];
         buttons.forEach(button => { if (button) button.disabled = true; });
         try {
@@ -8801,41 +8834,282 @@ document.addEventListener('DOMContentLoaded', () => {
             feedback.show(`월말보고 저장 실패: ${err.message}`, 'error');
         } finally {
             buttons.forEach(button => { if (button) button.disabled = monthlyReportLocked; });
+            updateMonthlyReportSaveAvailability();
         }
     }
 
     async function loadSavedMonthlyReports() {
         const select = document.getElementById('monthly-report-history-select');
         const studentId = document.getElementById('monthly-report-student-select')?.value;
-        if (!select) return;
+        monthlyReportReferenceList = [];
+        monthlyReportReference = null;
         if (!studentId) {
-            select.innerHTML = '<option value="">학생을 선택해 주세요.</option>';
-            select.disabled = true;
+            renderMonthlyReportReference(null);
+            updateMonthlyReportDraftButton();
+            if (select) {
+                select.innerHTML = '<option value="">학생을 선택해 주세요.</option>';
+                select.disabled = true;
+            }
+            toggleMonthlyReportHistoryPicker(false);
             return;
         }
-        select.innerHTML = '<option value="">저장 목록을 불러오는 중...</option>';
-        select.disabled = true;
-        try {
-            const data = await apiFetch(`/api/user/monthly-reports?student_id=${encodeURIComponent(studentId)}`);
-            const reports = data.reports || [];
-            if (!reports.length) {
-                select.innerHTML = '<option value="">저장된 월말보고가 없습니다.</option>';
-                select.disabled = true;
-                return;
-            }
-            select.innerHTML = '<option value="">저장된 기록을 선택하세요.</option>' + reports.map(report => {
-                const status = report.Status === 'completed' ? '완료' : '임시';
-                const updatedAt = String(report.UpdatedAt || report.CreatedAt || '').slice(0, 16);
-                return `<option value="${report.Id}">${escapeHtml(report.ReportYearMonth)} · ${status} · ${escapeHtml(updatedAt)}</option>`;
-            }).join('');
-            select.disabled = false;
-            if (currentMonthlyReportId && reports.some(report => Number(report.Id) === Number(currentMonthlyReportId))) {
-                select.value = String(currentMonthlyReportId);
-            }
-        } catch (err) {
-            select.innerHTML = `<option value="">저장 목록 로딩 실패: ${escapeHtml(err.message)}</option>`;
+        if (select) {
+            select.innerHTML = '<option value="">저장 목록을 불러오는 중...</option>';
             select.disabled = true;
         }
+        try {
+            const data = await apiFetch(`/api/user/monthly-reports?student_id=${encodeURIComponent(studentId)}`);
+            monthlyReportReferenceList = data.reports || [];
+            const current = currentMonthlyReportId
+                ? monthlyReportReferenceList.find(report => Number(report.Id) === Number(currentMonthlyReportId))
+                : null;
+            monthlyReportReference = current || monthlyReportReferenceList[0] || null;
+            renderMonthlyReportReference(monthlyReportReference);
+            updateMonthlyReportDraftButton();
+            if (select) {
+                if (!monthlyReportReferenceList.length) {
+                    select.innerHTML = '<option value="">저장된 월말보고가 없습니다.</option>';
+                    select.disabled = true;
+                } else {
+                    select.innerHTML = '<option value="">저장된 기록을 선택하세요.</option>' + monthlyReportReferenceList.map(report => {
+                        const status = report.Status === 'completed' ? '완료' : '임시';
+                        const updatedAt = String(report.UpdatedAt || report.CreatedAt || '').slice(0, 16);
+                        return `<option value="${report.Id}">${escapeHtml(report.ReportYearMonth)} · ${status} · ${escapeHtml(updatedAt)}</option>`;
+                    }).join('');
+                    select.disabled = false;
+                    if (monthlyReportReference) select.value = String(monthlyReportReference.Id);
+                }
+            }
+            toggleMonthlyReportHistoryPicker(monthlyReportReferenceList.length > 1);
+        } catch (err) {
+            renderMonthlyReportReference(null);
+            if (select) {
+                select.innerHTML = `<option value="">저장 목록 로딩 실패: ${escapeHtml(err.message)}</option>`;
+                select.disabled = true;
+            }
+        }
+    }
+
+    function toggleMonthlyReportHistoryPicker(show) {
+        const picker = document.getElementById('monthly-report-history-picker');
+        if (!picker) return;
+        picker.classList.toggle('hidden', !show);
+    }
+
+    // 가장 최근 달의 임시 저장 문서를 찾는다(완료 문서는 이어서 쓸 수 없다).
+    function pickLatestMonthlyDraft(reports) {
+        return (reports || []).find(report => (report.Status || 'draft') !== 'completed') || null;
+    }
+
+    function updateMonthlyReportDraftButton() {
+        const button = document.getElementById('btn-resume-monthly-draft');
+        if (!button) return;
+        const draft = pickLatestMonthlyDraft(monthlyReportReferenceList);
+        button.classList.toggle('hidden', !draft);
+        button.disabled = !draft;
+        if (draft) button.title = `${formatMonthlyReportMonth(draft.ReportYearMonth)} 임시 저장 문서를 이어서 수정합니다.`;
+        else button.removeAttribute('title');
+    }
+
+    // 지난 보고 목록만 다시 불러온다. 학생 선택과 작성 중인 문구는 그대로 둔다.
+    async function refreshMonthlyReportReference() {
+        const feedback = createActionFeedback();
+        const studentSelect = document.getElementById('monthly-report-student-select');
+        const previewTextarea = document.getElementById('monthly-report-result-text');
+        const studentId = studentSelect ? studentSelect.value : '';
+        const previewText = previewTextarea ? previewTextarea.value : '';
+
+        await loadSavedMonthlyReports();
+
+        // 목록을 다시 읽는 사이 학생 선택이 비워졌다면 원래 학생으로 되돌리고 그 학생 기준으로 다시 읽는다.
+        if (studentSelect && studentId && studentSelect.value !== studentId) {
+            const hasOption = Array.from(studentSelect.options).some(option => option.value === studentId);
+            if (hasOption) {
+                studentSelect.value = studentId;
+                await loadSavedMonthlyReports();
+            }
+        }
+        // 어떤 이유로든 선택이 풀렸다면 마지막으로 한 번 더 되돌린다.
+        if (studentSelect && studentId && studentSelect.value !== studentId
+            && Array.from(studentSelect.options).some(option => option.value === studentId)) {
+            studentSelect.value = studentId;
+        }
+        // 작성 중인 문구가 사라졌다면 되살린다.
+        if (previewTextarea && previewText && !previewTextarea.value.trim()) {
+            previewTextarea.value = previewText;
+        }
+        feedback.show('지난 보고를 새로 불러왔습니다. 선택한 학생과 작성 중인 내용은 그대로 두었습니다.', 'success');
+    }
+
+    function formatMonthlyReportMonth(yearMonth) {
+        const value = String(yearMonth || '').trim();
+        const match = value.match(/^(\d{4})-(\d{2})$/);
+        return match ? `${match[1]}년 ${Number(match[2])}월` : value;
+    }
+
+    function addMonthToYearMonth(yearMonth, offset) {
+        const match = String(yearMonth || '').trim().match(/^(\d{4})-(\d{2})$/);
+        if (!match) return '';
+        const base = new Date(Number(match[1]), Number(match[2]) - 1 + offset, 1);
+        return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function lastDayOfYearMonth(yearMonth) {
+        const match = String(yearMonth || '').trim().match(/^(\d{4})-(\d{2})$/);
+        if (!match) return '';
+        const base = new Date(Number(match[1]), Number(match[2]), 0);
+        return `${match[1]}-${match[2]}-${String(base.getDate()).padStart(2, '0')}`;
+    }
+
+    // 미리보기 패널에 지금 작성 중인 문서(또는 새 보고서)의 대상을 표시한다.
+    function updateMonthlyReportDocumentLabel(report) {
+        const label = document.getElementById('monthly-report-document-label');
+        if (!label) return;
+        const yearMonth = (report && report.ReportYearMonth) || document.getElementById('monthly-report-year-month')?.value || '';
+        const monthText = formatMonthlyReportMonth(yearMonth);
+        if (!report) {
+            if (currentMonthlyReportId) {
+                label.textContent = `${monthText} 문서 수정 중`;
+            } else {
+                label.textContent = monthText ? `새 보고서 · ${monthText}` : '새 보고서';
+            }
+            return;
+        }
+        const status = report.Status === 'completed' ? '완료' : '임시';
+        label.textContent = `${monthText} · ${status} 문서`;
+    }
+
+    function showMonthlyReportRegenerateNotice() {
+        const notice = document.getElementById('monthly-report-regenerate-notice');
+        if (notice) notice.classList.remove('hidden');
+    }
+
+    function hideMonthlyReportRegenerateNotice() {
+        const notice = document.getElementById('monthly-report-regenerate-notice');
+        if (notice) notice.classList.add('hidden');
+    }
+
+    // 선택한 차시가 없으면 머리말만 있는 문구를 저장하지 않도록 버튼을 잠근다.
+    // 이미 저장된 문서를 여는 경우에는 기존 문구를 고쳐 다시 저장할 수 있어야 한다.
+    function updateMonthlyReportSaveAvailability() {
+        const hasSelection = getSelectedMonthlyLogs().length > 0 || !!currentMonthlyReportId;
+        ['btn-save-monthly-draft', 'btn-save-monthly-completed'].forEach(id => {
+            const button = document.getElementById(id);
+            if (!button || monthlyReportLocked) return;
+            button.disabled = !hasSelection;
+            if (hasSelection) button.removeAttribute('title');
+            else button.title = '포함할 학습 기록이나 결석 내역을 선택해 주세요.';
+        });
+    }
+
+    // 학생의 최근 저장 보고는 참고용으로만 보여 준다(편집 대상이 아니다).
+    function renderMonthlyReportReference(report) {
+        const body = document.getElementById('monthly-report-reference-body');
+        const copyButton = document.getElementById('btn-copy-monthly-reference');
+        const editButton = document.getElementById('btn-edit-monthly-report');
+        const newButton = document.getElementById('btn-new-monthly-report');
+        if (!body) return;
+        const studentId = document.getElementById('monthly-report-student-select')?.value || '';
+        if (newButton) newButton.disabled = !studentId;
+        if (!report) {
+            body.innerHTML = '<p class="monthly-report-reference-note">학생을 선택하면 가장 최근에 저장한 보고를 여기에 보여 줍니다.</p>';
+            if (copyButton) copyButton.disabled = true;
+            if (editButton) editButton.disabled = true;
+            return;
+        }
+        if (copyButton) copyButton.disabled = false;
+        const statusText = report.Status === 'completed' ? '완료' : '임시';
+        // 완료 문서는 사이트 관리자만 고칠 수 있다. 그 외에는 열람과 새 보고서 작성만 한다.
+        const lockedForMe = report.Status === 'completed' && !isSiteAdmin();
+        if (editButton) {
+            editButton.disabled = lockedForMe;
+            if (lockedForMe) editButton.title = MONTHLY_REPORT_LOCK_HINT;
+            else editButton.removeAttribute('title');
+        }
+        const updatedAt = `${userName(report.UpdatedBy || report.CreatedBy)} · ${report.UpdatedAt || report.CreatedAt || ''} 수정`;
+        const guideNote = lockedForMe
+            ? '참고용입니다. 완료로 저장한 보고는 사이트 관리자만 수정할 수 있어 이 문구는 변경되지 않습니다. 새 보고서는 [이번 달 보고 작성]으로 시작합니다.'
+            : (report.Status === 'completed'
+                ? '참고용입니다. 이 문구는 수정되지 않습니다. 새 보고서는 [이번 달 보고 작성]으로 시작하고, 고쳐야 할 때만 [지난 보고 수정]을 씁니다.'
+                : '임시 저장 문서입니다. 선생님 누구나 이어서 수정하고 다시 저장할 수 있습니다. 새 보고서는 [이번 달 보고 작성]으로 시작합니다.');
+        body.innerHTML = `
+            <div class="monthly-report-reference-meta">
+                <span class="tag-badge${report.Status === 'completed' ? ' success' : ''}">${statusText}</span>
+                <span>${escapeHtml(formatMonthlyReportMonth(report.ReportYearMonth))} 보고</span>
+                <span>${escapeHtml(updatedAt)}</span>
+            </div>
+            <pre class="monthly-report-reference-content">${escapeHtml(report.Content || '문구가 비어 있습니다.')}</pre>
+            <p class="monthly-report-reference-note">${guideNote}</p>`;
+    }
+
+    // 지난 보고를 참고한 뒤 같은 학생의 다음 달 보고서를 새로 시작한다.
+    async function startNewMonthlyReport() {
+        const feedback = createActionFeedback();
+        const studentId = document.getElementById('monthly-report-student-select')?.value || '';
+        if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
+
+        const reference = monthlyReportReference;
+        const currentYearMonth = document.getElementById('monthly-report-year-month')?.value || '';
+        const targetMonth = reference && reference.ReportYearMonth
+            ? addMonthToYearMonth(reference.ReportYearMonth, 1)
+            : currentYearMonth;
+
+        if (targetMonth) {
+            const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === targetMonth);
+            if (existing) {
+                // 완료 문서는 사이트 관리자만 수정할 수 있으므로 그 외에는 편집기로 열지 않는다.
+                if (existing.Status === 'completed' && !isSiteAdmin()) {
+                    monthlyReportReference = existing;
+                    renderMonthlyReportReference(existing);
+                    feedback.show(`${formatMonthlyReportMonth(targetMonth)} 보고서는 이미 완료되어 사이트 관리자만 수정할 수 있습니다.`, 'warning');
+                    return;
+                }
+                await loadSavedMonthlyReport(existing.Id);
+                feedback.show(`${formatMonthlyReportMonth(targetMonth)} 보고서가 이미 있어 불러왔습니다. 이어서 수정해 주세요.`, 'warning');
+                return;
+            }
+        }
+
+        if (reference) {
+            const periodLabelInput = document.getElementById('monthly-report-period-label');
+            const specialTeacherInput = document.getElementById('monthly-report-special-teacher');
+            if (periodLabelInput && !periodLabelInput.value) periodLabelInput.value = reference.PeriodLabel || '';
+            if (specialTeacherInput && !specialTeacherInput.value) specialTeacherInput.value = reference.SpecialTeacherName || '';
+        }
+
+        if (targetMonth) {
+            const yearMonthInput = document.getElementById('monthly-report-year-month');
+            const monthLabelInput = document.getElementById('monthly-report-month-label');
+            const dateFromInput = document.getElementById('monthly-report-log-date-from');
+            const dateToInput = document.getElementById('monthly-report-log-date-to');
+            if (yearMonthInput) yearMonthInput.value = targetMonth;
+            if (monthLabelInput) monthLabelInput.value = `${Number(targetMonth.slice(5, 7))}월`;
+            if (dateFromInput) dateFromInput.value = `${targetMonth}-01`;
+            if (dateToInput) dateToInput.value = lastDayOfYearMonth(targetMonth);
+        }
+
+        currentMonthlyReportId = null;
+        monthlyReportManualEdit = false;
+        monthlyLectureStartIsAuto = false;
+        monthlyLectureCycleLength = 0;
+        hideMonthlyReportRegenerateNotice();
+        const startLectureInput = document.getElementById('monthly-report-start-lecture');
+        if (startLectureInput) startLectureInput.value = '1';
+        const resultTextarea = document.getElementById('monthly-report-result-text');
+        if (resultTextarea) resultTextarea.value = '';
+        setMonthlyReportSaveState(null);
+        await loadMonthlyReportLogs({ selectAll: true });
+        const monthText = formatMonthlyReportMonth(targetMonth);
+        feedback.show(`${monthText ? monthText + ' ' : ''}보고서를 새로 시작했습니다. 포함할 수업을 확인해 주세요.`, 'success');
+    }
+
+    function copyMonthlyReportReference() {
+        const feedback = createActionFeedback();
+        const content = monthlyReportReference && monthlyReportReference.Content ? monthlyReportReference.Content : '';
+        if (!content.trim()) return feedback.show('복사할 지난 보고 문구가 없습니다.', 'warning');
+        navigator.clipboard.writeText(content).then(() => {
+            feedback.show('지난 보고 문구를 클립보드에 복사했습니다.', 'success');
+        }).catch(err => feedback.show(`복사 실패: ${err.message}`, 'error'));
     }
 
     async function loadSavedMonthlyReport(reportId) {
@@ -8843,6 +9117,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await apiFetch(`/api/user/monthly-reports/${reportId}`);
             const report = data.report;
+            // 완료 문서는 사이트 관리자만 수정한다. 그 외에는 참고 패널로만 보여 준다.
+            if (report.Status === 'completed' && !isSiteAdmin()) {
+                monthlyReportReference = report;
+                renderMonthlyReportReference(report);
+                feedback.show('완료로 저장한 월말보고는 사이트 관리자만 수정할 수 있습니다. 참고로만 볼 수 있습니다.', 'warning');
+                return;
+            }
             document.getElementById('monthly-report-year-month').value = report.ReportYearMonth || '';
             document.getElementById('monthly-report-period-label').value = report.PeriodLabel || '';
             document.getElementById('monthly-report-month-label').value = report.ReportMonthLabel || '';
@@ -8850,10 +9131,24 @@ document.addEventListener('DOMContentLoaded', () => {
             monthlyLectureStartIsAuto = false; // 저장된 문서의 강의 번호를 그대로 유지한다.
             document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
             currentMonthlyLogs = report.StudyLogSnapshot || [];
+            // 저장 당시 조회한 기간을 복원해 화면의 기간과 목록이 어긋나지 않게 한다.
+            const studiedDays = currentMonthlyLogs
+                .map(log => String(log.StudiedDay || log.studied_day || '').slice(0, 10))
+                .filter(Boolean)
+                .sort();
+            if (studiedDays.length) {
+                document.getElementById('monthly-report-log-date-from').value = studiedDays[0];
+                document.getElementById('monthly-report-log-date-to').value = studiedDays[studiedDays.length - 1];
+            }
             setMonthlyReportSaveState(report);
             renderMonthlyReportLogItems(currentMonthlyLogs, true);
             document.getElementById('monthly-report-result-text').value = report.Content || '';
-            feedback.show('저장된 월말보고를 불러왔습니다.', 'success');
+            monthlyReportManualEdit = false;
+            monthlyLectureRequestSeq++; // 불러온 문구를 늦게 도착한 자동 계산이 덮어쓰지 않게 한다.
+            hideMonthlyReportRegenerateNotice();
+            updateMonthlyReportDocumentLabel(report);
+            updateMonthlyReportSaveAvailability();
+            feedback.show('저장된 월말보고를 불러왔습니다. 문구를 고쳐 다시 저장할 수 있습니다.', 'success');
         } catch (err) {
             feedback.show(`월말보고 불러오기 실패: ${err.message}`, 'error');
         }
@@ -8869,13 +9164,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (studentSelectEl) {
         studentSelectEl.addEventListener('change', () => {
             currentMonthlyReportId = null;
+            monthlyReportManualEdit = false;
+            hideMonthlyReportRegenerateNotice();
             setMonthlyReportSaveState(null);
             if (studentSelectEl.value) {
                 const selectedId = studentSelectEl.value;
                 monthlyStudentSelectionSave = monthlyStudentSelectionSave
                     .then(() => apiFetch(`/api/user/monthly-report/recent-students/${encodeURIComponent(selectedId)}`, { method: 'POST' }))
                     .catch(err => createActionFeedback().show(`최근 학생 선택 저장 실패: ${err.message}`, 'error'));
-                loadMonthlyReportLogs();
+                loadMonthlyReportLogs({ selectAll: true });
             } else {
                 generateMonthlyReportText();
             }
@@ -8886,7 +9183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnApplyMonthlyLogPeriod = document.getElementById('btn-apply-monthly-log-period');
     if (btnApplyMonthlyLogPeriod) {
-        btnApplyMonthlyLogPeriod.addEventListener('click', () => loadMonthlyReportLogs());
+        btnApplyMonthlyLogPeriod.addEventListener('click', () => loadMonthlyReportLogs({ selectAll: true }));
     }
 
     ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-special-teacher'].forEach(id => {
@@ -8902,7 +9199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('monthly-report-logs-container');
             if (container) {
                 container.querySelectorAll('.chk-log-include').forEach(chk => chk.checked = true);
-                generateMonthlyReportText();
+                generateMonthlyReportText(false, true);
             }
         });
     }
@@ -8913,7 +9210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('monthly-report-logs-container');
             if (container) {
                 container.querySelectorAll('.chk-log-include').forEach(chk => chk.checked = false);
-                generateMonthlyReportText();
+                generateMonthlyReportText(false, true);
             }
         });
     }
@@ -9164,11 +9461,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-save-monthly-draft')?.addEventListener('click', () => saveMonthlyReport('draft'));
     document.getElementById('btn-save-monthly-completed')?.addEventListener('click', () => saveMonthlyReport('completed'));
-    document.getElementById('btn-refresh-monthly-reports')?.addEventListener('click', loadSavedMonthlyReports);
-    document.getElementById('monthly-report-history-select')?.addEventListener('change', event => {
-        if (event.target.value) loadSavedMonthlyReport(event.target.value);
+    document.getElementById('btn-refresh-monthly-reports')?.addEventListener('click', () => refreshMonthlyReportReference());
+    document.getElementById('btn-new-monthly-report')?.addEventListener('click', () => startNewMonthlyReport());
+    document.getElementById('btn-resume-monthly-draft')?.addEventListener('click', () => {
+        const draft = pickLatestMonthlyDraft(monthlyReportReferenceList);
+        if (!draft) {
+            createActionFeedback().show('이어서 쓸 임시 저장 문서가 없습니다.', 'warning');
+            return;
+        }
+        loadSavedMonthlyReport(draft.Id);
     });
-    document.getElementById('monthly-report-result-text')?.addEventListener('input', () => setMonthlyReportSaveState(null));
+    document.getElementById('btn-edit-monthly-report')?.addEventListener('click', () => {
+        if (!monthlyReportReference) {
+            createActionFeedback().show('불러올 지난 보고가 없습니다.', 'warning');
+            return;
+        }
+        if (monthlyReportReference.Status === 'completed' && !isSiteAdmin()) {
+            createActionFeedback().show(MONTHLY_REPORT_LOCK_HINT, 'warning');
+            return;
+        }
+        loadSavedMonthlyReport(monthlyReportReference.Id);
+    });
+    document.getElementById('btn-copy-monthly-reference')?.addEventListener('click', () => copyMonthlyReportReference());
+    document.getElementById('btn-regenerate-monthly-text')?.addEventListener('click', () => generateMonthlyReportText(false, true));
+    document.getElementById('monthly-report-history-select')?.addEventListener('change', event => {
+        const selected = monthlyReportReferenceList.find(report => Number(report.Id) === Number(event.target.value));
+        if (!selected) return;
+        monthlyReportReference = selected;
+        renderMonthlyReportReference(selected);
+    });
+    document.getElementById('monthly-report-result-text')?.addEventListener('input', () => {
+        if (monthlyReportLocked) return;
+        // 직접 고친 문구는 기록 선택이 바뀌어도 자동으로 덮어쓰지 않는다.
+        monthlyReportManualEdit = true;
+        hideMonthlyReportRegenerateNotice();
+        setMonthlyReportSaveState(null);
+    });
+    document.getElementById('monthly-report-year-month')?.addEventListener('input', () => {
+        if (currentMonthlyReportId) return;
+        updateMonthlyReportDocumentLabel(null);
+    });
 
     async function loadTuitionPaymentView() {
         const feedback = createActionFeedback('#tuition-student-search');
