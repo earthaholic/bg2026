@@ -9822,7 +9822,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span><i class="fa-solid fa-money-check-dollar"></i> 납부일: <strong>${escapeHtml(payment.PaidDate || '-')}</strong></span>
                 </div>
             </div>
-            <div class="tuition-detail-summary-grid">
+            <div class="tuition-detail-summary-grid tuition-refund-summary">
                 <div class="detail-info-item"><div class="label">결제 수업료</div><div class="val">${formatWon(payment.FeeAmount)}</div></div>
                 <div class="detail-info-item"><div class="label">환불 누계</div><div class="val tuition-refund-amount">${formatWon(refundedAmount)}</div></div>
                 <div class="detail-info-item"><div class="label">남은 금액</div><div class="val">${formatWon(remainingAmount)}</div></div>

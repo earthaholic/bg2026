@@ -6415,3 +6415,12 @@ button.class-student-badge { cursor: pointer; }
     color: var(--danger);
     white-space: nowrap;
 }
+
+/* 환불 관리 창의 요약은 좁은 모달에서 두 줄로 나눠 금액이 잘리지 않게 한다. */
+.tuition-detail-summary-grid.tuition-refund-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tuition-detail-summary-grid.tuition-refund-summary .detail-info-item .val {
+    white-space: nowrap;
+}
