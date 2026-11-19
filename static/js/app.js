@@ -8679,7 +8679,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const yearMonthInput = document.getElementById('monthly-report-year-month');
             const monthLabelInput = document.getElementById('monthly-report-month-label');
             if (yearMonthInput) yearMonthInput.value = monthKey;
-            if (monthLabelInput) monthLabelInput.value = `${Number(monthKey.slice(5, 7))}월`;
+            if (monthLabelInput) monthLabelInput.value = monthlyReportTextMonthLabel(monthKey);
             updateMonthlyReportDocumentLabel(null);
         }
 
@@ -8829,12 +8829,10 @@ document.addEventListener('DOMContentLoaded', () => {
             setMonthlyReportDefaultLogPeriod()
         ]);
 
-        // 본문의 보고 월은 조회 기간의 달을 따른다(기본 기간은 지난달).
+        // 본문의 보고 월 기본값은 저장할 보고 월의 전 달이다.
         if (monthLabelInput && !monthLabelInput.value) {
             const yearMonth = document.getElementById('monthly-report-year-month')?.value || '';
-            monthLabelInput.value = /^\d{4}-\d{2}$/.test(yearMonth)
-                ? `${Number(yearMonth.slice(5, 7))}월`
-                : `${new Date().getMonth() + 1}월`;
+            monthLabelInput.value = monthlyReportTextMonthLabel(yearMonth);
         }
         updateMonthlyReportDocumentLabel(null);
         updateMonthlyReportSaveAvailability();
@@ -9031,6 +9029,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
     }
 
+    // 문자에 들어갈 월 기본값은 저장할 보고 월의 바로 전 달이다(예: 10월 보고서 → 9월 수업보고).
+    function monthlyReportTextMonthLabel(yearMonth) {
+        const previous = addMonthToYearMonth(yearMonth, -1);
+        if (previous) return `${Number(previous.slice(5, 7))}월`;
+        const now = new Date();
+        return `${now.getMonth() + 1}월`;
+    }
+
     function lastDayOfYearMonth(yearMonth) {
         const match = String(yearMonth || '').trim().match(/^(\d{4})-(\d{2})$/);
         if (!match) return '';
@@ -9160,7 +9166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateFromInput = document.getElementById('monthly-report-log-date-from');
             const dateToInput = document.getElementById('monthly-report-log-date-to');
             if (yearMonthInput) yearMonthInput.value = targetMonth;
-            if (monthLabelInput) monthLabelInput.value = `${Number(targetMonth.slice(5, 7))}월`;
+            if (monthLabelInput) monthLabelInput.value = monthlyReportTextMonthLabel(targetMonth);
             if (dateFromInput) dateFromInput.value = `${targetMonth}-01`;
             if (dateToInput) dateToInput.value = lastDayOfYearMonth(targetMonth);
         }

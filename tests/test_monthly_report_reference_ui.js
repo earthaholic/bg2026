@@ -72,7 +72,7 @@ test('지난 보고를 참고한 뒤 다음 달 보고서를 새로 시작한다
     await f.api.start();
 
     assert.equal(f.nodes['monthly-report-year-month'].value, '2026-06');
-    assert.equal(f.nodes['monthly-report-month-label'].value, '6월');
+    assert.equal(f.nodes['monthly-report-month-label'].value, '5월', '문자 월은 저장 월의 전 달이 기본값이다');
     assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-06-01');
     assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-06-30');
     assert.equal(f.nodes['monthly-report-period-label'].value, '1학기(3,4,5월)');
@@ -355,4 +355,18 @@ test('학생 선택이 그대로면 목록만 한 번 다시 읽는다', async (
     assert.equal(f.select.value, '757');
     assert.equal(f.textarea.value, '작성 중인 문구');
     assert.equal(f.loads(), 1);
+});
+
+// --- 문자에 들어갈 월 기본값 ---
+const textMonthCode = between('    function monthlyReportTextMonthLabel', '    function lastDayOfYearMonth');
+const textMonthContext = vm.createContext({ Date, Number, String });
+vm.runInContext(
+    between('    function addMonthToYearMonth', '    function lastDayOfYearMonth') + '\n' + textMonthCode + '\nglobalThis.__textMonth = monthlyReportTextMonthLabel;',
+    textMonthContext
+);
+
+test('문자에 들어갈 월은 저장할 보고 월의 전 달이 기본값이다', () => {
+    assert.equal(textMonthContext.__textMonth('2026-10'), '9월');
+    assert.equal(textMonthContext.__textMonth('2026-06'), '5월');
+    assert.equal(textMonthContext.__textMonth('2026-01'), '12월', '1월은 지난해 12월이 된다');
 });
