@@ -8885,6 +8885,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = document.getElementById('monthly-report-result-text')?.value.trim();
         if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
         if (!yearMonth) return feedback.show('저장할 보고 월을 선택해 주세요.', 'warning');
+        if (!currentMonthlyReportId && monthlyReportReferenceList.some(report => String(report.ReportYearMonth) === yearMonth)) {
+            return feedback.show(`${formatMonthlyReportMonth(yearMonth)} 문서가 이미 있습니다. [지난 보고 수정]으로 열어 수정해 주세요.`, 'warning');
+        }
         if (!content) return feedback.show('저장할 문자 내용을 입력해 주세요.', 'warning');
         if (!getSelectedMonthlyLogs().length && !currentMonthlyReportId) return feedback.show('포함할 학습 기록이나 결석 내역을 선택해 주세요.', 'warning');
         const buttons = [document.getElementById('btn-save-monthly-draft'), document.getElementById('btn-save-monthly-completed')];
@@ -9132,18 +9135,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 지난 보고를 참고한 뒤 같은 학생의 다음 달 보고서를 새로 시작한다.
-    async function startNewMonthlyReport() {
+    // 지정한 달로 보고서를 새로 시작한다. allowExisting=false면 그 달 문서가 이미 있을 때 시작하지 않는다.
+    async function startMonthlyReportForMonth(targetMonth, options = {}) {
+        const allowExisting = options.allowExisting !== false;
         const feedback = createActionFeedback();
         const studentId = document.getElementById('monthly-report-student-select')?.value || '';
         if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
+        if (!targetMonth) return feedback.show('보고 월을 선택해 주세요.', 'warning');
 
         const reference = monthlyReportReference;
-        // 참고한 문서의 다음 달이 아니라 오늘 기준 이번 달로 연다(비어 있는 달이 있어도 건너뛴다).
-        const targetMonth = currentYearMonth();
 
-        if (targetMonth) {
+        {
             const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === targetMonth);
             if (existing) {
+                // 마법사에서 고른 달에 문서가 이미 있으면 덮어쓰지 않고 시작도 하지 않는다.
+                if (!allowExisting) {
+                    monthlyReportReference = existing;
+                    renderMonthlyReportReference(existing);
+                    updateMonthlyReportDraftButton();
+                    feedback.show(`${formatMonthlyReportMonth(targetMonth)} 문서가 이미 있습니다. 다른 달을 고르거나 [지난 보고 수정]으로 이어서 수정해 주세요.`, 'warning');
+                    return;
+                }
                 // 완료 문서는 사이트 관리자만 수정할 수 있으므로 그 외에는 편집기로 열지 않는다.
                 if (existing.Status === 'completed' && !isSiteAdmin()) {
                     monthlyReportReference = existing;
@@ -9188,6 +9200,56 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadMonthlyReportLogs({ selectAll: true });
         const monthText = formatMonthlyReportMonth(targetMonth);
         feedback.show(`${monthText ? monthText + ' ' : ''}보고서를 새로 시작했습니다. 포함할 수업을 확인해 주세요.`, 'success');
+    }
+
+    function startNewMonthlyReport() {
+        return startMonthlyReportForMonth(currentYearMonth(), { allowExisting: true });
+    }
+
+    // 보고서를 시작할 달을 골라 왼쪽 설정을 대신 채우는 마법사.
+    function updateMonthlyStartMonthPreview() {
+        const input = document.getElementById('monthly-start-month');
+        const summary = document.getElementById('monthly-start-month-summary');
+        const warning = document.getElementById('monthly-start-month-warning');
+        const confirmButton = document.getElementById('btn-confirm-monthly-start');
+        if (!input || !summary) return;
+        const month = input.value;
+        if (!month) {
+            summary.textContent = '보고 월을 선택해 주세요.';
+            if (confirmButton) confirmButton.disabled = true;
+            if (warning) warning.classList.add('hidden');
+            return;
+        }
+        const textMonth = monthlyReportTextMonthLabel(month);
+        summary.innerHTML = `저장할 보고 월 <strong>${escapeHtml(formatMonthlyReportMonth(month))}</strong><br>` +
+            ` 문자에 들어갈 월 <strong>${escapeHtml(textMonth)}</strong><br>` +
+            ` 학습 기간 <strong>${escapeHtml(month)}-01 ~ ${escapeHtml(lastDayOfYearMonth(month))}</strong>`;
+        const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === month);
+        if (warning) {
+            if (existing) {
+                const statusText = existing.Status === 'completed' ? '완료' : '임시';
+                warning.textContent = `${formatMonthlyReportMonth(month)} ${statusText} 문서가 이미 있습니다. 다른 달을 고르거나 [지난 보고 수정]으로 이어서 수정해 주세요.`;
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
+        }
+        if (confirmButton) confirmButton.disabled = !!existing;
+    }
+
+    function openMonthlyStartPicker() {
+        const studentId = document.getElementById('monthly-report-student-select')?.value || '';
+        if (!studentId) return createActionFeedback().show('학생을 선택해 주세요.', 'warning');
+        const modal = document.getElementById('modal-monthly-start');
+        const input = document.getElementById('monthly-start-month');
+        if (input) input.value = currentYearMonth();
+        updateMonthlyStartMonthPreview();
+        if (modal) modal.classList.remove('hidden');
+        input?.focus();
+    }
+
+    function closeMonthlyStartPicker() {
+        document.getElementById('modal-monthly-start')?.classList.add('hidden');
     }
 
     function copyMonthlyReportReference() {
@@ -9550,6 +9612,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-save-monthly-completed')?.addEventListener('click', () => saveMonthlyReport('completed'));
     document.getElementById('btn-refresh-monthly-reports')?.addEventListener('click', () => refreshMonthlyReportReference());
     document.getElementById('btn-new-monthly-report')?.addEventListener('click', () => startNewMonthlyReport());
+    document.getElementById('btn-monthly-start-picker')?.addEventListener('click', () => openMonthlyStartPicker());
+    document.getElementById('monthly-start-month')?.addEventListener('input', () => updateMonthlyStartMonthPreview());
+    document.getElementById('btn-cancel-monthly-start')?.addEventListener('click', () => closeMonthlyStartPicker());
+    document.getElementById('btn-close-monthly-start')?.addEventListener('click', () => closeMonthlyStartPicker());
+    document.getElementById('modal-monthly-start')?.addEventListener('click', event => {
+        if (event.target && event.target.id === 'modal-monthly-start') closeMonthlyStartPicker();
+    });
+    document.getElementById('btn-confirm-monthly-start')?.addEventListener('click', async () => {
+        const month = document.getElementById('monthly-start-month')?.value || '';
+        closeMonthlyStartPicker();
+        await startMonthlyReportForMonth(month, { allowExisting: false });
+    });
     document.getElementById('btn-resume-monthly-draft')?.addEventListener('click', () => {
         const draft = pickLatestMonthlyDraft(monthlyReportReferenceList);
         if (!draft) {

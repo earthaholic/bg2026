@@ -157,7 +157,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Modern CSS -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261114-refund-summary">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261114-month-wizard2">
     <!-- 모바일 화면 지원 (styles.css 뒤에 로드) -->
     <link rel="stylesheet" href="/static/css/mobile.css?v=20261102-mobile11">
     <!-- Chart.js Library -->
@@ -1520,6 +1520,9 @@
                                                 <button type="button" id="btn-new-monthly-report" class="btn btn-xs btn-primary" disabled>
                                                     <i class="fa-solid fa-plus"></i> 이번 달 보고 작성
                                                 </button>
+                                                <button type="button" id="btn-monthly-start-picker" class="btn btn-xs btn-outline">
+                                                    <i class="fa-solid fa-calendar-plus"></i> 다른 달 보고 작성
+                                                </button>
                                                 <button type="button" id="btn-resume-monthly-draft" class="btn btn-xs btn-outline hidden" disabled>
                                                     <i class="fa-solid fa-pen-to-square"></i> 임시 저장 이어서 쓰기
                                                 </button>
@@ -2797,6 +2800,27 @@
     </div>
 
     <!-- 수업료 결제 상세 모달 -->
+    <div id="modal-monthly-start" class="modal-backdrop hidden">
+        <div class="modal-card" style="max-width: 460px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-calendar-plus"></i> 보고서를 시작할 달</h3>
+                <button id="btn-close-monthly-start" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="monthly-start-month" class="form-label">보고 월</label>
+                    <input type="month" id="monthly-start-month" class="form-control">
+                </div>
+                <p id="monthly-start-month-summary" class="form-help"></p>
+                <p id="monthly-start-month-warning" class="alert alert-warning hidden"></p>
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; padding:0 1.25rem 1.25rem;">
+                <button type="button" id="btn-cancel-monthly-start" class="btn btn-outline">취소</button>
+                <button type="button" id="btn-confirm-monthly-start" class="btn btn-primary">이 달로 시작</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-tuition-detail" class="modal-backdrop hidden">
         <div class="modal-card detail-card tuition-detail-modal-card">
             <div class="modal-header">
@@ -2913,7 +2937,7 @@
     <script src="/static/js/search_requests.js?v=20261026-filter-stability"></script>
     <script src="/static/js/tuition_collection.js?v=20261114-refund-link"></script>
     <script src="/static/js/mcp_connection.js?v=20261026-mcp-dedicated-token"></script>
-    <script src="/static/js/app.js?v=20261114-this-month"></script>
+    <script src="/static/js/app.js?v=20261114-month-wizard"></script>
     <script src="/static/js/dialog_escape.js?v=20261018-escape-close"></script>
     <script src="/static/js/mobile.js?v=20261102-mobile11"></script>
 </body>

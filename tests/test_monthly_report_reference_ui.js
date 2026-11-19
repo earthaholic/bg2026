@@ -42,6 +42,7 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
         between('    // 지난 보고를 참고한 뒤', '    function copyMonthlyReportReference'),
         `globalThis.__ref = {
             start: startNewMonthlyReport,
+            startMonth: startMonthlyReportForMonth,
             setReference: (value, list) => { monthlyReportReference = value; monthlyReportReferenceList = list; },
             state: () => ({ reportId: currentMonthlyReportId, manual: monthlyReportManualEdit, auto: monthlyLectureStartIsAuto, cycle: monthlyLectureCycleLength })
         };`,
@@ -58,6 +59,7 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
         loadSavedMonthlyReport: async id => { calls.loaded.push(id); },
         setMonthlyReportSaveState: () => { calls.saveStates++; },
         hideMonthlyReportRegenerateNotice() {},
+        updateMonthlyReportDraftButton() {},
         renderMonthlyReportReference() {},
         isSiteAdmin: () => siteAdmin,
     });
@@ -373,4 +375,40 @@ test('문자에 들어갈 월은 저장할 보고 월의 전 달이 기본값이
     assert.equal(textMonthContext.__textMonth('2026-10'), '9월');
     assert.equal(textMonthContext.__textMonth('2026-06'), '5월');
     assert.equal(textMonthContext.__textMonth('2026-01'), '12월', '1월은 지난해 12월이 된다');
+});
+
+
+test('다른 달 보고 작성은 고른 달로 왼쪽 설정을 대신 채운다', async () => {
+    const f = buildStartFixture({ reference: { Id: 3, ReportYearMonth: '2026-05', Status: 'draft' }, reports: [] });
+
+    await f.api.startMonth('2026-09', { allowExisting: false });
+
+    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-09');
+    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
+    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-09-01');
+    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-09-30');
+    assert.equal(f.calls.logs.length, 1);
+    assert.equal(f.calls.logs[0].selectAll, true);
+});
+
+test('고른 달 문서가 이미 있으면 시작하지 않고 알린다', async () => {
+    const draft = { Id: 9, ReportYearMonth: '2026-09', Status: 'draft' };
+    const f = buildStartFixture({ reference: null, reports: [draft] });
+
+    await f.api.startMonth('2026-09', { allowExisting: false });
+
+    assert.equal(f.calls.logs.length, 0, '기록을 불러오지 않는다');
+    assert.deepEqual(f.calls.loaded, [], '기존 문서를 편집기로 열지 않는다');
+    assert.match(f.calls.messages[0][0], /이미 있습니다/);
+});
+
+test('화면에 다른 달 보고 작성 진입점과 달 선택 창이 있다', () => {
+    assert.match(template, /id="btn-monthly-start-picker"/);
+    assert.match(template, /id="modal-monthly-start"/);
+    assert.match(template, /id="monthly-start-month"/);
+    assert.match(template, /id="btn-confirm-monthly-start"/);
+});
+
+test('이미 있는 달로는 새 보고서를 저장하지 않는다', () => {
+    assert.match(source, /if \(!currentMonthlyReportId && monthlyReportReferenceList\.some\(report => String\(report\.ReportYearMonth\) === yearMonth\)\)/);
 });

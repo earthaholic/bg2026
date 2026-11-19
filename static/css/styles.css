@@ -6424,3 +6424,10 @@ button.class-student-badge { cursor: pointer; }
 .tuition-detail-summary-grid.tuition-refund-summary .detail-info-item .val {
     white-space: nowrap;
 }
+
+/* 모달 등 화면 밖에서도 비활성 버튼이 구분되게 한다. */
+button.btn:disabled,
+button.btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
