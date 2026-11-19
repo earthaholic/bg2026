@@ -412,3 +412,48 @@ test('화면에 다른 달 보고 작성 진입점과 달 선택 창이 있다',
 test('이미 있는 달로는 새 보고서를 저장하지 않는다', () => {
     assert.match(source, /if \(!currentMonthlyReportId && monthlyReportReferenceList\.some\(report => String\(report\.ReportYearMonth\) === yearMonth\)\)/);
 });
+
+
+// --- 저장 월 변경 시 문자 월 동기화 ---
+const syncCode = between('    function monthlyReportTextMonthLabel', '    function lastDayOfYearMonth');
+function buildSyncFixture({ saveMonth = '2026-11', textMonth = '10월', manual = false } = {}) {
+    const nodes = {
+        'monthly-report-year-month': { value: saveMonth },
+        'monthly-report-month-label': { value: textMonth },
+    };
+    let generated = 0;
+    const context = vm.createContext({
+        document: { getElementById: id => nodes[id] || null },
+        Date, Number, String, monthlyReportManualEdit: manual,
+        generateMonthlyReportText: () => { generated++; },
+    });
+    vm.runInContext(
+        between('    function addMonthToYearMonth', '    function lastDayOfYearMonth') + '\n' + syncCode +
+        '\nglobalThis.__sync = () => { syncMonthlyReportTextMonth(); };',
+        context
+    );
+    return { nodes, context, generated: () => generated };
+}
+
+test('저장할 보고 월을 바꾸면 문자에 들어갈 월이 전 달로 맞춰진다', () => {
+    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월' });
+    f.nodes['monthly-report-year-month'].value = '2026-09';
+    f.context.__sync();
+    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
+    assert.equal(f.generated(), 1, '문자 본문도 다시 만든다');
+});
+
+test('1월로 바꾸면 문자 월은 12월이 된다', () => {
+    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월' });
+    f.nodes['monthly-report-year-month'].value = '2027-01';
+    f.context.__sync();
+    assert.equal(f.nodes['monthly-report-month-label'].value, '12월');
+});
+
+test('직접 고친 문구가 있으면 자동 생성으로 덮어쓰지 않는다', () => {
+    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월', manual: true });
+    f.nodes['monthly-report-year-month'].value = '2026-09';
+    f.context.__sync();
+    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
+    assert.equal(f.generated(), 0);
+});

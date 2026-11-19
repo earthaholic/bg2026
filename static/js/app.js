@@ -9046,6 +9046,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${now.getMonth() + 1}월`;
     }
 
+    // 저장할 보고 월이 바뀌면 문자에 들어갈 월을 그 전 달로 맞춘다(직접 고친 문구는 자동 생성이 덮어쓰지 않는다).
+    function syncMonthlyReportTextMonth() {
+        const yearMonthInput = document.getElementById('monthly-report-year-month');
+        const monthLabelInput = document.getElementById('monthly-report-month-label');
+        if (!yearMonthInput || !monthLabelInput) return;
+        const yearMonth = yearMonthInput.value;
+        if (!/^\d{4}-\d{2}$/.test(yearMonth)) return;
+        const nextLabel = monthlyReportTextMonthLabel(yearMonth);
+        if (monthLabelInput.value === nextLabel) return;
+        monthLabelInput.value = nextLabel;
+        if (!monthlyReportManualEdit) generateMonthlyReportText(false, true);
+    }
+
     function lastDayOfYearMonth(yearMonth) {
         const match = String(yearMonth || '').trim().match(/^(\d{4})-(\d{2})$/);
         if (!match) return '';
@@ -9183,6 +9196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateToInput = document.getElementById('monthly-report-log-date-to');
             if (yearMonthInput) yearMonthInput.value = targetMonth;
             if (monthLabelInput) monthLabelInput.value = monthlyReportTextMonthLabel(targetMonth);
+            syncMonthlyReportTextMonth();
             if (dateFromInput) dateFromInput.value = `${targetMonth}-01`;
             if (dateToInput) dateToInput.value = lastDayOfYearMonth(targetMonth);
         }
@@ -9659,9 +9673,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setMonthlyReportSaveState(null);
     });
     document.getElementById('monthly-report-year-month')?.addEventListener('input', () => {
+        syncMonthlyReportTextMonth();
         if (currentMonthlyReportId) return;
         updateMonthlyReportDocumentLabel(null);
     });
+    document.getElementById('monthly-report-year-month')?.addEventListener('change', () => syncMonthlyReportTextMonth());
 
     async function loadTuitionPaymentView() {
         const feedback = createActionFeedback('#tuition-student-search');
