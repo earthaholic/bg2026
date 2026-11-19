@@ -9030,6 +9030,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 문자에 들어갈 월 기본값은 저장할 보고 월의 바로 전 달이다(예: 10월 보고서 → 9월 수업보고).
+    // 오늘 기준 이번 달(Y-M). 이번 달 보고 작성은 참고한 문서의 다음 달이 아니라 항상 이번 달을 쓴다.
+    function currentYearMonth() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+
     function monthlyReportTextMonthLabel(yearMonth) {
         const previous = addMonthToYearMonth(yearMonth, -1);
         if (previous) return `${Number(previous.slice(5, 7))}월`;
@@ -9132,10 +9138,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
 
         const reference = monthlyReportReference;
-        const currentYearMonth = document.getElementById('monthly-report-year-month')?.value || '';
-        const targetMonth = reference && reference.ReportYearMonth
-            ? addMonthToYearMonth(reference.ReportYearMonth, 1)
-            : currentYearMonth;
+        // 참고한 문서의 다음 달이 아니라 오늘 기준 이번 달로 연다(비어 있는 달이 있어도 건너뛴다).
+        const targetMonth = currentYearMonth();
 
         if (targetMonth) {
             const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === targetMonth);

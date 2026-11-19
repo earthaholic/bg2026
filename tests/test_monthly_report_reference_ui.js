@@ -46,9 +46,13 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
             state: () => ({ reportId: currentMonthlyReportId, manual: monthlyReportManualEdit, auto: monthlyLectureStartIsAuto, cycle: monthlyLectureCycleLength })
         };`,
     ].join('\n');
+    class FixedDate extends Date {
+        constructor(...args) { super(...(args.length ? args : ['2026-11-14T10:00:00'])); }
+        static now() { return new Date('2026-11-14T10:00:00').getTime(); }
+    }
     const context = vm.createContext({
         document: { getElementById: id => nodes[id] || null },
-        Date, Number, String, JSON, Map, Array,
+        Date: FixedDate, Number, String, JSON, Map, Array,
         createActionFeedback: () => ({ show: (...args) => calls.messages.push(args) }),
         loadMonthlyReportLogs: async options => { calls.logs.push(options); },
         loadSavedMonthlyReport: async id => { calls.loaded.push(id); },
@@ -62,7 +66,7 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
     return { nodes, calls, api: context.__ref };
 }
 
-test('지난 보고를 참고한 뒤 다음 달 보고서를 새로 시작한다', async () => {
+test('지난 보고를 참고해도 이번 달 보고서를 새로 시작한다', async () => {
     const reference = {
         Id: 3, ReportYearMonth: '2026-05', Status: 'completed',
         PeriodLabel: '1학기(3,4,5월)', SpecialTeacherName: '지윤주',
@@ -71,10 +75,10 @@ test('지난 보고를 참고한 뒤 다음 달 보고서를 새로 시작한다
 
     await f.api.start();
 
-    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-06');
-    assert.equal(f.nodes['monthly-report-month-label'].value, '5월', '문자 월은 저장 월의 전 달이 기본값이다');
-    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-06-01');
-    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-06-30');
+    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-11', '참고 문서와 무관하게 이번 달을 쓴다');
+    assert.equal(f.nodes['monthly-report-month-label'].value, '10월', '문자 월은 저장 월의 전 달이 기본값이다');
+    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-11-01');
+    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-11-30');
     assert.equal(f.nodes['monthly-report-period-label'].value, '1학기(3,4,5월)');
     assert.equal(f.nodes['monthly-report-special-teacher'].value, '지윤주');
     assert.equal(f.nodes['monthly-report-start-lecture'].value, '1');
@@ -90,21 +94,21 @@ test('지난 보고를 참고한 뒤 다음 달 보고서를 새로 시작한다
     assert.deepEqual(f.calls.loaded, []);
 });
 
-test('지난 보고가 없으면 현재 보고 월 그대로 새 보고서를 시작한다', async () => {
+test('지난 보고가 없어도 이번 달 보고서를 시작한다', async () => {
     const f = buildStartFixture({ reference: null, reports: [] });
 
     await f.api.start();
 
-    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-10');
-    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-10-01');
-    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-10-31');
+    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-11');
+    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-11-01');
+    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-11-30');
     assert.equal(f.calls.logs.length, 1);
     assert.equal(f.calls.logs[0].selectAll, true);
 });
 
-test('다음 달 문서가 이미 있으면 덮어쓰지 않고 그 문서를 불러온다', async () => {
+test('이번 달 문서가 이미 있으면 덮어쓰지 않고 그 문서를 불러온다', async () => {
     const reference = { Id: 3, ReportYearMonth: '2026-05', Status: 'draft' };
-    const draft = { Id: 4, ReportYearMonth: '2026-06', Status: 'draft' };
+    const draft = { Id: 4, ReportYearMonth: '2026-11', Status: 'draft' };
     const f = buildStartFixture({ reference, reports: [draft, reference] });
 
     await f.api.start();
@@ -222,9 +226,9 @@ test('포함할 기록이 없으면 머리말만 있는 문구를 만들지 않�
 });
 
 
-test('완료된 문서가 있는 달은 사이트 관리자가 아니면 편집기로 열지 않는다', async () => {
+test('이번 달 문서가 완료여도 사이트 관리자가 아니면 편집기로 열지 않는다', async () => {
     const reference = { Id: 3, ReportYearMonth: '2026-05', Status: 'draft' };
-    const completed = { Id: 4, ReportYearMonth: '2026-06', Status: 'completed' };
+    const completed = { Id: 4, ReportYearMonth: '2026-11', Status: 'completed' };
     const f = buildStartFixture({ reference, reports: [completed, reference] });
 
     await f.api.start();
@@ -236,7 +240,7 @@ test('완료된 문서가 있는 달은 사이트 관리자가 아니면 편집�
 
 test('사이트 관리자는 완료 문서도 열어 수정할 수 있다', async () => {
     const reference = { Id: 3, ReportYearMonth: '2026-05', Status: 'draft' };
-    const completed = { Id: 4, ReportYearMonth: '2026-06', Status: 'completed' };
+    const completed = { Id: 4, ReportYearMonth: '2026-11', Status: 'completed' };
     const f = buildStartFixture({ reference, reports: [completed, reference], siteAdmin: true });
 
     await f.api.start();
