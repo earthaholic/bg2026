@@ -34,6 +34,7 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
     const code = [
         'let currentMonthlyReportId = 7;',
         'let monthlyReportManualEdit = true;',
+        'let monthlyReportTextMonthManual = false;',
         'let monthlyLectureStartIsAuto = true;',
         'let monthlyLectureCycleLength = 4;',
         'let monthlyReportReference = null;',
@@ -416,7 +417,7 @@ test('이미 있는 달로는 새 보고서를 저장하지 않는다', () => {
 
 // --- 저장 월 변경 시 문자 월 동기화 ---
 const syncCode = between('    function monthlyReportTextMonthLabel', '    function lastDayOfYearMonth');
-function buildSyncFixture({ saveMonth = '2026-11', textMonth = '10월', manual = false } = {}) {
+function buildSyncFixture({ saveMonth = '2026-11', textMonth = '10월', manual = false, manualTextMonth = false } = {}) {
     const nodes = {
         'monthly-report-year-month': { value: saveMonth },
         'monthly-report-month-label': { value: textMonth },
@@ -424,12 +425,12 @@ function buildSyncFixture({ saveMonth = '2026-11', textMonth = '10월', manual =
     let generated = 0;
     const context = vm.createContext({
         document: { getElementById: id => nodes[id] || null },
-        Date, Number, String, monthlyReportManualEdit: manual,
+        Date, Number, String, monthlyReportManualEdit: manual, monthlyReportTextMonthManual: manualTextMonth,
         generateMonthlyReportText: () => { generated++; },
     });
     vm.runInContext(
         between('    function addMonthToYearMonth', '    function lastDayOfYearMonth') + '\n' + syncCode +
-        '\nglobalThis.__sync = () => { syncMonthlyReportTextMonth(); };',
+        '\nglobalThis.__sync = options => { syncMonthlyReportTextMonth(options || {}); };',
         context
     );
     return { nodes, context, generated: () => generated };
@@ -456,4 +457,21 @@ test('직접 고친 문구가 있으면 자동 생성으로 덮어쓰지 않는�
     f.context.__sync();
     assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
     assert.equal(f.generated(), 0);
+});
+
+
+test('직접 고친 문자 월은 재조회로 덮어쓰지 않는다', () => {
+    const f = buildSyncFixture({ saveMonth: '2026-10', textMonth: '7월', manualTextMonth: true });
+    f.nodes['monthly-report-year-month'].value = '2026-10';
+    f.context.__sync();
+    assert.equal(f.nodes['monthly-report-month-label'].value, '7월', '수동 값을 유지한다');
+    assert.equal(f.generated(), 0);
+});
+
+test('저장할 보고 월을 바꾸면 직접 고친 값도 전 달로 다시 맞춘다', () => {
+    const f = buildSyncFixture({ saveMonth: '2026-10', textMonth: '7월', manualTextMonth: true });
+    f.nodes['monthly-report-year-month'].value = '2026-09';
+    f.context.__sync({ force: true });
+    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
+    assert.equal(f.generated(), 1);
 });

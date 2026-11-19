@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthlyReportId = null;
     let monthlyReportLocked = false; // 완료로 저장한 월말보고 잠금 상태(관리자는 잠그지 않는다)
     let monthlyReportManualEdit = false; // 사용자가 미리보기 문구를 직접 고친 상태
+    let monthlyReportTextMonthManual = false; // 사용자가 '문자에 들어갈 월'을 직접 고친 상태
     let monthlyReportReference = null; // 학생의 최근 저장 보고(참고 전용, 편집 대상이 아니다)
     let monthlyReportReferenceList = [];
     let monthlyLectureRequestSeq = 0;
@@ -8673,13 +8674,12 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학습 기록 불러오는 중...</div>';
         currentMonthlyLogs = [];
 
-        // 새 보고서는 조회 기간의 달을 저장·문구 월로 사용해 세 개의 달이 어긋나지 않게 한다.
+        // 새 보고서는 조회 기간의 달을 저장 월로 사용한다. 문자 월은 직접 고친 값이 있으면 그대로 둔다.
         if (options.syncMonth !== false && !currentMonthlyReportId && dateTo && /^\d{4}-\d{2}$/.test(dateTo.slice(0, 7))) {
             const monthKey = dateTo.slice(0, 7);
             const yearMonthInput = document.getElementById('monthly-report-year-month');
-            const monthLabelInput = document.getElementById('monthly-report-month-label');
             if (yearMonthInput) yearMonthInput.value = monthKey;
-            if (monthLabelInput) monthLabelInput.value = monthlyReportTextMonthLabel(monthKey);
+            syncMonthlyReportTextMonth();
             updateMonthlyReportDocumentLabel(null);
         }
 
@@ -8815,6 +8815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const startLectureInput = document.getElementById('monthly-report-start-lecture');
 
         applyMonthlyReportLock(null);
+        monthlyReportTextMonthManual = false;
 
         if (periodLabelInput) {
             periodLabelInput.value = '';
@@ -9047,7 +9048,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 저장할 보고 월이 바뀌면 문자에 들어갈 월을 그 전 달로 맞춘다(직접 고친 문구는 자동 생성이 덮어쓰지 않는다).
-    function syncMonthlyReportTextMonth() {
+    function syncMonthlyReportTextMonth(options = {}) {
+        // 직접 고친 값은 저장할 보고 월을 바꿀 때만 다시 맞춘다.
+        if (monthlyReportTextMonthManual && !options.force) return;
         const yearMonthInput = document.getElementById('monthly-report-year-month');
         const monthLabelInput = document.getElementById('monthly-report-month-label');
         if (!yearMonthInput || !monthLabelInput) return;
@@ -9203,6 +9206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         currentMonthlyReportId = null;
         monthlyReportManualEdit = false;
+        monthlyReportTextMonthManual = false;
         monthlyLectureStartIsAuto = false;
         monthlyLectureCycleLength = 0;
         hideMonthlyReportRegenerateNotice();
@@ -9307,6 +9311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMonthlyReportLogItems(currentMonthlyLogs, true);
             document.getElementById('monthly-report-result-text').value = report.Content || '';
             monthlyReportManualEdit = false;
+            monthlyReportTextMonthManual = false;
             monthlyLectureRequestSeq++; // 불러온 문구를 늦게 도착한 자동 계산이 덮어쓰지 않게 한다.
             hideMonthlyReportRegenerateNotice();
             updateMonthlyReportDocumentLabel(report);
@@ -9352,7 +9357,10 @@ document.addEventListener('DOMContentLoaded', () => {
     ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-special-teacher'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            el.addEventListener('input', () => generateMonthlyReportText());
+            el.addEventListener('input', () => {
+                if (id === 'monthly-report-month-label') monthlyReportTextMonthManual = true;
+                generateMonthlyReportText();
+            });
         }
     });
 
@@ -9673,11 +9681,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setMonthlyReportSaveState(null);
     });
     document.getElementById('monthly-report-year-month')?.addEventListener('input', () => {
-        syncMonthlyReportTextMonth();
+        syncMonthlyReportTextMonth({ force: true });
         if (currentMonthlyReportId) return;
         updateMonthlyReportDocumentLabel(null);
     });
-    document.getElementById('monthly-report-year-month')?.addEventListener('change', () => syncMonthlyReportTextMonth());
+    document.getElementById('monthly-report-year-month')?.addEventListener('change', () => syncMonthlyReportTextMonth({ force: true }));
 
     async function loadTuitionPaymentView() {
         const feedback = createActionFeedback('#tuition-student-search');
