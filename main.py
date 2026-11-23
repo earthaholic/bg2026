@@ -447,6 +447,10 @@ def _payment_provided_lessons(payment: Dict[str, Any]) -> int:
     return int(payment.get("PaidLessons") or 0) + int(payment.get("ServiceLessons") or 0)
 
 
+# 잘못 입력된 아주 옛 날짜(예: 1970-01-01)는 차시 시작일 기준에서 뺀다.
+TUITION_START_DATE_FLOOR = "2000-01-01"
+
+
 def _resolve_tuition_cycle_starts(
     conn: Any,
     cursor: Any,
@@ -457,8 +461,8 @@ def _resolve_tuition_cycle_starts(
     """학생의 결제 주기 시작일을 오래된 결제부터 차례로 정한다.
 
     차시 시작일이 비어 있는 결제는 이전 결제 주기의 차시를 다 쓴 다음 첫 수업일로 기록한다.
-    그래서 납부가 수업보다 늦어도 이미 진행한 차시가 새 주기의 1차시부터로 잡힌다.
-    학생의 첫 결제는 납부일 이후 첫 수업일을 쓰고, 학습 기록이 없으면 비워 둔다.
+    납부가 수업보다 늦어도 이미 진행한 차시가 새 주기의 1차시부터로 잡힌다.
+    학생의 첫 결제는 그 학생의 첫 수업일을 쓰고, 학습 기록이 없으면 비워 둔다.
     """
     student_row_id = student["row_id"]
     student_id = student.get("Id", student_row_id)
@@ -476,9 +480,10 @@ def _resolve_tuition_cycle_starts(
         start = stored
         if not stored:
             if previous is None:
+                # 첫 결제는 납부일과 상관없이 그 학생의 첫 수업일부터 시작한다.
                 start = _first_general_lesson_day(
                     cursor, student_row_id, student_id, student_name,
-                    _tuition_cycle_anchor(payment), reference_day
+                    TUITION_START_DATE_FLOOR, reference_day
                 ) or ""
             else:
                 previous_start = starts.get(previous["row_id"], "")

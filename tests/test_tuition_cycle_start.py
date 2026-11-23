@@ -94,17 +94,27 @@ class TuitionCycleStartTests(unittest.TestCase):
         self.assertEqual(result['payment_start'], '2026-09-10', '학습 기록이 없으면 납부일을 기준일로 쓴다')
         self.assertEqual(self.stored_start(payment_id), '', '학습 기록이 없으면 비워 둔다')
 
-    def test_first_lesson_day_is_recorded_as_cycle_start(self):
-        payment_id = self.add_payment(paid='2026-09-10')
-        self.add_log('2026-09-05')  # 납부일 이전 수업은 이번 주기에 들어가지 않는다.
+    def test_first_payment_uses_first_lesson_even_before_paid_date(self):
+        # 학생의 첫 결제는 납부일보다 앞선 수업이라도 첫 수업일부터 시작한다.
+        first_id = self.add_payment(paid='2026-09-10')
+        self.add_log('2026-09-05')
         self.add_log('2026-09-12')
         self.add_log('2026-09-19')
 
         result = self.progress()
 
-        self.assertEqual(result['used_lessons'], 2)
-        self.assertEqual(result['payment_start'], '2026-09-12')
-        self.assertEqual(self.stored_start(payment_id), '2026-09-12', '첫 수업일을 차시 시작일로 기록한다')
+        self.assertEqual(result['used_lessons'], 3)
+        self.assertEqual(result['payment_start'], '2026-09-05')
+        self.assertEqual(self.stored_start(first_id), '2026-09-05', '첫 수업일을 차시 시작일로 기록한다')
+
+    def test_broken_old_day_is_ignored_for_first_cycle_start(self):
+        first_id = self.add_payment(paid='2026-09-10')
+        self.add_log('1970-01-01')
+        self.add_log('2026-09-12')
+
+        self.progress()
+
+        self.assertEqual(self.stored_start(first_id), '2026-09-12', '잘못된 옛 날짜는 기준에서 뺀다')
 
     def test_holiday_log_does_not_start_cycle(self):
         payment_id = self.add_payment()

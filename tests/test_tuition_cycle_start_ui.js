@@ -12,9 +12,9 @@ new Function(collection);
 const paymentForm = html.slice(html.indexOf('id="form-tuition-payment"'), html.indexOf('id="tuition-payments-body"'));
 assert.doesNotMatch(paymentForm, /tuition-start-date/);
 assert.doesNotMatch(paymentForm, /<label[^>]*>차시 시작일/);
-assert.match(paymentForm, /차시 시작일은 학습 기록을 보고 자동 기록됩니다/);
+assert.match(paymentForm, /차시 시작일은 학습 기록을 보고 자동으로 정해집니다/);
 assert.match(paymentForm, /<label for="tuition-paid-date">납부일/);
-assert.match(html, /차시 시작일은 학습 기록을 보고 자동 기록됩니다/);
+assert.match(html, /첫 결제는 첫 수업일, 이후 결제는 이전 차시를 다 쓴 다음 첫 수업일입니다/);
 assert.doesNotMatch(app, /getElementById\('tuition-start-date'\)|id="tuition-start-date"/);
 
 // 등록 요청에는 차시 시작일을 보내지 않는다.
@@ -25,7 +25,7 @@ assert.doesNotMatch(submitBlock, /StartDate/);
 
 // 수정 화면에서는 비워 둘 수 있고, 비우면 학습 기록 기준으로 다시 기록된다.
 assert.match(app, /id="edit-tuition-start-date" class="form-control" type="date" value="\$\{escapeHtml\(payment\.StartDate \|\| ''\)\}"/);
-assert.match(app, /비워 두면 이전 차시를 다 쓴 다음 첫 수업일로 자동 기록됩니다/);
+assert.match(app, /비워 두면 학습 기록을 보고 다시 정합니다\(첫 결제는 첫 수업일, 이후는 이전 차시를 다 쓴 다음 첫 수업일\)/);
 
 // 결제 이력은 시작 전이면 빈칸 대신 '-'로 보여 준다.
 assert.match(app, /escapeHtml\(p\.StartDate \|\| '-'\)/);
@@ -34,7 +34,7 @@ assert.match(app, /차시 시작일: <strong>\$\{escapeHtml\(payment\.StartDate 
 // 납입 관리 결제 등록 폼에도 차시 시작일 입력이 없다.
 const tcForm = collection.slice(collection.indexOf('id="tc-payment-form"'), collection.indexOf('id="tc-link-form"'));
 assert.doesNotMatch(tcForm, /StartDate/);
-assert.match(collection, /차시 시작일은 학습 기록을 보고 자동 기록됩니다/);
+assert.match(collection, /첫 결제는 첫 수업일, 이후 결제는 이전 차시를 다 쓴 다음 첫 수업일입니다/);
 assert.match(collection, /차시 시작 전/);
 
 console.log('차시 시작일 자동 기록 UI 검사 통과');
