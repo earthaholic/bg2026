@@ -1970,6 +1970,17 @@
         "first_studied_day": {
           "type": "string",
           "title": "First Studied Day"
+        },
+        "last_studied_day": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Studied Day"
         }
       },
       "additionalProperties": false,
@@ -1980,7 +1991,8 @@
     },
     "locations": {
       "student_id": "query",
-      "first_studied_day": "query"
+      "first_studied_day": "query",
+      "last_studied_day": "query"
     },
     "encoding": "none"
   },

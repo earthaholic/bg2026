@@ -114,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let monthlyReportReferenceList = [];
     let monthlyLectureRequestSeq = 0;
     let monthlyLectureCycleLength = 0; // 결제 총 차시·강의 번호를 새 주기로 되돌리는 기준
+    let monthlyLectureCycles = null; // 보고 기간에 걸친 결제 주기 경계(2개 이상일 때만 사용)
     let monthlyLectureStartIsAuto = false; // 시작 강의 번호가 결제 이력 자동 계산값인지
     let payrollTeacherOptions = [];
     const payrollSelectedSessions = new Map();
@@ -8373,6 +8374,16 @@ document.addEventListener('DOMContentLoaded', () => {
         lines.push('');
 
         let currentLecture = startLectureNum;
+        // 보고 기간에 결제 주기가 둘 이상 걸치면 주기마다 번호를 따로 센다.
+        const useLectureCycles = monthlyLectureStartIsAuto && Array.isArray(monthlyLectureCycles) && monthlyLectureCycles.length > 1;
+        const cycleCounters = useLectureCycles
+            ? monthlyLectureCycles.map(cycle => {
+                // 결제 차시를 이미 다 쓴 주기는 기존 규칙대로 1강으로 감싼다.
+                const total = Number(cycle.total_lessons) || 0;
+                const start = Number(cycle.start_num) || 1;
+                return total > 0 && start > total ? ((start - 1) % total) + 1 : start;
+            })
+            : null;
         let teacherSuffix = specialTeacherName;
         if (teacherSuffix && !teacherSuffix.endsWith('선생님')) {
             teacherSuffix += ' 선생님';
@@ -8402,7 +8413,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     lines.push('<특강>');
                 }
             } else {
-                lines.push(`<${currentLecture}강>`);
+                let lectureNumber = currentLecture;
+                if (useLectureCycles) {
+                    const lectureDay = String(log.StudiedDay || log.studied_day || '').slice(0, 10);
+                    let cycleIndex = 0;
+                    monthlyLectureCycles.forEach((cycle, index) => {
+                        if (cycle.payment_start && cycle.payment_start <= lectureDay) cycleIndex = index;
+                    });
+                    lectureNumber = cycleCounters[cycleIndex];
+                    cycleCounters[cycleIndex] = lectureNumber + 1;
+                    const cycleTotal = Number(monthlyLectureCycles[cycleIndex].total_lessons) || 0;
+                    if (cycleTotal > 0 && cycleCounters[cycleIndex] > cycleTotal) cycleCounters[cycleIndex] = 1;
+                }
+                lines.push(`<${lectureNumber}강>`);
                 currentLecture++;
                 if (lectureCycle > 0 && currentLecture > lectureCycle) currentLecture = 1;
             }
@@ -8453,6 +8476,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const requestSeq = ++monthlyLectureRequestSeq;
         if (!studentId || !generalDates.length) {
             monthlyLectureCycleLength = 0;
+            monthlyLectureCycles = null;
             monthlyLectureStartIsAuto = false;
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide';
@@ -8465,11 +8489,16 @@ document.addEventListener('DOMContentLoaded', () => {
             guide.textContent = '결제 이력을 확인하여 강의 번호를 계산하는 중입니다...';
         }
         try {
-            const params = new URLSearchParams({ student_id: studentId, first_studied_day: generalDates[0] });
+            const params = new URLSearchParams({
+                student_id: studentId,
+                first_studied_day: generalDates[0],
+                last_studied_day: generalDates[generalDates.length - 1]
+            });
             const progress = await apiFetch(`/api/user/monthly-report/start-lecture?${params.toString()}`);
             if (requestSeq !== monthlyLectureRequestSeq) return;
             if (!progress.has_payment) {
                 monthlyLectureCycleLength = 0;
+                monthlyLectureCycles = null;
                 monthlyLectureStartIsAuto = false;
                 if (guide) {
                     guide.className = 'monthly-report-lecture-guide is-warning';
@@ -8479,6 +8508,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const nextNumber = Number(progress.start_lecture_num) || 1;
             const cycleLength = Number(progress.total_lessons) || 0;
+            monthlyLectureCycles = Array.isArray(progress.cycles) && progress.cycles.length > 1
+                ? progress.cycles.map(cycle => ({
+                    payment_start: String(cycle.payment_start || '').slice(0, 10),
+                    start_num: Number(cycle.start_num) || 1,
+                    total_lessons: Number(cycle.total_lessons) || 0
+                }))
+                : null;
             const cycleChanged = monthlyLectureCycleLength !== cycleLength || !monthlyLectureStartIsAuto;
             monthlyLectureCycleLength = cycleLength;
             monthlyLectureStartIsAuto = true;
@@ -8491,7 +8527,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (guide) {
                 guide.className = 'monthly-report-lecture-guide is-calculated';
                 const cycleNote = cycleLength > 0 ? ` · 결제 ${cycleLength}회 기준이라 ${cycleLength}강 다음은 1강으로 다시 셈` : '';
-                guide.textContent = `현재 결제 시작일 ${progress.payment_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작${cycleNote}`;
+                const boundaryNote = (Array.isArray(progress.cycles) && progress.cycles.length > 1)
+                    ? ` · ${formatMonthlyReportMonth(String(progress.cycles[progress.cycles.length - 1].payment_start || '').slice(0, 7))} 결제부터 1강으로 다시 셈`
+                    : '';
+                guide.textContent = `현재 결제 시작일 ${progress.payment_start}부터 ${progress.used_before}회 수강 · ${nextNumber}강부터 시작${cycleNote}${boundaryNote}`;
             }
         } catch (err) {
             if (requestSeq !== monthlyLectureRequestSeq) return;
@@ -9209,6 +9248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyReportTextMonthManual = false;
         monthlyLectureStartIsAuto = false;
         monthlyLectureCycleLength = 0;
+        monthlyLectureCycles = null;
         hideMonthlyReportRegenerateNotice();
         const startLectureInput = document.getElementById('monthly-report-start-lecture');
         if (startLectureInput) startLectureInput.value = '1';
@@ -9296,6 +9336,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('monthly-report-month-label').value = report.ReportMonthLabel || '';
             document.getElementById('monthly-report-start-lecture').value = report.StartLectureNum || 1;
             monthlyLectureStartIsAuto = false; // 저장된 문서의 강의 번호를 그대로 유지한다.
+            monthlyLectureCycles = null;
             document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
             currentMonthlyLogs = report.StudyLogSnapshot || [];
             // 저장 당시 조회한 기간을 복원해 화면의 기간과 목록이 어긋나지 않게 한다.

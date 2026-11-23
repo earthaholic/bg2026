@@ -277,6 +277,9 @@ JWT `role` 클레임 / `_app_users.role` 기준 4단계:
 - 자동 계산 안내 문구는 `결제 N회 기준이라 N강 다음은 1강으로 다시 셈`을 추가로 보여 준다.
 - 검증: `node --test tests/test_monthly_report_lecture_cycle_ui.js`.
 
+- 보고 기간에 결제 주기가 둘 이상 걸치면 주기마다 번호를 따로 센다. `/api/user/monthly-report/start-lecture`가 `first_studied_day`·`last_studied_day` 기준으로 걸친 결제 목록(`cycles`)을 돌려주고, 각 주기는 이전 결제 마지막 주기의 번호를 이어 받은 뒤 새 결제 시작일부터 1강으로 다시 센다. 결제 차시를 이미 다 쓴 주기는 기존 규칙대로 1강으로 감싼다.
+- 검증: `tests/test_monthly_report_lecture_start.py`, `node --test tests/test_monthly_report_lecture_cycle_ui.js`.
+
 ## 월말보고 완료 문서 잠금
 - `POST /api/user/monthly-reports`는 기존 행이 `Status='completed'`이면 사이트 관리자(`MONTHLY_REPORT_LOCK_BYPASS_ROLES` = `admin`만)가 아닌 한 다시 저장할 수 없다. 부관리자(`subadmin`)도 포함해 그 밖의 역할은 403과 `MONTHLY_REPORT_LOCK_MESSAGE`를 받고, 감사 이력도 남기지 않는다.
 - 임시 저장 문서는 지금처럼 누구나 계속 수정할 수 있고, 임시 → 완료 전환도 제한하지 않는다. 잠기는 것은 한 번 완료로 저장된 같은 학생·같은 보고 월 문서이며, 완료 문서를 임시로 되돌리는 저장도 막힌다.

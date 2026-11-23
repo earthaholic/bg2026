@@ -2295,12 +2295,27 @@ def _monthly_report_response(row: Any) -> Dict[str, Any]:
         item["StudyLogSnapshot"] = []
     return item
 
-def _get_monthly_report_start_lecture(student: Dict[str, Any], first_studied_day: str) -> Dict[str, Any]:
-    """선택한 첫 수업일 직전까지 사용한 일반 수업 차시를 기준으로 시작 번호를 계산한다."""
+def _get_monthly_report_start_lecture(
+    student: Dict[str, Any],
+    first_studied_day: str,
+    last_studied_day: Optional[str] = None
+) -> Dict[str, Any]:
+    """보고 기간의 결제 주기별 시작 번호를 계산한다.
+
+    기간 안에서 새 결제(차시 시작일)가 시작되면 그 주기부터 1강으로 다시 세고,
+    그 이전 수업은 이전 결제 주기의 번호를 이어서 매긴다.
+    """
     try:
         datetime.strptime(first_studied_day, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(status_code=400, detail="학습 일자가 올바르지 않습니다.")
+    last_day = last_studied_day or first_studied_day
+    try:
+        datetime.strptime(last_day, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="학습 일자가 올바르지 않습니다.")
+    if last_day < first_studied_day:
+        last_day = first_studied_day
 
     student_row_id = student["row_id"]
     student_id = student.get("Id", student_row_id)
@@ -2308,28 +2323,56 @@ def _get_monthly_report_start_lecture(student: Dict[str, Any], first_studied_day
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        # 선택한 수업일에 적용되는 가장 최근 결제 1건을 기준으로 차시를 다시 시작한다.
+        # 보고 기간 마지막 수업일까지 적용되는 결제를 모두 모아 주기 경계를 만든다.
         cursor.execute('''SELECT rowid AS row_id, * FROM "TuitionPayments"
                           WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
-                          ORDER BY "StartDate" DESC, rowid DESC LIMIT 1''',
-                       (student_row_id, student_id, first_studied_day))
+                          ORDER BY "StartDate", rowid''',
+                       (student_row_id, student_id, last_day))
         payments = [dict(row) for row in cursor.fetchall()]
         if not payments:
-            return {"has_payment": False, "start_lecture_num": None, "used_before": 0}
+            return {"has_payment": False, "start_lecture_num": None, "used_before": 0, "cycles": []}
 
-        current_payment = payments[0]
-        payment_start = current_payment["StartDate"]
-        used_before = _count_general_lesson_sessions(
-            cursor, student_row_id, student_id, student_name,
-            payment_start, first_studied_day, include_end=False, exclude_report_breaks=True
-        )
-        total_lessons = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
+        cycles = []
+        for index, payment in enumerate(payments):
+            payment_start = payment["StartDate"]
+            next_start = payments[index + 1]["StartDate"] if index + 1 < len(payments) else None
+            total_lessons = int(payment.get("PaidLessons") or 0) + int(payment.get("ServiceLessons") or 0)
+            used_before = 0
+            if payment_start < first_studied_day:
+                used_before = _count_general_lesson_sessions(
+                    cursor, student_row_id, student_id, student_name,
+                    payment_start, first_studied_day,
+                    include_end=False, exclude_report_breaks=True
+                )
+            cycles.append({
+                "payment_start": payment_start,
+                "next_payment_start": next_start,
+                "start_num": used_before + 1,
+                "used_before": used_before,
+                "total_lessons": total_lessons,
+            })
+
+        # 보고 기간에 걸친 주기만 남긴다.
+        relevant = [c for c in cycles
+                    if c["next_payment_start"] is None or c["next_payment_start"] > first_studied_day]
+        if not relevant:
+            relevant = [cycles[-1]]
+        first_cycle = relevant[0]
         return {
             "has_payment": True,
-            "start_lecture_num": used_before + 1,
-            "used_before": used_before,
-            "total_lessons": total_lessons,
-            "payment_start": payment_start
+            "start_lecture_num": first_cycle["start_num"],
+            "used_before": first_cycle["used_before"],
+            "total_lessons": first_cycle["total_lessons"],
+            "payment_start": first_cycle["payment_start"],
+            "cycles": [
+                {
+                    "payment_start": c["payment_start"],
+                    "start_num": c["start_num"],
+                    "used_before": c["used_before"],
+                    "total_lessons": c["total_lessons"],
+                }
+                for c in relevant
+            ],
         }
     finally:
         conn.close()
@@ -3577,6 +3620,7 @@ def user_batch_register_class_studylogs(
 def user_get_monthly_report_start_lecture(
     student_id: int = Query(...),
     first_studied_day: str = Query(...),
+    last_studied_day: Optional[str] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     conn = get_db_connection()
@@ -3584,7 +3628,7 @@ def user_get_monthly_report_start_lecture(
         student = _get_monthly_report_student(conn.cursor(), student_id, current_user)
     finally:
         conn.close()
-    return _get_monthly_report_start_lecture(student, first_studied_day)
+    return _get_monthly_report_start_lecture(student, first_studied_day, last_studied_day)
 
 @app.delete("/api/user/classes/{class_id}/cancellations/{cancellation_id}")
 def user_delete_class_cancellation(

@@ -16,7 +16,7 @@ function between(start, end) {
 
 const code = [
     'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false; let monthlyReportManualEdit = false;',
-    'let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false;',
+    'let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false; let monthlyLectureCycles = null;',
     between('    function formatDateKorean', '    function generateMonthlyReportText'),
     between('    function generateMonthlyReportText', '    function formatMonthlyAbsenceReason'),
     between('    function formatMonthlyAbsenceReason', '    function isMonthlyReportBreak'),
@@ -27,6 +27,7 @@ const code = [
         updateStartLecture: logs => updateMonthlyStartLecture(logs),
         setLogs: logs => { currentMonthlyLogs = logs; },
         setCycle: (length, auto) => { monthlyLectureCycleLength = length; monthlyLectureStartIsAuto = auto; },
+        setCycles: cycles => { monthlyLectureCycles = cycles; },
         state: () => ({ cycle: monthlyLectureCycleLength, auto: monthlyLectureStartIsAuto })
     };`,
 ].join('\n');
@@ -135,4 +136,29 @@ test('자동 계산은 결제 차시를 기준으로 새 주기 안내를 표시
     assert.equal(state.cycle, 2);
     assert.equal(state.auto, true);
     assert.match(f.nodes['monthly-report-lecture-guide'].textContent, /결제 2회 기준이라 2강 다음은 1강으로 다시 셈/);
+});
+
+
+test('보고 기간에 새 결제가 시작되면 그 주기부터 1강으로 다시 센다', () => {
+    const logs = [
+        log('2026-08-10', '이전 도서', '이전 주기 마지막 수업'),
+        log('2026-08-17', '새 도서', '새 주기 첫 수업'),
+        log('2026-08-24', '새 도서2', '새 주기 둘째 수업'),
+    ];
+    const f = fixture(logs);
+    f.api.setCycle(36, true);
+    f.api.setCycles([
+        { payment_start: '2026-01-05', start_num: 36, total_lessons: 36 },
+        { payment_start: '2026-08-14', start_num: 1, total_lessons: 10 },
+    ]);
+    f.api.generate();
+    assert.deepEqual(lectureNumbers(f.nodes['monthly-report-result-text'].value), [36, 1, 2]);
+});
+
+test('주기 정보가 없으면 기존처럼 시작 번호부터 이어서 센다', () => {
+    const f = fixture(fourLogs);
+    f.api.setCycle(2, true);
+    f.api.setCycles(null);
+    f.api.generate();
+    assert.deepEqual(lectureNumbers(f.nodes['monthly-report-result-text'].value), [1, 2, 1, 2]);
 });
