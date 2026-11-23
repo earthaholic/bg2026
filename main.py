@@ -355,7 +355,7 @@ class TuitionPaymentRequest(BaseModel):
     ClassType: str
     PaidLessons: int
     ServiceLessons: int = 0
-    StartDate: str
+    StartDate: str = ""
     PaidDate: str
     FeeAmount: int
     Memo: Optional[str] = ""
@@ -374,6 +374,106 @@ def _validate_tuition_values(class_type: str, paid_lessons: int, service_lessons
         raise HTTPException(status_code=400, detail="서비스차시는 0~10회 사이로 입력해 주세요.")
     if fee_amount < 0:
         raise HTTPException(status_code=400, detail="수업료는 0원 이상으로 입력해 주세요.")
+
+def _tuition_cycle_anchor(payment: Dict[str, Any]) -> str:
+    """결제 주기의 기준일을 돌려준다.
+
+    차시 시작일은 학습 기록으로 채워지기 전까지 비어 있으므로,
+    그동안은 납부일을 주기 기준일로 사용한다.
+    """
+    start = (payment.get("StartDate") or "").strip()[:10]
+    if start:
+        return start
+    return (payment.get("PaidDate") or "").strip()[:10]
+
+
+def _tuition_cycle_anchor_sql(prefix: str = "") -> str:
+    """SQL에서 같은 기준일을 계산한다. Python 쪽 `_tuition_cycle_anchor`와 같은 규칙이다."""
+    return (f"COALESCE(NULLIF(TRIM(COALESCE({prefix}\"StartDate\", '')), ''), "
+            f"SUBSTR(TRIM(COALESCE({prefix}\"PaidDate\", '')), 1, 10), '')")
+
+
+def _first_general_lesson_day(
+    cursor: Any,
+    student_row_id: int,
+    student_id: Any,
+    student_name: str,
+    start_date: str,
+    end_date: str
+) -> Optional[str]:
+    """기간 안에서 실제 차시로 세는 첫 수업일을 찾는다. 특강·휴강은 세지 않는다."""
+    if not start_date or not end_date:
+        return None
+    cursor.execute('''SELECT MIN(SUBSTR(TRIM("StudiedDay"), 1, 10)) AS first_day
+                      FROM "StudyLogs"
+                      WHERE ("StudentId" = ? OR "StudentId" = ? OR "StudentId" = ? OR "StudentId" = ?)
+                        AND "StudiedDay" >= ? AND "StudiedDay" <= ?
+                        AND COALESCE("IsSpecial", 0) = 0
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "Books" b
+                            WHERE (b.rowid = "StudyLogs"."BookId" OR b."Id" = "StudyLogs"."BookId")
+                              AND TRIM(b."Title") IN ('휴일', '휴강')
+                        )''',
+                   (student_row_id, str(student_row_id), student_id, student_name, start_date, end_date))
+    row = cursor.fetchone()
+    return (row["first_day"] or None) if row else None
+
+
+def _record_tuition_cycle_start(
+    conn: Any,
+    cursor: Any,
+    payment: Dict[str, Any],
+    student_row_id: int,
+    student_id: Any,
+    student_name: str,
+    reference_day: str
+) -> str:
+    """학습 기록에서 결제 주기의 첫 수업일을 찾아 비어 있는 차시 시작일을 기록한다.
+
+    이미 값이 있으면 손대지 않는다. 학습 기록이 아직 없으면 비워 둔다.
+    """
+    stored = (payment.get("StartDate") or "").strip()[:10]
+    if stored:
+        return stored
+    anchor = _tuition_cycle_anchor(payment)
+    first_day = _first_general_lesson_day(
+        cursor, student_row_id, student_id, student_name, anchor, reference_day
+    )
+    if not first_day:
+        return ""
+    try:
+        cursor.execute('UPDATE "TuitionPayments" SET "StartDate" = ? WHERE rowid = ?',
+                       (first_day, payment["row_id"]))
+        conn.commit()
+    except Exception:
+        # 기록에 실패해도 계산한 값은 그대로 사용한다.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return first_day
+    payment["StartDate"] = first_day
+    return first_day
+
+
+def _apply_payment_start_dates(conn: Any, payments: List[Dict[str, Any]], reference_day: str) -> None:
+    """차시 시작일이 비어 있는 결제를 학습 기록 기준으로 채운다."""
+    if not payments:
+        return
+    cursor = conn.cursor()
+    for payment in payments:
+        if (payment.get("StartDate") or "").strip():
+            continue
+        student_row_id = payment.get("StudentRowId")
+        if student_row_id is None:
+            continue
+        try:
+            _record_tuition_cycle_start(
+                conn, cursor, payment, student_row_id,
+                payment.get("StudentId"), payment.get("StudentName") or "", reference_day
+            )
+        except Exception:
+            continue
 
 def _count_general_lesson_sessions(
     cursor: Any,
@@ -432,9 +532,11 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
                     "next_cycle_lesson": None, "payments": []}
         student = dict(student_row)
         reference_day = as_of or datetime.now().strftime("%Y-%m-%d")
-        cursor.execute('''SELECT rowid as row_id, * FROM "TuitionPayments"
-                          WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
-                          ORDER BY "StartDate" DESC, rowid DESC LIMIT 1''',
+        anchor = _tuition_cycle_anchor_sql()
+        cursor.execute(f'''SELECT rowid as row_id, * FROM "TuitionPayments"
+                          WHERE ("StudentId" = ? OR "StudentId" = ?)
+                            AND {anchor} <> '' AND {anchor} <= ?
+                          ORDER BY {anchor} DESC, rowid DESC LIMIT 1''',
                        (student["row_id"], student.get("Id", student["row_id"]), reference_day))
         payments = [dict(r) for r in cursor.fetchall()]
         if not payments:
@@ -442,9 +544,14 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
                     "next_lesson": None, "remaining_lessons": 0, "overage_lessons": 0,
                     "next_cycle_lesson": None, "payments": []}
         current_payment = payments[0]
+        # 차시 시작일이 비어 있으면 학습 기록의 첫 수업일로 기록하고 그 날부터 차시를 센다.
+        cycle_start = _record_tuition_cycle_start(
+            conn, cursor, current_payment, student["row_id"],
+            student.get("Id", student["row_id"]), student.get("Name", ""), reference_day
+        ) or _tuition_cycle_anchor(current_payment)
         used = _count_general_lesson_sessions(
             cursor, student["row_id"], student.get("Id", student["row_id"]), student.get("Name", ""),
-            current_payment["StartDate"], reference_day
+            cycle_start, reference_day
         )
         total = (current_payment.get("PaidLessons") or 0) + (current_payment.get("ServiceLessons") or 0)
         # 환불한 차시는 현재 결제의 제공 차시에서 빼고 잔여 차시와 새 주기를 계산한다.
@@ -463,7 +570,7 @@ def _get_tuition_progress(student_id: int, as_of: Optional[str] = None, *, conne
                 "next_lesson": used + 1, "remaining_lessons": total - used,
                 "overage_lessons": overage, "next_cycle_lesson": overage + 1,
                 "is_exhausted": used >= total, "payments": payments,
-                "payment_start": current_payment["StartDate"]}
+                "payment_start": cycle_start}
     finally:
         if connection is None:
             conn.close()
@@ -1813,8 +1920,10 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
         cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s.rowid AS "StudentRowId",
                            {_tuition_refund_columns(cursor)}
                            FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
-                           {where} ORDER BY p."StartDate" DESC, p.rowid DESC''', params)
+                           {where} ORDER BY {_tuition_cycle_anchor_sql('p.')} DESC, p.rowid DESC''', params)
         payments = [dict(r) for r in cursor.fetchall()]
+        # 차시 시작일이 비어 있는 결제는 학습 기록의 첫 수업일로 채운다.
+        _apply_payment_start_dates(conn, payments, datetime.now().strftime("%Y-%m-%d"))
         if include_progress or progress_state:
             reference_day = datetime.now().strftime("%Y-%m-%d")
             progress_by_student = {}
@@ -1829,7 +1938,7 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
                         student_row_id, reference_day, connection=conn
                     )
                 progress = progress_by_student[student_row_id]
-                if payment["StartDate"] > reference_day:
+                if _tuition_cycle_anchor(payment) > reference_day:
                     payment["ProgressState"] = "upcoming"
                 elif progress["has_payment"]:
                     current_id = progress["payments"][0]["row_id"]
@@ -1853,11 +1962,17 @@ def get_tuition_payments(q: Optional[str] = None, class_type: Optional[str] = No
 @app.post("/api/user/tuition-payments")
 def create_tuition_payment(payload: TuitionPaymentRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
     _validate_tuition_values(payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.FeeAmount)
+    # 차시 시작일은 비워 두고, 학습 기록이 생기면 그 첫 수업일로 기록한다.
+    start_date = (payload.StartDate or "").strip()[:10]
+    if start_date:
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="차시 시작일은 YYYY-MM-DD 형식이어야 합니다.")
     try:
-        datetime.strptime(payload.StartDate, "%Y-%m-%d")
         datetime.strptime(payload.PaidDate, "%Y-%m-%d")
     except ValueError:
-        raise HTTPException(status_code=400, detail="차시 시작일과 납부일은 YYYY-MM-DD 형식이어야 합니다.")
+        raise HTTPException(status_code=400, detail="납부일은 YYYY-MM-DD 형식이어야 합니다.")
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1865,7 +1980,7 @@ def create_tuition_payment(payload: TuitionPaymentRequest, current_user: Dict[st
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="해당 학생을 찾을 수 없습니다.")
         cursor.execute('''INSERT INTO "TuitionPayments" ("StudentId", "ClassType", "PaidLessons", "ServiceLessons", "StartDate", "PaidDate", "FeeAmount", "Memo", "CreatedBy")
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"]))
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, start_date, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"]))
         payment_id = cursor.lastrowid
         conn.commit()
         _audit_insert("TuitionPayments", payment_id, get_record_snapshot("TuitionPayments", payment_id), current_user["username"], current_user["role"])
@@ -1879,24 +1994,34 @@ def get_tuition_payment_detail(payment_id: int, current_user: Dict[str, Any] = D
     try:
         cursor = conn.cursor()
         cursor.execute(f'''SELECT p.rowid as row_id, p.*, s."Name" AS "StudentName", s."Grade" AS "StudentGrade",
+                          s.rowid AS "StudentRowId",
                           {_tuition_refund_columns(cursor)}
                           FROM "TuitionPayments" p LEFT JOIN "Students" s ON p."StudentId" = s.rowid OR p."StudentId" = s."Id"
                           WHERE p.rowid = ? OR p."Id" = ?''', (payment_id, payment_id))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
-        return {"payment": dict(row)}
+        payment = dict(row)
+        # 상세 화면에서도 학습 기록으로 채운 차시 시작일을 보여 준다.
+        _apply_payment_start_dates(conn, [payment], datetime.now().strftime("%Y-%m-%d"))
+        return {"payment": payment}
     finally:
         conn.close()
 
 @app.put("/api/user/tuition-payments/{payment_id}")
 def update_tuition_payment(payment_id: int, payload: TuitionPaymentRequest, current_user: Dict[str, Any] = Depends(get_current_staff)):
     _validate_tuition_values(payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.FeeAmount)
+    # 비워서 보내면 학습 기록에서 다시 기록하게 두고, 값이 있으면 그 날짜를 쓴다.
+    start_date = (payload.StartDate or "").strip()[:10]
+    if start_date:
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="차시 시작일은 YYYY-MM-DD 형식이어야 합니다.")
     try:
-        datetime.strptime(payload.StartDate, "%Y-%m-%d")
         datetime.strptime(payload.PaidDate, "%Y-%m-%d")
     except ValueError:
-        raise HTTPException(status_code=400, detail="차시 시작일과 납부일은 YYYY-MM-DD 형식이어야 합니다.")
+        raise HTTPException(status_code=400, detail="납부일은 YYYY-MM-DD 형식이어야 합니다.")
     row_id = _resolve_domain_pk("TuitionPayments", payment_id)
     if row_id is None:
         raise HTTPException(status_code=404, detail="해당 결제 정보를 찾을 수 없습니다.")
@@ -1906,7 +2031,7 @@ def update_tuition_payment(payment_id: int, payload: TuitionPaymentRequest, curr
         cursor = conn.cursor()
         cursor.execute('''UPDATE "TuitionPayments" SET "StudentId"=?, "ClassType"=?, "PaidLessons"=?, "ServiceLessons"=?,
                           "StartDate"=?, "PaidDate"=?, "FeeAmount"=?, "Memo"=?, "UpdatedBy"=?, "UpdatedAt"=datetime('now','localtime') WHERE rowid=?''',
-                       (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, payload.StartDate, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"], row_id))
+                       (payload.StudentId, payload.ClassType, payload.PaidLessons, payload.ServiceLessons, start_date, payload.PaidDate, payload.FeeAmount, (payload.Memo or '').strip(), current_user["username"], row_id))
         conn.commit()
     finally:
         conn.close()
@@ -2302,8 +2427,9 @@ def _get_monthly_report_start_lecture(
 ) -> Dict[str, Any]:
     """보고 기간의 결제 주기별 시작 번호를 계산한다.
 
-    기간 안에서 새 결제(차시 시작일)가 시작되면 그 주기부터 1강으로 다시 세고,
+    기간 안에서 새 결제 주기가 시작되면 그 주기부터 1강으로 다시 세고,
     그 이전 수업은 이전 결제 주기의 번호를 이어서 매긴다.
+    차시 시작일이 비어 있으면 납부일을 주기 기준일로 쓴다.
     """
     try:
         datetime.strptime(first_studied_day, "%Y-%m-%d")
@@ -2324,18 +2450,30 @@ def _get_monthly_report_start_lecture(
     try:
         cursor = conn.cursor()
         # 보고 기간 마지막 수업일까지 적용되는 결제를 모두 모아 주기 경계를 만든다.
-        cursor.execute('''SELECT rowid AS row_id, * FROM "TuitionPayments"
-                          WHERE ("StudentId" = ? OR "StudentId" = ?) AND "StartDate" <= ?
-                          ORDER BY "StartDate", rowid''',
+        anchor = _tuition_cycle_anchor_sql()
+        cursor.execute(f'''SELECT rowid AS row_id, *, {anchor} AS "CycleAnchor" FROM "TuitionPayments"
+                          WHERE ("StudentId" = ? OR "StudentId" = ?)
+                            AND {anchor} <> '' AND {anchor} <= ?
+                          ORDER BY "CycleAnchor", rowid''',
                        (student_row_id, student_id, last_day))
         payments = [dict(row) for row in cursor.fetchall()]
         if not payments:
             return {"has_payment": False, "start_lecture_num": None, "used_before": 0, "cycles": []}
+        # 보고 기간까지의 학습 기록으로 비어 있는 차시 시작일을 채운 뒤 주기 경계를 다시 읽는다.
+        for payment in payments:
+            try:
+                _record_tuition_cycle_start(
+                    conn, cursor, payment, student_row_id, student_id, student_name, last_day
+                )
+            except Exception:
+                continue
+            payment["CycleAnchor"] = _tuition_cycle_anchor(payment)
+        payments.sort(key=lambda payment: (payment["CycleAnchor"], payment["row_id"]))
 
         cycles = []
         for index, payment in enumerate(payments):
-            payment_start = payment["StartDate"]
-            next_start = payments[index + 1]["StartDate"] if index + 1 < len(payments) else None
+            payment_start = payment["CycleAnchor"]
+            next_start = payments[index + 1]["CycleAnchor"] if index + 1 < len(payments) else None
             total_lessons = int(payment.get("PaidLessons") or 0) + int(payment.get("ServiceLessons") or 0)
             used_before = 0
             if payment_start < first_studied_day:

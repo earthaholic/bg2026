@@ -9732,9 +9732,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const feedback = createActionFeedback('#tuition-student-search');
         const studentInput = document.getElementById('tuition-student-search');
         if (!studentInput) return;
-        if (!document.getElementById('tuition-start-date').value) {
+        if (!document.getElementById('tuition-paid-date').value) {
             const today = new Date().toISOString().slice(0, 10);
-            document.getElementById('tuition-start-date').value = today;
             document.getElementById('tuition-paid-date').value = today;
         }
         try {
@@ -9804,7 +9803,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await apiFetch('/api/user/tuition-payments?include_ended=true');
             const rows = data.payments || [];
             tuitionPaymentsCache = rows;
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate || '-')}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td>${p.PaidLessons}회 / ${p.ServiceLessons}회</td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-edit-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-pen"></i> 수정</button> <button class="btn btn-xs btn-danger btn-delete-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-trash-can"></i> 삭제</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">등록된 결제 이력이 없습니다.</td></tr>';
             body.querySelectorAll('.btn-refund-tuition').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id, false, true)));
             body.querySelectorAll('.btn-edit-tuition').forEach(btn => btn.addEventListener('click', () => editTuitionPayment(btn.dataset.id)));
             body.querySelectorAll('.btn-delete-tuition').forEach(btn => btn.addEventListener('click', async () => {
@@ -9852,7 +9851,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-tuition-payment')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('tuition-payment-msg');
-        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), StartDate: document.getElementById('tuition-start-date').value, PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: parseCurrency(document.getElementById('tuition-fee-amount').value), Memo: document.getElementById('tuition-memo').value.trim() };
+        const payload = { StudentId: Number(document.getElementById('tuition-student').value), ClassType: document.getElementById('tuition-class-type').value, PaidLessons: Number(document.getElementById('tuition-paid-lessons').value), ServiceLessons: Number(document.getElementById('tuition-service-lessons').value), PaidDate: document.getElementById('tuition-paid-date').value, FeeAmount: parseCurrency(document.getElementById('tuition-fee-amount').value), Memo: document.getElementById('tuition-memo').value.trim() };
         try { const result = await apiFetch('/api/user/tuition-payments', { method: 'POST', body: JSON.stringify(payload) }); msg.className = 'alert alert-success'; msg.textContent = result.message; msg.classList.remove('hidden'); await loadTuitionPayments(); await showTuitionProgress(); } catch (err) { msg.className = 'alert alert-danger'; msg.textContent = err.message; msg.classList.remove('hidden'); }
     });
 
@@ -9919,7 +9918,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lookup?.success();
             if (version !== tuitionPaymentSearchVersion) return;
             const rows = data.payments || [];
-            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate)}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
+            body.innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.StartDate || '-')}</td><td>${escapeHtml(p.PaidDate || '-')}</td><td><strong>${escapeHtml(p.StudentName || '학생 미상')}</strong></td><td>${escapeHtml(p.ClassType)}</td><td data-sort-value="${p.ProgressState === 'current' && Number.isFinite(p.TuitionProgress?.remaining_lessons) ? p.TuitionProgress.remaining_lessons : ''}"><div class="tuition-lesson-status"><span>${p.PaidLessons}회 / ${p.ServiceLessons}회</span>${tuitionPaymentProgressDisplay(p)}</div></td><td>${formatWon(p.FeeAmount)}${tuitionRefundNote(p)}</td><td><button class="btn btn-xs btn-outline btn-refund-tuition" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-rotate-left"></i> 환불</button> <button class="btn btn-xs btn-outline btn-tuition-detail" data-id="${p.row_id || p.Id}"><i class="fa-solid fa-eye"></i> 상세</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center">검색 결과가 없습니다.</td></tr>';
             body.querySelectorAll('.btn-refund-tuition').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id, false, true)));
             body.querySelectorAll('.btn-tuition-detail').forEach(btn => btn.addEventListener('click', () => showTuitionPaymentDetail(btn.dataset.id)));
         } catch (err) {
@@ -10045,7 +10044,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="detail-meta-row">
                     ${payment.StudentGrade ? `<span><i class="fa-solid fa-graduation-cap"></i> 학년: <strong>${escapeHtml(payment.StudentGrade)}</strong></span>` : ''}
                     <span><i class="fa-solid fa-users"></i> 반: <strong>${escapeHtml(payment.ClassType)}</strong></span>
-                    <span><i class="fa-solid fa-calendar-day"></i> 차시 시작일: <strong>${escapeHtml(payment.StartDate)}</strong></span>
+                    <span><i class="fa-solid fa-calendar-day"></i> 차시 시작일: <strong>${escapeHtml(payment.StartDate || '-')}</strong></span>
                     <span><i class="fa-solid fa-money-check-dollar"></i> 납부일: <strong>${escapeHtml(payment.PaidDate || '-')}</strong></span>
                 </div>
             </div>
@@ -10082,7 +10081,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-grid">
                         <div class="form-group"><label for="edit-tuition-paid-lessons">결제차시 <span class="required">*</span></label><select id="edit-tuition-paid-lessons" class="form-control">${[0, 10, 20, 30].map(value => `<option value="${value}" ${Number(payment.PaidLessons) === value ? 'selected' : ''}>${value}차시</option>`).join('')}</select></div>
                         <div class="form-group"><label for="edit-tuition-service-lessons">서비스차시</label><input id="edit-tuition-service-lessons" class="form-control" type="number" min="0" max="10" value="${Number(payment.ServiceLessons || 0)}"></div>
-                        <div class="form-group"><label for="edit-tuition-start-date">차시 시작일 <span class="required">*</span></label><input id="edit-tuition-start-date" class="form-control" type="date" value="${escapeHtml(payment.StartDate || '')}" required></div>
+                        <div class="form-group"><label for="edit-tuition-start-date">차시 시작일</label><input id="edit-tuition-start-date" class="form-control" type="date" value="${escapeHtml(payment.StartDate || '')}"><div class="text-muted">비워 두면 학습 기록의 첫 수업일로 자동 기록됩니다.</div></div>
                         <div class="form-group"><label for="edit-tuition-paid-date">납부일 <span class="required">*</span></label><input id="edit-tuition-paid-date" class="form-control" type="date" value="${escapeHtml(payment.PaidDate || '')}" required></div>
                         <div class="form-group span-2"><label for="edit-tuition-fee-amount">수업료 <span class="required">*</span></label><div class="currency-input-wrap"><input id="edit-tuition-fee-amount" class="form-control currency-input" type="text" inputmode="numeric" value="${Number(payment.FeeAmount || 0).toLocaleString('ko-KR')}" required><span>원</span></div></div>
                         <div class="form-group span-2"><label for="edit-tuition-memo">비고</label><textarea id="edit-tuition-memo" class="form-control" rows="4">${escapeHtml(payment.Memo || '')}</textarea></div>

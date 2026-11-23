@@ -78,7 +78,7 @@ class PaymentRequest(BaseModel):
     ClassType: str
     PaidLessons: StrictInt
     ServiceLessons: StrictInt
-    StartDate: str
+    StartDate: str = ''
     PaidDate: str
     FeeAmount: StrictInt
     Memo: str = Field('', max_length=4000)
@@ -102,6 +102,12 @@ def _day(value, required=False):
             raise ValueError()
     except (ValueError, TypeError):
         raise HTTPException(400, '날짜는 YYYY-MM-DD 형식이어야 합니다.')
+
+
+def _cycle_anchor_sql(prefix=''):
+    """차시 시작일이 비어 있으면 납부일을 결제 주기 기준일로 쓰는 SQL 식을 빌려온다."""
+    from main import _tuition_cycle_anchor_sql
+    return _tuition_cycle_anchor_sql(prefix)
 
 
 def _student(conn, student_id):
@@ -240,7 +246,7 @@ def list_collection(q: str = '', class_id: Optional[int] = None, teacher: str = 
             try:
                 _student(conn, s['row_id'])
                 p = progress_fn(s['row_id'], today, connection=conn)
-                upcoming = conn.execute('SELECT rowid AS row_id,* FROM TuitionPayments WHERE StudentId IN (?,?) AND StartDate>? ORDER BY StartDate,rowid DESC LIMIT 1', (s['row_id'], s.get('Id'), today)).fetchone()
+                upcoming = conn.execute(f'SELECT rowid AS row_id,* FROM TuitionPayments WHERE StudentId IN (?,?) AND {_cycle_anchor_sql()} > ? AND {_cycle_anchor_sql()} <> \'\' ORDER BY {_cycle_anchor_sql()},rowid DESC LIMIT 1', (s['row_id'], s.get('Id'), today)).fetchone()
                 blocked = ''
             except HTTPException as exc:
                 p = {'has_payment': False, 'remaining_lessons': None, 'payments': []}
@@ -280,7 +286,7 @@ def collection_detail(student_id: int, current_user=Depends(get_current_staff)):
     try:
         s = _student(conn, student_id)
         cases = [_case(conn, r) for r in conn.execute('SELECT * FROM TuitionCollectionCases WHERE student_id=? ORDER BY id DESC', (student_id,))]
-        payments = [dict(r) for r in conn.execute('SELECT rowid AS row_id,* FROM TuitionPayments WHERE StudentId IN (?,?) ORDER BY StartDate DESC,rowid DESC', (student_id,s.get('Id')))]
+        payments = [dict(r) for r in conn.execute(f'SELECT rowid AS row_id,* FROM TuitionPayments WHERE StudentId IN (?,?) ORDER BY {_cycle_anchor_sql()} DESC,rowid DESC', (student_id,s.get('Id')))]
         return dict(student=s, cases=cases, payments=payments)
     finally:
         conn.close()
@@ -400,7 +406,7 @@ def complete_case(case_id: int, payload: CompleteRequest, current_user=Depends(g
         p = payload.payment
         _, validate = _functions()
         validate(p.ClassType, p.PaidLessons, p.ServiceLessons, p.FeeAmount)
-        _day(p.StartDate, True)
+        _day(p.StartDate)
         _day(p.PaidDate, True)
     conn = get_db_connection()
     try:

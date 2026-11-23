@@ -73,6 +73,24 @@ class MonthlyReportLectureStartTests(unittest.TestCase):
         self.assertEqual(result['cycles'][1]['start_num'], 1, '새 결제 주기는 1강부터 시작한다')
         self.assertEqual(result['cycles'][1]['total_lessons'], 10)
 
+    def test_empty_start_date_uses_paid_date_then_first_lesson(self):
+        # 차시 시작일을 비워 둔 결제는 납부일을 기준으로 세고, 첫 수업일을 시작일로 기록한다.
+        self.conn.execute("UPDATE TuitionPayments SET StartDate='' WHERE rowid=2")
+        self.conn.commit()
+        for day in ('2026-01-12', '2026-02-09', '2026-03-09', '2026-04-13', '2026-05-11', '2026-06-08', '2026-07-13'):
+            self.add_lesson(day)
+        self.add_lesson('2026-08-10')
+        self.add_lesson('2026-08-17')
+        self.add_lesson('2026-08-24')
+
+        result = self.start('2026-08-10', '2026-08-31')
+
+        self.assertEqual(result['start_lecture_num'], 8)
+        self.assertEqual(result['cycles'][1]['payment_start'], '2026-08-17')
+        self.assertEqual(result['cycles'][1]['start_num'], 1)
+        stored = self.conn.execute('SELECT StartDate FROM TuitionPayments WHERE rowid=2').fetchone()[0]
+        self.assertEqual(stored, '2026-08-17', '학습 기록으로 채운 차시 시작일을 저장한다')
+
     def test_period_after_new_payment_uses_only_that_cycle(self):
         # 기간이 새 결제 이후로만 잡히면 이전 주기는 번호 계산에 끼지 않는다.
         self.add_lesson('2026-08-17')
