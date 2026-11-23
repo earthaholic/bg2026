@@ -147,6 +147,47 @@ class TuitionCycleStartTests(unittest.TestCase):
         self.assertEqual(by_id[new_id]['ProgressState'], 'current')
         self.assertEqual(by_id[new_id]['TuitionProgress']['remaining_lessons'], 8)
 
+    def test_late_payment_records_first_lesson_after_previous_cycle(self):
+        # 지난 주기(2차시)를 다 쓴 뒤 수업한 9/7, 9/14 수업은 납부일(9/20)보다 앞서지만 새 주기의 1차시부터다.
+        self.add_payment(start='2026-08-01', paid='2026-08-01', lessons=2)
+        for day in ('2026-08-03', '2026-08-10', '2026-09-07', '2026-09-14'):
+            self.add_log(day)
+
+        new_id = self.add_payment(paid='2026-09-20', lessons=10)
+        result = self.progress()
+
+        self.assertEqual(self.stored_start(new_id), '2026-09-07', '납부 전에 진행한 차시도 새 주기로 기록한다')
+        self.assertEqual(result['payment_start'], '2026-09-07')
+        self.assertEqual(result['used_lessons'], 2)
+        self.assertEqual(result['remaining_lessons'], 8)
+
+    def test_next_cycle_waits_until_previous_cycle_is_used_up(self):
+        # 지난 주기의 차시가 남아 있으면 새 결제는 아직 시작 전이다.
+        self.add_payment(start='2026-08-01', paid='2026-08-01', lessons=10)
+        self.add_log('2026-08-03')
+        self.add_log('2026-08-10')
+
+        new_id = self.add_payment(paid='2026-09-01', lessons=10)
+        self.add_log('2026-09-07')
+
+        self.progress()
+
+        self.assertEqual(self.stored_start(new_id), '', '지난 주기가 남아 있으면 차시 시작일을 비워 둔다')
+
+    def test_cycle_start_is_recorded_once_previous_cycle_is_used_up(self):
+        self.add_payment(start='2026-08-01', paid='2026-08-01', lessons=3)
+        for day in ('2026-08-03', '2026-08-10', '2026-09-07'):
+            self.add_log(day)
+        new_id = self.add_payment(paid='2026-09-01', lessons=10)
+
+        self.progress()
+        self.assertEqual(self.stored_start(new_id), '', '3차시를 다 쓰기 전에는 시작하지 않는다')
+
+        self.add_log('2026-09-14')
+        self.progress()
+
+        self.assertEqual(self.stored_start(new_id), '2026-09-14', '지난 주기를 다 쓴 다음 수업일부터 새 주기다')
+
     def test_explicit_start_date_is_not_overwritten(self):
         payment_id = self.add_payment(start='2026-09-01', paid='2026-08-28')
         self.add_log('2026-09-12')

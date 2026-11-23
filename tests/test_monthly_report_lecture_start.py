@@ -74,8 +74,9 @@ class MonthlyReportLectureStartTests(unittest.TestCase):
         self.assertEqual(result['cycles'][1]['total_lessons'], 10)
 
     def test_empty_start_date_uses_paid_date_then_first_lesson(self):
-        # 차시 시작일을 비워 둔 결제는 납부일을 기준으로 세고, 첫 수업일을 시작일로 기록한다.
+        # 차시 시작일을 비워 둔 결제는 이전 주기를 다 쓴 다음 첫 수업일로 기록한다.
         self.conn.execute("UPDATE TuitionPayments SET StartDate='' WHERE rowid=2")
+        self.conn.execute('UPDATE TuitionPayments SET PaidLessons=8, ServiceLessons=0 WHERE rowid=1')
         self.conn.commit()
         for day in ('2026-01-12', '2026-02-09', '2026-03-09', '2026-04-13', '2026-05-11', '2026-06-08', '2026-07-13'):
             self.add_lesson(day)
