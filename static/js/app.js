@@ -109,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthlyReportId = null;
     let monthlyReportLocked = false; // 완료로 저장한 월말보고 잠금 상태(관리자는 잠그지 않는다)
     let monthlyReportManualEdit = false; // 사용자가 미리보기 문구를 직접 고친 상태
-    let monthlyReportTextMonthManual = false; // 사용자가 '문자에 들어갈 월'을 직접 고친 상태
     let monthlyReportReference = null; // 학생의 최근 저장 보고(참고 전용, 편집 대상이 아니다)
     let monthlyReportReferenceList = [];
     let monthlyLectureRequestSeq = 0;
@@ -8263,10 +8262,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const studentSelect = document.getElementById('monthly-report-student-select');
-        const periodLabelInput = document.getElementById('monthly-report-period-label');
-        const monthLabelInput = document.getElementById('monthly-report-month-label');
+        const yearMonthInput = document.getElementById('monthly-report-year-month');
         const startLectureInput = document.getElementById('monthly-report-start-lecture');
-        const specialTeacherInput = document.getElementById('monthly-report-special-teacher');
         const resultTextarea = document.getElementById('monthly-report-result-text');
 
         if (!resultTextarea) return;
@@ -8279,8 +8276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const periodLabel = periodLabelInput ? periodLabelInput.value.trim() : '';
-        const reportMonth = monthLabelInput ? monthLabelInput.value.trim() : `${new Date().getMonth() + 1}월`;
+        const reportMonth = monthlyReportMonthText(yearMonthInput ? yearMonthInput.value : '');
         let startLectureNum = startLectureInput ? parseInt(startLectureInput.value, 10) : 1;
         if (isNaN(startLectureNum) || startLectureNum < 1) startLectureNum = 1;
         // 자동 계산된 번호는 결제 차시를 넘으면 1강부터 다시 센다. 직접 입력한 번호는 그대로 둔다.
@@ -8288,8 +8284,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lectureCycle > 0 && startLectureNum > lectureCycle) {
             startLectureNum = ((startLectureNum - 1) % lectureCycle) + 1;
         }
-
-        let specialTeacherName = specialTeacherInput ? specialTeacherInput.value.trim() : '';
 
         const container = document.getElementById('monthly-report-logs-container');
         const checkedLogItems = [];
@@ -8361,12 +8355,8 @@ document.addEventListener('DOMContentLoaded', () => {
         lines.push(`${nameYi} 어머님`);
         lines.push('안녕하세요');
 
-        if (periodLabel && reportMonth) {
-            lines.push(`${periodLabel}중 ${reportMonth} 수업보고드립니다^^`);
-        } else if (reportMonth) {
+        if (reportMonth) {
             lines.push(`${reportMonth} 수업보고드립니다^^`);
-        } else if (periodLabel) {
-            lines.push(`${periodLabel} 수업보고드립니다^^`);
         } else {
             lines.push('수업보고드립니다^^');
         }
@@ -8384,11 +8374,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return total > 0 && start > total ? ((start - 1) % total) + 1 : start;
             })
             : null;
-        let teacherSuffix = specialTeacherName;
-        if (teacherSuffix && !teacherSuffix.endsWith('선생님')) {
-            teacherSuffix += ' 선생님';
-        }
-
         groupedLogItems.forEach((log, idx) => {
             if (log.IsAbsence) {
                 if (idx > 0) lines.push('');
@@ -8407,11 +8392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isSpecial = ['1', 'true'].includes(String(log.IsSpecial ?? log.is_special ?? 0).toLowerCase());
             if (isSpecial) {
-                if (teacherSuffix) {
-                    lines.push(`<특강> ${teacherSuffix}`);
-                } else {
-                    lines.push('<특강>');
-                }
+                lines.push('<특강>');
             } else {
                 let lectureNumber = currentLecture;
                 if (useLectureCycles) {
@@ -8543,9 +8524,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const MONTHLY_REPORT_LOCKABLE_IDS = [
-        'monthly-report-period-label', 'monthly-report-year-month', 'monthly-report-month-label',
-        'monthly-report-start-lecture', 'monthly-report-special-teacher', 'monthly-report-log-date-from',
-        'monthly-report-log-date-to', 'btn-apply-monthly-log-period', 'btn-monthly-select-all',
+        'monthly-report-year-month', 'monthly-report-log-date-from', 'monthly-report-log-date-to',
+        'monthly-report-start-lecture', 'btn-apply-monthly-log-period', 'btn-monthly-select-all',
         'btn-monthly-deselect-all', 'btn-fetch-monthly-logs', 'btn-save-monthly-draft', 'btn-save-monthly-completed'
     ];
     const MONTHLY_REPORT_LOCK_HINT = '완료로 저장한 월말보고는 사이트 관리자만 수정할 수 있습니다.';
@@ -8713,15 +8693,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> 학습 기록 불러오는 중...</div>';
         currentMonthlyLogs = [];
 
-        // 새 보고서는 조회 기간의 달을 저장 월로 사용한다. 문자 월은 직접 고친 값이 있으면 그대로 둔다.
-        if (options.syncMonth !== false && !currentMonthlyReportId && dateTo && /^\d{4}-\d{2}$/.test(dateTo.slice(0, 7))) {
-            const monthKey = dateTo.slice(0, 7);
-            const yearMonthInput = document.getElementById('monthly-report-year-month');
-            if (yearMonthInput) yearMonthInput.value = monthKey;
-            syncMonthlyReportTextMonth();
-            updateMonthlyReportDocumentLabel(null);
-        }
-
         try {
             const params = new URLSearchParams({ student_id: studentId });
             if (dateFrom) params.set('date_from', dateFrom);
@@ -8849,16 +8820,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function initMonthlyReportView(preselectStudentId) {
-        const periodLabelInput = document.getElementById('monthly-report-period-label');
-        const monthLabelInput = document.getElementById('monthly-report-month-label');
         const startLectureInput = document.getElementById('monthly-report-start-lecture');
 
         applyMonthlyReportLock(null);
-        monthlyReportTextMonthManual = false;
-
-        if (periodLabelInput) {
-            periodLabelInput.value = '';
-        }
 
         if (startLectureInput && !startLectureInput.value) {
             startLectureInput.value = '1';
@@ -8869,11 +8833,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setMonthlyReportDefaultLogPeriod()
         ]);
 
-        // 본문의 보고 월 기본값은 저장할 보고 월의 전 달이다.
-        if (monthLabelInput && !monthLabelInput.value) {
-            const yearMonth = document.getElementById('monthly-report-year-month')?.value || '';
-            monthLabelInput.value = monthlyReportTextMonthLabel(yearMonth);
-        }
         updateMonthlyReportDocumentLabel(null);
         updateMonthlyReportSaveAvailability();
 
@@ -8937,10 +8896,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: JSON.stringify({
                     student_id: Number(studentId), report_year_month: yearMonth,
-                    period_label: document.getElementById('monthly-report-period-label')?.value.trim() || '',
-                    report_month_label: document.getElementById('monthly-report-month-label')?.value.trim() || '',
                     start_lecture_num: Number(document.getElementById('monthly-report-start-lecture')?.value) || 1,
-                    special_teacher_name: document.getElementById('monthly-report-special-teacher')?.value.trim() || '',
                     logs: getSelectedMonthlyLogs(), content, status
                 })
             });
@@ -9065,40 +9021,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return match ? `${match[1]}년 ${Number(match[2])}월` : value;
     }
 
-    function addMonthToYearMonth(yearMonth, offset) {
-        const match = String(yearMonth || '').trim().match(/^(\d{4})-(\d{2})$/);
-        if (!match) return '';
-        const base = new Date(Number(match[1]), Number(match[2]) - 1 + offset, 1);
-        return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
-    }
-
-    // 문자에 들어갈 월 기본값은 저장할 보고 월의 바로 전 달이다(예: 10월 보고서 → 9월 수업보고).
     // 오늘 기준 이번 달(Y-M). 이번 달 보고 작성은 참고한 문서의 다음 달이 아니라 항상 이번 달을 쓴다.
     function currentYearMonth() {
         const now = new Date();
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    function monthlyReportTextMonthLabel(yearMonth) {
-        const previous = addMonthToYearMonth(yearMonth, -1);
-        if (previous) return `${Number(previous.slice(5, 7))}월`;
-        const now = new Date();
-        return `${now.getMonth() + 1}월`;
-    }
-
-    // 저장할 보고 월이 바뀌면 문자에 들어갈 월을 그 전 달로 맞춘다(직접 고친 문구는 자동 생성이 덮어쓰지 않는다).
-    function syncMonthlyReportTextMonth(options = {}) {
-        // 직접 고친 값은 저장할 보고 월을 바꿀 때만 다시 맞춘다.
-        if (monthlyReportTextMonthManual && !options.force) return;
-        const yearMonthInput = document.getElementById('monthly-report-year-month');
-        const monthLabelInput = document.getElementById('monthly-report-month-label');
-        if (!yearMonthInput || !monthLabelInput) return;
-        const yearMonth = yearMonthInput.value;
-        if (!/^\d{4}-\d{2}$/.test(yearMonth)) return;
-        const nextLabel = monthlyReportTextMonthLabel(yearMonth);
-        if (monthLabelInput.value === nextLabel) return;
-        monthLabelInput.value = nextLabel;
-        if (!monthlyReportManualEdit) generateMonthlyReportText(false, true);
+    // 보고 월을 문자 표기(12월)로 바꾼다. 저장 월과 문자 표기는 같은 달이다.
+    function monthlyReportMonthText(yearMonth) {
+        const match = String(yearMonth || '').trim().match(/^\d{4}-(\d{2})$/);
+        if (match) return `${Number(match[1])}월`;
+        return `${new Date().getMonth() + 1}월`;
     }
 
     function lastDayOfYearMonth(yearMonth) {
@@ -9106,6 +9039,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!match) return '';
         const base = new Date(Number(match[1]), Number(match[2]), 0);
         return `${match[1]}-${match[2]}-${String(base.getDate()).padStart(2, '0')}`;
+    }
+
+    // 보고 월을 바꾸면 학습 기간을 그 달 1일~말일로 맞추고, 필요하면 기록을 다시 불러온다.
+    function applyMonthlyReportMonthPeriod(options = {}) {
+        const yearMonthInput = document.getElementById('monthly-report-year-month');
+        const fromInput = document.getElementById('monthly-report-log-date-from');
+        const toInput = document.getElementById('monthly-report-log-date-to');
+        const yearMonth = yearMonthInput ? yearMonthInput.value : '';
+        if (!/^\d{4}-\d{2}$/.test(yearMonth)) return false;
+        if (fromInput) fromInput.value = `${yearMonth}-01`;
+        if (toInput) toInput.value = lastDayOfYearMonth(yearMonth);
+        updateMonthlyReportDocumentLabel(null);
+        if (options.reload !== false) reloadMonthlyReportLogsForMonth();
+        return true;
+    }
+
+    // 문구를 직접 고친 상태면 자동 조회를 건너뛰고 [기록 불러오기]를 직접 누르게 한다.
+    function reloadMonthlyReportLogsForMonth() {
+        if (monthlyReportManualEdit) return;
+        const studentId = document.getElementById('monthly-report-student-select')?.value;
+        if (!studentId) return;
+        loadMonthlyReportLogs({ selectAll: true });
     }
 
     // 미리보기 패널에 지금 작성 중인 문서(또는 새 보고서)의 대상을 표시한다.
@@ -9198,8 +9153,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!studentId) return feedback.show('학생을 선택해 주세요.', 'warning');
         if (!targetMonth) return feedback.show('보고 월을 선택해 주세요.', 'warning');
 
-        const reference = monthlyReportReference;
-
         {
             const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === targetMonth);
             if (existing) {
@@ -9224,28 +9177,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (reference) {
-            const periodLabelInput = document.getElementById('monthly-report-period-label');
-            const specialTeacherInput = document.getElementById('monthly-report-special-teacher');
-            if (periodLabelInput && !periodLabelInput.value) periodLabelInput.value = reference.PeriodLabel || '';
-            if (specialTeacherInput && !specialTeacherInput.value) specialTeacherInput.value = reference.SpecialTeacherName || '';
-        }
-
         if (targetMonth) {
             const yearMonthInput = document.getElementById('monthly-report-year-month');
-            const monthLabelInput = document.getElementById('monthly-report-month-label');
             const dateFromInput = document.getElementById('monthly-report-log-date-from');
             const dateToInput = document.getElementById('monthly-report-log-date-to');
             if (yearMonthInput) yearMonthInput.value = targetMonth;
-            if (monthLabelInput) monthLabelInput.value = monthlyReportTextMonthLabel(targetMonth);
-            syncMonthlyReportTextMonth();
             if (dateFromInput) dateFromInput.value = `${targetMonth}-01`;
             if (dateToInput) dateToInput.value = lastDayOfYearMonth(targetMonth);
         }
 
         currentMonthlyReportId = null;
         monthlyReportManualEdit = false;
-        monthlyReportTextMonthManual = false;
         monthlyLectureStartIsAuto = false;
         monthlyLectureCycleLength = 0;
         monthlyLectureCycles = null;
@@ -9278,9 +9220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (warning) warning.classList.add('hidden');
             return;
         }
-        const textMonth = monthlyReportTextMonthLabel(month);
-        summary.innerHTML = `저장할 보고 월 <strong>${escapeHtml(formatMonthlyReportMonth(month))}</strong><br>` +
-            ` 문자에 들어갈 월 <strong>${escapeHtml(textMonth)}</strong><br>` +
+        summary.innerHTML = `보고 월 <strong>${escapeHtml(formatMonthlyReportMonth(month))}</strong><br>` +
+            ` 문자 표기 <strong>${escapeHtml(monthlyReportMonthText(month))} 수업보고드립니다^^</strong><br>` +
             ` 학습 기간 <strong>${escapeHtml(month)}-01 ~ ${escapeHtml(lastDayOfYearMonth(month))}</strong>`;
         const existing = monthlyReportReferenceList.find(report => String(report.ReportYearMonth) === month);
         if (warning) {
@@ -9332,12 +9273,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             document.getElementById('monthly-report-year-month').value = report.ReportYearMonth || '';
-            document.getElementById('monthly-report-period-label').value = report.PeriodLabel || '';
-            document.getElementById('monthly-report-month-label').value = report.ReportMonthLabel || '';
             document.getElementById('monthly-report-start-lecture').value = report.StartLectureNum || 1;
             monthlyLectureStartIsAuto = false; // 저장된 문서의 강의 번호를 그대로 유지한다.
             monthlyLectureCycles = null;
-            document.getElementById('monthly-report-special-teacher').value = report.SpecialTeacherName || '';
             currentMonthlyLogs = report.StudyLogSnapshot || [];
             // 저장 당시 조회한 기간을 복원해 화면의 기간과 목록이 어긋나지 않게 한다.
             const studiedDays = currentMonthlyLogs
@@ -9352,7 +9290,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMonthlyReportLogItems(currentMonthlyLogs, true);
             document.getElementById('monthly-report-result-text').value = report.Content || '';
             monthlyReportManualEdit = false;
-            monthlyReportTextMonthManual = false;
             monthlyLectureRequestSeq++; // 불러온 문구를 늦게 도착한 자동 계산이 덮어쓰지 않게 한다.
             hideMonthlyReportRegenerateNotice();
             updateMonthlyReportDocumentLabel(report);
@@ -9394,16 +9331,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnApplyMonthlyLogPeriod) {
         btnApplyMonthlyLogPeriod.addEventListener('click', () => loadMonthlyReportLogs({ selectAll: true }));
     }
-
-    ['monthly-report-period-label', 'monthly-report-month-label', 'monthly-report-special-teacher'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('input', () => {
-                if (id === 'monthly-report-month-label') monthlyReportTextMonthManual = true;
-                generateMonthlyReportText();
-            });
-        }
-    });
 
     const btnMonthlySelectAll = document.getElementById('btn-monthly-select-all');
     if (btnMonthlySelectAll) {
@@ -9721,12 +9648,10 @@ document.addEventListener('DOMContentLoaded', () => {
         hideMonthlyReportRegenerateNotice();
         setMonthlyReportSaveState(null);
     });
-    document.getElementById('monthly-report-year-month')?.addEventListener('input', () => {
-        syncMonthlyReportTextMonth({ force: true });
-        if (currentMonthlyReportId) return;
-        updateMonthlyReportDocumentLabel(null);
+    // 보고 월을 바꾸면 학습 기간을 1일~말일로 맞추고, 문구를 직접 고치지 않았다면 기록을 다시 불러온다.
+    document.getElementById('monthly-report-year-month')?.addEventListener('change', () => {
+        applyMonthlyReportMonthPeriod({ reload: true });
     });
-    document.getElementById('monthly-report-year-month')?.addEventListener('change', () => syncMonthlyReportTextMonth({ force: true }));
 
     async function loadTuitionPaymentView() {
         const feedback = createActionFeedback('#tuition-student-search');

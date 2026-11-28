@@ -8,9 +8,8 @@ const end = source.indexOf('    function setMonthlyReportSaveState(', start);
 const lockSource = source.slice(start, end);
 
 const LOCKABLE_IDS = [
-    'monthly-report-period-label', 'monthly-report-year-month', 'monthly-report-month-label',
-    'monthly-report-start-lecture', 'monthly-report-special-teacher', 'monthly-report-log-date-from',
-    'monthly-report-log-date-to', 'btn-apply-monthly-log-period', 'btn-monthly-select-all',
+    'monthly-report-year-month', 'monthly-report-log-date-from', 'monthly-report-log-date-to',
+    'monthly-report-start-lecture', 'btn-apply-monthly-log-period', 'btn-monthly-select-all',
     'btn-monthly-deselect-all', 'btn-fetch-monthly-logs', 'btn-save-monthly-draft', 'btn-save-monthly-completed'
 ];
 
@@ -64,7 +63,7 @@ test('완료 문서는 관리자를 제외하면 잠긴다', () => {
     assert.equal(locked, true);
     assert.equal(context.monthlyReportLocked, true);
     assert.equal(elements['monthly-report-year-month'].disabled, true);
-    assert.equal(elements['monthly-report-special-teacher'].disabled, true);
+    assert.equal(elements['monthly-report-start-lecture'].disabled, true);
     assert.equal(elements['btn-fetch-monthly-logs'].disabled, true);
     assert.equal(elements['btn-monthly-select-all'].disabled, true);
     assert.equal(elements['btn-apply-monthly-log-period'].disabled, true);

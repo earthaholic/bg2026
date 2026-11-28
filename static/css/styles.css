@@ -3449,7 +3449,7 @@ body {
 
 .monthly-report-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1.25rem;
     align-items: start;
 }
@@ -3460,22 +3460,107 @@ body {
     gap: 1rem;
 }
 
-.monthly-report-log-filter {
+/* 보고 월과 시작 강의 번호는 한 줄을 다 쓰고, 학습 기간은 두 칸으로 나란히 둔다. */
+.monthly-report-basic-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
 }
 
-.monthly-report-log-filter .form-group {
+.monthly-report-basic-grid .form-group {
     margin-bottom: 0;
+    min-width: 0;
 }
 
-@media (max-width: 640px) {
-    .monthly-report-log-filter {
-        grid-template-columns: 1fr;
+.monthly-report-basic-grid .monthly-report-field-full {
+    grid-column: 1 / -1;
+}
+
+.monthly-report-lecture-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.monthly-report-lecture-row > .form-control {
+    flex: 0 0 7rem;
+    width: 7rem;
+}
+
+.monthly-report-lecture-row > .monthly-report-lecture-guide {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+@media (max-width: 720px) {
+    .monthly-report-basic-grid {
+        grid-template-columns: minmax(0, 1fr);
     }
+
+    .monthly-report-basic-grid .monthly-report-field-full {
+        grid-column: auto;
+    }
+
+    .monthly-report-lecture-row {
+        flex-wrap: wrap;
+    }
+}
+
+#view-monthly-report input[type="date"],
+#view-monthly-report input[type="month"] {
+    min-width: 0;
+}
+
+.monthly-report-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    color: var(--primary);
+}
+
+.monthly-report-divider {
+    border: 0;
+    border-top: 1px dashed var(--border-color);
+    margin: 1rem 0;
+}
+
+.monthly-report-period-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-top: 0.85rem;
+}
+
+.monthly-report-period-actions .form-help {
+    flex: 1 1 18rem;
+    margin: 0;
+}
+
+.monthly-report-log-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+}
+
+.monthly-report-log-header-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* 넓은 화면에서는 기록 목록을 훑는 동안 문자 미리보기가 화면에 남아 있게 한다. */
+@media (min-width: 1281px) {
+    #view-monthly-report .report-preview-panel {
+        position: sticky;
+        top: 1rem;
+    }
+}
+
+#view-monthly-report .monthly-report-textarea {
+    min-height: 25rem;
 }
 
 /* 좁은 화면에서도 카드가 화면 폭을 넘지 않게 한다(1fr은 min-content에 밀린다). */

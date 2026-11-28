@@ -112,11 +112,11 @@ test('결제가 많으면 최근 5건까지만 표시하고 안내한다', async
     assert.match(built.body.innerHTML, /최근 5건만/);
 });
 
-test('결제 이력 패널은 학생 선택과 2. 문구 세부 설정 사이에 있다', () => {
+test('결제 이력 패널은 학생 선택과 2. 보고 설정 사이에 있다', () => {
     const studentIndex = template.indexOf('id="monthly-report-student-select"');
     const panelIndex = template.indexOf('id="monthly-report-tuition-summary"');
-    const sectionIndex = template.indexOf('2. 문구 세부 설정');
+    const sectionIndex = template.indexOf('2. 보고 설정');
     assert.ok(studentIndex >= 0 && panelIndex >= 0 && sectionIndex >= 0);
     assert.ok(studentIndex < panelIndex, '학생 선택 다음에 있어야 한다');
-    assert.ok(panelIndex < sectionIndex, '2. 문구 세부 설정보다 위에 있어야 한다');
+    assert.ok(panelIndex < sectionIndex, '2. 보고 설정보다 위에 있어야 한다');
 });

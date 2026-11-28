@@ -22,9 +22,6 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
     const nodes = {
         'monthly-report-student-select': element(studentId),
         'monthly-report-year-month': element(yearMonth),
-        'monthly-report-period-label': element(''),
-        'monthly-report-month-label': element(''),
-        'monthly-report-special-teacher': element(''),
         'monthly-report-log-date-from': element(''),
         'monthly-report-log-date-to': element(''),
         'monthly-report-start-lecture': element('5'),
@@ -34,7 +31,6 @@ function buildStartFixture({ reference = null, reports = [], studentId = '757', 
     const code = [
         'let currentMonthlyReportId = 7;',
         'let monthlyReportManualEdit = true;',
-        'let monthlyReportTextMonthManual = false;',
         'let monthlyLectureStartIsAuto = true;',
         'let monthlyLectureCycleLength = 4;',
         'let monthlyReportReference = null;',
@@ -79,11 +75,8 @@ test('지난 보고를 참고해도 이번 달 보고서를 새로 시작한다'
     await f.api.start();
 
     assert.equal(f.nodes['monthly-report-year-month'].value, '2026-11', '참고 문서와 무관하게 이번 달을 쓴다');
-    assert.equal(f.nodes['monthly-report-month-label'].value, '10월', '문자 월은 저장 월의 전 달이 기본값이다');
     assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-11-01');
     assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-11-30');
-    assert.equal(f.nodes['monthly-report-period-label'].value, '1학기(3,4,5월)');
-    assert.equal(f.nodes['monthly-report-special-teacher'].value, '지윤주');
     assert.equal(f.nodes['monthly-report-start-lecture'].value, '1');
     assert.equal(f.nodes['monthly-report-result-text'].value, '');
 
@@ -148,6 +141,7 @@ test('선택한 차시가 없으면 저장하지 않고 먼저 알린다', () =>
 // --- 문구 자동 생성 보호 ---
 const generateCode = [
     'let currentMonthlyLogs = [];',
+    'function monthlyReportMonthText(y){ const m = String(y || "").match(/\\d{4}-(\\d{2})/); return m ? Number(m[1]) + "월" : "9월"; }',
     'let monthlyLectureRequestSeq = 0;',
     'let monthlyReportLocked = false;',
     'let monthlyReportManualEdit = false;',
@@ -173,10 +167,8 @@ function buildGenerateFixture({ checked = true, manual = false, text = '직접 �
     }));
     const nodes = {
         'monthly-report-student-select': Object.assign(element('17'), { options: [{ value: '17', dataset: { studentName: '김하나' } }] }),
-        'monthly-report-period-label': element('9월'),
-        'monthly-report-month-label': element('9월'),
+        'monthly-report-year-month': element('2026-09'),
         'monthly-report-start-lecture': element('1'),
-        'monthly-report-special-teacher': element(''),
         'monthly-report-result-text': element(text),
         'monthly-report-lecture-guide': element(),
         'monthly-report-regenerate-notice': { classList: { hidden: true, add() { this.hidden = true; }, remove() { this.hidden = false; } } },
@@ -364,18 +356,15 @@ test('학생 선택이 그대로면 목록만 한 번 다시 읽는다', async (
     assert.equal(f.loads(), 1);
 });
 
-// --- 문자에 들어갈 월 기본값 ---
-const textMonthCode = between('    function monthlyReportTextMonthLabel', '    function lastDayOfYearMonth');
-const textMonthContext = vm.createContext({ Date, Number, String });
-vm.runInContext(
-    between('    function addMonthToYearMonth', '    function lastDayOfYearMonth') + '\n' + textMonthCode + '\nglobalThis.__textMonth = monthlyReportTextMonthLabel;',
-    textMonthContext
-);
+// --- 문자 표기 월 ---
+const monthTextCode = between('    function monthlyReportMonthText', '    function lastDayOfYearMonth');
+const monthTextContext = vm.createContext({ Date, Number, String });
+vm.runInContext(monthTextCode + '\nglobalThis.__monthText = monthlyReportMonthText;', monthTextContext);
 
-test('문자에 들어갈 월은 저장할 보고 월의 전 달이 기본값이다', () => {
-    assert.equal(textMonthContext.__textMonth('2026-10'), '9월');
-    assert.equal(textMonthContext.__textMonth('2026-06'), '5월');
-    assert.equal(textMonthContext.__textMonth('2026-01'), '12월', '1월은 지난해 12월이 된다');
+test('문자 표기는 저장 월과 같은 달이다', () => {
+    assert.equal(monthTextContext.__monthText('2026-10'), '10월');
+    assert.equal(monthTextContext.__monthText('2026-01'), '1월');
+    assert.equal(monthTextContext.__monthText('2026-12'), '12월');
 });
 
 
@@ -384,8 +373,7 @@ test('다른 달 보고 작성은 고른 달로 왼쪽 설정을 대신 채운�
 
     await f.api.startMonth('2026-09', { allowExisting: false });
 
-    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-09');
-    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
+    assert.equal(f.nodes['monthly-report-year-month'].value, '2026-09', '고른 달로 저장 월을 바꾼다');
     assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-09-01');
     assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-09-30');
     assert.equal(f.calls.logs.length, 1);
@@ -415,63 +403,65 @@ test('이미 있는 달로는 새 보고서를 저장하지 않는다', () => {
 });
 
 
-// --- 저장 월 변경 시 문자 월 동기화 ---
-const syncCode = between('    function monthlyReportTextMonthLabel', '    function lastDayOfYearMonth');
-function buildSyncFixture({ saveMonth = '2026-11', textMonth = '10월', manual = false, manualTextMonth = false } = {}) {
+// --- 보고 월 변경 시 학습 기간 자동 설정 ---
+const periodCode = between('    function lastDayOfYearMonth', '    function updateMonthlyReportDocumentLabel');
+function buildPeriodFixture({ month = '2026-11', studentId = '757', manual = false } = {}) {
     const nodes = {
-        'monthly-report-year-month': { value: saveMonth },
-        'monthly-report-month-label': { value: textMonth },
+        'monthly-report-year-month': { value: month },
+        'monthly-report-log-date-from': { value: '' },
+        'monthly-report-log-date-to': { value: '' },
+        'monthly-report-student-select': { value: studentId },
     };
-    let generated = 0;
+    const loads = [];
     const context = vm.createContext({
         document: { getElementById: id => nodes[id] || null },
-        Date, Number, String, monthlyReportManualEdit: manual, monthlyReportTextMonthManual: manualTextMonth,
-        generateMonthlyReportText: () => { generated++; },
+        Date, Number, String,
+        monthlyReportManualEdit: manual,
+        currentMonthlyReportId: null,
+        updateMonthlyReportDocumentLabel() {},
+        loadMonthlyReportLogs: options => { loads.push(options || {}); },
     });
-    vm.runInContext(
-        between('    function addMonthToYearMonth', '    function lastDayOfYearMonth') + '\n' + syncCode +
-        '\nglobalThis.__sync = options => { syncMonthlyReportTextMonth(options || {}); };',
-        context
-    );
-    return { nodes, context, generated: () => generated };
+    vm.runInContext(periodCode + '\nglobalThis.__apply = options => applyMonthlyReportMonthPeriod(options || {});', context);
+    return { nodes, loads, apply: context.__apply };
 }
 
-test('저장할 보고 월을 바꾸면 문자에 들어갈 월이 전 달로 맞춰진다', () => {
-    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월' });
-    f.nodes['monthly-report-year-month'].value = '2026-09';
-    f.context.__sync();
-    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
-    assert.equal(f.generated(), 1, '문자 본문도 다시 만든다');
+test('보고 월을 바꾸면 학습 기간이 1일~말일로 자동 설정된다', () => {
+    const f = buildPeriodFixture({ month: '2026-09' });
+    f.apply({ reload: false });
+
+    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-09-01');
+    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2026-09-30');
+    assert.deepEqual(f.loads, [], '자동 조회를 끄면 목록은 건드리지 않는다');
 });
 
-test('1월로 바꾸면 문자 월은 12월이 된다', () => {
-    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월' });
-    f.nodes['monthly-report-year-month'].value = '2027-01';
-    f.context.__sync();
-    assert.equal(f.nodes['monthly-report-month-label'].value, '12월');
+test('보고 월을 바꾸면 학습 기록도 다시 불러온다', () => {
+    const f = buildPeriodFixture({ month: '2027-02' });
+    f.apply({ reload: true });
+
+    assert.equal(f.nodes['monthly-report-log-date-to'].value, '2027-02-28');
+    assert.equal(f.loads.length, 1);
+    assert.equal(f.loads[0].selectAll, true);
 });
 
-test('직접 고친 문구가 있으면 자동 생성으로 덮어쓰지 않는다', () => {
-    const f = buildSyncFixture({ saveMonth: '2026-11', textMonth: '10월', manual: true });
-    f.nodes['monthly-report-year-month'].value = '2026-09';
-    f.context.__sync();
-    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
-    assert.equal(f.generated(), 0);
+test('문구를 직접 고쳤으면 월을 바꿔도 자동 조회를 건너뛴다', () => {
+    const f = buildPeriodFixture({ month: '2026-09', manual: true });
+    f.apply({ reload: true });
+
+    assert.equal(f.nodes['monthly-report-log-date-from'].value, '2026-09-01');
+    assert.deepEqual(f.loads, [], '직접 쓴 문구를 덮지 않는다');
 });
 
-
-test('직접 고친 문자 월은 재조회로 덮어쓰지 않는다', () => {
-    const f = buildSyncFixture({ saveMonth: '2026-10', textMonth: '7월', manualTextMonth: true });
-    f.nodes['monthly-report-year-month'].value = '2026-10';
-    f.context.__sync();
-    assert.equal(f.nodes['monthly-report-month-label'].value, '7월', '수동 값을 유지한다');
-    assert.equal(f.generated(), 0);
+test('학생을 고르지 않았으면 월을 바꿔도 조회하지 않는다', () => {
+    const f = buildPeriodFixture({ month: '2026-09', studentId: '' });
+    f.apply({ reload: true });
+    assert.deepEqual(f.loads, []);
 });
 
-test('저장할 보고 월을 바꾸면 직접 고친 값도 전 달로 다시 맞춘다', () => {
-    const f = buildSyncFixture({ saveMonth: '2026-10', textMonth: '7월', manualTextMonth: true });
-    f.nodes['monthly-report-year-month'].value = '2026-09';
-    f.context.__sync({ force: true });
-    assert.equal(f.nodes['monthly-report-month-label'].value, '8월');
-    assert.equal(f.generated(), 1);
+test('화면에서 학기 문구·문자 월·특강 담당 칸을 없애고 보고 월 하나로 합쳤다', () => {
+    assert.ok(!template.includes('monthly-report-period-label'), '학기/기간 문구는 없어야 한다');
+    assert.ok(!template.includes('monthly-report-month-label'), '문자에 들어갈 월은 없어야 한다');
+    assert.ok(!template.includes('monthly-report-special-teacher'), '특강 담당 선생님 칸은 없어야 한다');
+    assert.match(template, /id="monthly-report-year-month"/);
+    assert.match(template, /id="monthly-report-log-date-from"/);
+    assert.match(template, /id="monthly-report-log-date-to"/);
 });

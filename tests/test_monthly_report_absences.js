@@ -16,6 +16,7 @@ function between(start, end) {
 
 const code = [
     'let currentMonthlyLogs = []; let monthlyLectureRequestSeq = 0; let monthlyReportLocked = false; let monthlyReportManualEdit = false; let monthlyLectureCycleLength = 0; let monthlyLectureStartIsAuto = false; let monthlyLectureCycles = null;',
+    'function monthlyReportMonthText(y){ const m = String(y || "").match(/\\d{4}-(\\d{2})/); return m ? Number(m[1]) + "월" : "9월"; }',
     between('    function formatDateKorean', '    function generateMonthlyReportText'),
     between('    function generateMonthlyReportText', '    function formatMonthlyAbsenceReason'),
     between('    function formatMonthlyAbsenceReason', '    function isMonthlyReportBreak'),
